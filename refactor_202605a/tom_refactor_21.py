@@ -1,75 +1,71 @@
 #!/usr/bin/env python3
 """Inline `ModelRunner.max_token_pool_size` property at its sole consumer in
-`tp_worker.py`. The @property is short (~6 lines); use a small text.replace for
-the property block (find_method_lines does not include the `@property`
-decorator line) and cut_lines for nothing here — exception to the cut-and-paste
-rule for this tiny inline.
+`tp_worker.py`. Cut the @property from ModelRunner via `cut_lines` (decorators
+included), then expand the if/else body inline at the consumer with `self.X`
+rewritten to `self.model_runner.X` (cross-class self replacement allowed for
+inline per EXECUTION_GUIDE).
+
+Usage:
+    uv run --python 3.12 tom_refactor_21.py run
+    uv run --python 3.12 tom_refactor_21.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
-)
+sys.path.insert(0, str(HERE))
+from _helpers import cut_lines, find_method_lines, replace_call_site
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/20"
-TARGET_COMMIT = "tom_refactor/21"
+BASE = "tom_refactor/20"
+TARGET = "tom_refactor/21"
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    text = mr.read_text()
-    old = (
-        "    @property\n"
-        "    def max_token_pool_size(self):\n"
-        '        """Return the max token pool size considering hybrid swa settings."""\n'
-        "        if self.is_hybrid_swa:\n"
-        "            return self.full_max_total_num_tokens\n"
-        "        else:\n"
-        "            return self.max_total_num_tokens\n\n"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    tp = wt / "python/sglang/srt/managers/tp_worker.py"
+
+    s, e = find_method_lines(
+        mr.read_text(), class_name="ModelRunner", method_name="max_token_pool_size"
     )
-    assert old in text, "max_token_pool_size property not found"
-    text = text.replace(old, "")
-    mr.write_text(text)
+    cut_lines(mr, s, e)
 
-    tp = dir_root / "python/sglang/srt/managers/tp_worker.py"
     text = tp.read_text()
-    old = (
-        "        self.max_req_len = min(\n"
-        "            self.model_config.context_len - 1,\n"
-        "            self.model_runner.max_token_pool_size - 1,\n"
-        "        )"
+    text = replace_call_site(
+        text,
+        old=(
+            "        self.max_req_len = min(\n"
+            "            self.model_config.context_len - 1,\n"
+            "            self.model_runner.max_token_pool_size - 1,\n"
+            "        )"
+        ),
+        new=(
+            "        if self.model_runner.is_hybrid_swa:\n"
+            "            pool_tokens = self.model_runner.full_max_total_num_tokens\n"
+            "        else:\n"
+            "            pool_tokens = self.model_runner.max_total_num_tokens\n"
+            "        self.max_req_len = min(\n"
+            "            self.model_config.context_len - 1,\n"
+            "            pool_tokens - 1,\n"
+            "        )"
+        ),
     )
-    new = (
-        "        mr = self.model_runner\n"
-        "        pool_tokens = (\n"
-        "            mr.full_max_total_num_tokens\n"
-        "            if mr.is_hybrid_swa\n"
-        "            else mr.max_total_num_tokens\n"
-        "        )\n"
-        "        self.max_req_len = min(\n"
-        "            self.model_config.context_len - 1,\n"
-        "            pool_tokens - 1,\n"
-        "        )"
-    )
-    assert old in text, "tp_worker max_token_pool_size callsite not found"
-    text = text.replace(old, new)
     tp.write_text(text)
 
     git_add_and_commit(
         "Inline max_token_pool_size property at sole consumer",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

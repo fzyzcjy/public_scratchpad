@@ -4,17 +4,28 @@ ModelRunner; paste as free functions in new file `model_executor/weight_updater.
 Updates tp_worker.py callers directly (methods are deleted).
 """
 
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
+
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from _helpers import append_to_file, cut_lines, dedent_method_to_function, find_method_lines
-from mechanical_refactor_verify_utils import git_add_and_commit, verify_mechanical_refactor
+sys.path.insert(0, str(HERE))
+from _helpers import (
+    append_to_file,
+    cut_lines,
+    dedent_method_to_function,
+    find_method_lines,
+    insert_after,
+    replace_call_site,
+)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/23"
-TARGET_COMMIT = "tom_refactor/24"
+BASE = "tom_refactor/23"
+TARGET = "tom_refactor/24"
 
 NEW_HEADER = (
     "from __future__ import annotations\n\nimport logging\n\nimport torch\n\n"
@@ -24,9 +35,12 @@ NEW_HEADER = (
 )
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    new_file = dir_root / "python/sglang/srt/model_executor/weight_updater.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    new_file = wt / "python/sglang/srt/model_executor/weight_updater.py"
     new_file.write_text(NEW_HEADER)
 
     for name in ("init_weights_update_group", "destroy_weights_update_group"):
@@ -49,51 +63,66 @@ def transform(dir_root: Path) -> None:
         append_to_file(new_file, fn)
 
     text = mr.read_text()
-    text = text.replace(
-        "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
-        "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n"
-        "from sglang.srt.model_executor.weight_updater import (\n"
-        "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n",
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
+        addition=(
+            "from sglang.srt.model_executor.weight_updater import (\n"
+            "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n"
+        ),
     )
     mr.write_text(text)
 
-    tp = dir_root / "python/sglang/srt/managers/tp_worker.py"
+    tp = wt / "python/sglang/srt/managers/tp_worker.py"
     text = tp.read_text()
-    text = text.replace(
-        "        success, message = self.model_runner.init_weights_update_group(\n"
-        "            recv_req.master_address,\n            recv_req.master_port,\n"
-        "            recv_req.rank_offset,\n            recv_req.world_size,\n"
-        "            recv_req.group_name,\n            recv_req.backend,\n        )\n",
-        "        success, message = init_weights_update_group(\n"
-        "            _model_update_group=self.model_runner._model_update_group,\n"
-        "            tp_rank=self.model_runner.tp_rank,\n"
-        "            master_address=recv_req.master_address,\n"
-        "            master_port=recv_req.master_port,\n"
-        "            rank_offset=recv_req.rank_offset,\n"
-        "            world_size=recv_req.world_size,\n"
-        "            group_name=recv_req.group_name,\n"
-        "            backend=recv_req.backend,\n        )\n",
+    text = replace_call_site(
+        text,
+        old=(
+            "        success, message = self.model_runner.init_weights_update_group(\n"
+            "            recv_req.master_address,\n            recv_req.master_port,\n"
+            "            recv_req.rank_offset,\n            recv_req.world_size,\n"
+            "            recv_req.group_name,\n            recv_req.backend,\n        )\n"
+        ),
+        new=(
+            "        success, message = init_weights_update_group(\n"
+            "            _model_update_group=self.model_runner._model_update_group,\n"
+            "            tp_rank=self.model_runner.tp_rank,\n"
+            "            master_address=recv_req.master_address,\n"
+            "            master_port=recv_req.master_port,\n"
+            "            rank_offset=recv_req.rank_offset,\n"
+            "            world_size=recv_req.world_size,\n"
+            "            group_name=recv_req.group_name,\n"
+            "            backend=recv_req.backend,\n        )\n"
+        ),
     )
-    text = text.replace(
-        "        success, message = self.model_runner.destroy_weights_update_group(\n"
-        "            recv_req.group_name,\n        )\n",
-        "        success, message = destroy_weights_update_group(\n"
-        "            _model_update_group=self.model_runner._model_update_group,\n"
-        "            group_name=recv_req.group_name,\n        )\n",
+    text = replace_call_site(
+        text,
+        old=(
+            "        success, message = self.model_runner.destroy_weights_update_group(\n"
+            "            recv_req.group_name,\n        )\n"
+        ),
+        new=(
+            "        success, message = destroy_weights_update_group(\n"
+            "            _model_update_group=self.model_runner._model_update_group,\n"
+            "            group_name=recv_req.group_name,\n        )\n"
+        ),
     )
-    text = text.replace(
-        "from sglang.srt.managers.io_struct import (\n",
-        "from sglang.srt.model_executor.weight_updater import (\n"
-        "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n"
-        "from sglang.srt.managers.io_struct import (\n",
+    text = replace_call_site(
+        text,
+        old="from sglang.srt.managers.io_struct import (\n",
+        new=(
+            "from sglang.srt.model_executor.weight_updater import (\n"
+            "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n"
+            "from sglang.srt.managers.io_struct import (\n"
+        ),
     )
     tp.write_text(text)
 
     git_add_and_commit(
         "Extract weights update group lifecycle to free functions in weight_updater",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(base_commit=BASE_COMMIT, target_commit=TARGET_COMMIT, transform=transform)
+    run_pr(transform=transform, base=BASE, target=TARGET)
