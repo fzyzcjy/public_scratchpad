@@ -83,19 +83,30 @@ def transform(wt: Path) -> None:
 
     # ---- Drop the alias-import block introduced by /34. ----
     text = mr.read_text()
-    alias_import = (
-        "from sglang.srt.configs.hybrid_arch import (\n"
-        "    hybrid_gdn_config as _free_hybrid_gdn_config,\n"
-        "    hybrid_lightning_config as _free_hybrid_lightning_config,\n"
-        "    kimi_linear_config as _free_kimi_linear_config,\n"
-        "    linear_attn_model_spec as _free_linear_attn_model_spec,\n"
-        "    mamba2_config as _free_mamba2_config,\n"
-        "    mambaish_config as _free_mambaish_config,\n"
-        "    qwen3_next_config as _free_qwen3_next_config,\n"
-        ")\n"
-    )
-    assert alias_import in text, "alias-import block from /34 not found"
-    text = text.replace(alias_import, "")
+    # Pre-commit (isort/ruff) splits the 7-symbol grouped import into a mix of
+    # single-line `import X as Y` and 1-symbol `(\n    X as Y,\n)` blocks based
+    # on line-length. Strip both forms for each of the 7 symbols.
+    for name in (
+        "hybrid_gdn_config",
+        "hybrid_lightning_config",
+        "kimi_linear_config",
+        "linear_attn_model_spec",
+        "mamba2_config",
+        "mambaish_config",
+        "qwen3_next_config",
+    ):
+        single_line = f"from sglang.srt.configs.hybrid_arch import {name} as _free_{name}\n"
+        block = (
+            "from sglang.srt.configs.hybrid_arch import (\n"
+            f"    {name} as _free_{name},\n"
+            ")\n"
+        )
+        if single_line in text:
+            text = text.replace(single_line, "")
+        elif block in text:
+            text = text.replace(block, "")
+        else:
+            raise AssertionError(f"alias import for {name} not found in expected forms")
     mr.write_text(text)
 
     # ---- Ripple consumers ----

@@ -125,21 +125,10 @@ def transform(wt: Path) -> None:
     )
     append_to_file(wu, appended)
 
-    text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    init_weights_update_group as _free_init_weights_update_group,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_distributed as _free_update_weights_from_distributed,\n"
-            ")\n"
-        ),
-    )
-    mr.write_text(text)
+    # No model_runner.py import needed — model_runner doesn't reference
+    # `_free_update_weights_from_distributed`; only tp_worker does. Adding an
+    # unused import would be stripped by pre-commit (ruff F401), breaking
+    # downstream anchors that rely on the import being present.
 
     text = tw.read_text()
     text = insert_after(

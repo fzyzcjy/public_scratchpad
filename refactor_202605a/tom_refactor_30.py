@@ -110,7 +110,6 @@ def transform(wt: Path) -> None:
         text,
         anchor=(
             "from sglang.srt.model_executor.weight_exporter import (\n"
-            "    init_weights_send_group_for_remote_instance as _free_init_weights_send_group_for_remote_instance,\n"
             "    send_weights_to_remote_instance as _free_send_weights_to_remote_instance,\n"
             ")\n"
         ),

@@ -20,6 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
+    add_to_grouped_import,
     append_to_file,
     cut_lines,
     dedent_method_to_function,
@@ -132,31 +133,16 @@ def transform(wt: Path) -> None:
     )
     append_to_file(wu, appended)
 
-    text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_distributed as _free_update_weights_from_distributed,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    LocalSerializedTensor,\n"
-            ")\n"
-        ),
-    )
-    mr.write_text(text)
+    # No model_runner.py import needed — after /27 cuts LocalSerializedTensor
+    # and its consumers (_unwrap_tensor / update_weights_from_tensor), no
+    # remaining references exist. An unused `LocalSerializedTensor` import
+    # would be stripped by pre-commit ruff F401.
 
     text = tw.read_text()
-    text = insert_after(
+    text = add_to_grouped_import(
         text,
-        anchor="from sglang.srt.utils import MultiprocessingSerializer\n",
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_tensor as _free_update_weights_from_tensor,\n"
-            ")\n"
-        ),
+        anchor_name="update_weights_from_distributed as _free_update_weights_from_distributed",
+        new_line="    update_weights_from_tensor as _free_update_weights_from_tensor,",
     )
     text = replace_call_site(
         text,

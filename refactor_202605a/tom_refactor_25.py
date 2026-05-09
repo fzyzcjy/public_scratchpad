@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Cut `update_weights_from_disk` from ModelRunner; paste as a free function in
 `weight_updater.py`. R4 concession: takes `model_runner_ref` kwarg because the
-body has 10+ `self.X` reads, 4 self-write writebacks, and a call to
+body has 10+ `self.X` reads + 4 self-write writebacks + a call to
 `self.init_device_graphs()`. Body is byte-identical except for s/self/model_runner_ref/
-plus the signature changes (`self,` -> `*,\n    model_runner_ref,`).
+plus the signature change (`self,` -> `*,\n    model_runner_ref,`).
 
 Caller sites updated:
-- model_runner.py: line 1492 captured-method ref -> functools.partial
-- tp_worker.py: positional kwargs -> explicit kwargs
-- eagle_worker_v2.py: positional kwargs -> explicit kwargs
-- expert_location_updater.py: positional call -> kwarg call (so partial works)
+- model_runner.py: inline callsite inside `update_expert_location` body
+- tp_worker.py: positional args -> explicit kwargs
+- eagle_worker_v2.py: positional args -> explicit kwargs
 
 Usage:
     uv run --python 3.12 tom_refactor_25.py run
@@ -49,7 +48,6 @@ def transform(wt: Path) -> None:
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     ew = wt / "python/sglang/srt/speculative/eagle_worker_v2.py"
-    elu = wt / "python/sglang/srt/eplb/expert_location_updater.py"
 
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="update_weights_from_disk"
@@ -100,7 +98,8 @@ def transform(wt: Path) -> None:
     wu.write_text(text)
     append_to_file(wu, func_text)
 
-    # model_runner.py: add free-function import; rewire line 1492 via functools.partial.
+    # model_runner.py: add free-function import; replace the inline call inside
+    # `update_expert_location` body with a direct free-function call.
     text = mr.read_text()
     text = insert_after(
         text,
@@ -111,20 +110,27 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
-    if "import functools\n" not in text:
-        text = insert_after(text, anchor="import gc\n", addition="import functools\n")
     text = replace_call_site(
         text,
-        old="            update_weights_from_disk_callable=self.update_weights_from_disk,\n",
+        old=(
+            "                self.update_weights_from_disk(\n"
+            "                    get_global_server_args().model_path,\n"
+            "                    get_global_server_args().load_format,\n"
+            "                    weight_name_filter=weight_name_filter,\n"
+            "                )\n"
+        ),
         new=(
-            "            update_weights_from_disk_callable=functools.partial(\n"
-            "                _free_update_weights_from_disk, model_runner_ref=self\n"
-            "            ),\n"
+            "                _free_update_weights_from_disk(\n"
+            "                    model_runner_ref=self,\n"
+            "                    model_path=get_global_server_args().model_path,\n"
+            "                    load_format=get_global_server_args().load_format,\n"
+            "                    weight_name_filter=weight_name_filter,\n"
+            "                )\n"
         ),
     )
     mr.write_text(text)
 
-    # tp_worker.py: add to existing grouped import; rewrite caller.
+    # tp_worker.py: add to existing grouped weight_updater import; rewrite caller.
     text = tw.read_text()
     text = add_to_grouped_import(
         text,
@@ -151,7 +157,7 @@ def transform(wt: Path) -> None:
     )
     tw.write_text(text)
 
-    # eagle_worker_v2.py: add new import block; rewrite caller.
+    # eagle_worker_v2.py: add new import; rewrite caller.
     text = ew.read_text()
     text = insert_after(
         text,
@@ -181,27 +187,6 @@ def transform(wt: Path) -> None:
         ),
     )
     ew.write_text(text)
-
-    # expert_location_updater.py: change positional call to kwarg form.
-    text = elu.read_text()
-    text = replace_call_site(
-        text,
-        old=(
-            "            update_weights_from_disk_callable(\n"
-            "                get_global_server_args().model_path,\n"
-            "                get_global_server_args().load_format,\n"
-            "                weight_name_filter=weight_name_filter,\n"
-            "            )\n"
-        ),
-        new=(
-            "            update_weights_from_disk_callable(\n"
-            "                model_path=get_global_server_args().model_path,\n"
-            "                load_format=get_global_server_args().load_format,\n"
-            "                weight_name_filter=weight_name_filter,\n"
-            "            )\n"
-        ),
-    )
-    elu.write_text(text)
 
     git_add_and_commit(
         "Extract update_weights_from_disk to free function in weight_updater",

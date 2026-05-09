@@ -50,19 +50,17 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     manager = wt / "python/sglang/srt/layers/n_gram_embedding_manager.py"
 
-    # The migrated body uses Optional + ScheduleBatch + ForwardMode; add the
-    # imports the new location needs to compile.
+    # The migrated body uses ForwardMode at runtime; add it to the imports.
+    # ``ScheduleBatch`` is referenced only in type annotations, which the
+    # ``from __future__ import annotations`` directive in this file
+    # already stringifies -- no import needed at runtime, and ruff would
+    # strip it anyway.
     text = manager.read_text()
-    text = insert_after(
-        text,
-        anchor="from __future__ import annotations\n",
-        addition="\nfrom typing import Optional\n",
-    )
     text = insert_after(
         text,
         anchor="from sglang.jit_kernel.ngram_embedding import update_token_table\n",
         addition=(
-            "from sglang.srt.managers.schedule_batch import ForwardMode, ScheduleBatch\n"
+            "from sglang.srt.managers.schedule_batch import ForwardMode\n"
         ),
     )
     manager.write_text(text)
