@@ -1,16 +1,30 @@
 #!/usr/bin/env python3
 """Cut `_publish_modelexpress_metadata`, `_build_transfer_engine_worker_metadata`,
-and `_build_nixl_worker_metadata` from `ModelRunner`; append all three to
+and `_build_nixl_worker_metadata` from ModelRunner; append all three to
 `RemoteInstanceWeightTransport`. Update the sole external caller of
 `_publish_modelexpress_metadata` to delegate via the transport.
+
+The ``self.X`` references that were rewritten at /40's caller side (now
+``self.remote_instance_weight_transport.X``) collapse back to ``self.X`` once
+the methods live inside the transport class. ``self.model.named_parameters()``
+in `_build_nixl_worker_metadata` keeps the original field name (``model`` on
+the transport class).
+
+Usage:
+    uv run --python 3.12 tom_refactor_42.py run
+    uv run --python 3.12 tom_refactor_42.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
@@ -18,21 +32,21 @@ from _helpers import (
     insert_after,
     replace_call_site,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
-)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/41"
-TARGET_COMMIT = "tom_refactor/42"
+BASE = "tom_refactor/41"
+TARGET = "tom_refactor/42"
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    transport = dir_root / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
 
-    # The migrated bodies use uuid (worker_id, agent_name) and torch
-    # (untyped_storage byte view); add those imports to the transport module.
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+
+    # Add imports needed by the migrated bodies (uuid for worker_id / agent_name,
+    # torch for the storage byte-view fallback in the NIXL builder).
     text = transport.read_text()
     text = insert_after(
         text,
@@ -41,32 +55,27 @@ def transform(dir_root: Path) -> None:
     )
     transport.write_text(text)
 
-    # Cut the three methods one at a time, re-finding line ranges after each
-    # cut so the AST sees the latest file. Substitutions per the migration:
-    # the bodies were already partially-rewritten in /41 to reference
-    # `self.remote_instance_weight_transport.X` from outside; once the methods
-    # live INSIDE the transport class, those become `self.X`. The NIXL builder
-    # additionally references the model via `self.model.named_parameters()`,
-    # which becomes `self.model_ref.named_parameters()` on the transport.
+    # Cut the 3 methods one at a time, re-finding line ranges after each cut so
+    # the AST sees the latest source text.
     cuts = []
     for method_name in (
         "_publish_modelexpress_metadata",
         "_build_transfer_engine_worker_metadata",
         "_build_nixl_worker_metadata",
     ):
-        start, end = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name=method_name)
+        start, end = find_method_lines(
+            mr.read_text(), class_name="ModelRunner", method_name=method_name
+        )
         method_text = cut_lines(mr, start, end)
         method_text = method_text.replace(
             "self.remote_instance_weight_transport.", "self."
         )
-        method_text = method_text.replace(
-            "self.model.named_parameters()", "self.model_ref.named_parameters()"
-        )
         cuts.append(method_text)
 
     for method_text in cuts:
-        append_to_file(transport, method_text.rstrip() + "\n", separator="\n")
+        append_to_file(transport, method_text.rstrip() + "\n")
 
+    # The only external call-site is `self._publish_modelexpress_metadata()`.
     text = mr.read_text()
     text = replace_call_site(
         text,
@@ -77,13 +86,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Migrate ModelExpress metadata publishing to RemoteInstanceWeightTransport",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

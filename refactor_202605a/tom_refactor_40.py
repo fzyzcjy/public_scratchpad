@@ -1,22 +1,43 @@
 #!/usr/bin/env python3
-"""Cut `remote_instance_init_transfer_engine` from ModelRunner; introduce
-`RemoteInstanceWeightTransport` skeleton class with that one method. Update
-caller and ripple-rename remaining `self.remote_instance_transfer_engine*`
-fields to live on the new transport object.
+"""Cut `remote_instance_init_transfer_engine` from ModelRunner; introduce a
+new `RemoteInstanceWeightTransport` class that owns the 4 lifecycle fields
+(``remote_instance_transfer_engine`` / ``_session_id`` / ``_weight_info`` /
+``_nixl_manager``) and that one method. Update callers to delegate via
+``self.remote_instance_weight_transport``. Field names on the new class match
+the original ModelRunner field names byte-for-byte.
+
+This is PR 1/3 of the RemoteInstanceWeightTransport extraction; PRs 2 and 3
+migrate the remaining 4 methods.
+
+Usage:
+    uv run --python 3.12 tom_refactor_40.py run
+    uv run --python 3.12 tom_refactor_40.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from _helpers import cut_lines, find_method_lines
-from mechanical_refactor_verify_utils import git_add_and_commit, verify_mechanical_refactor
+sys.path.insert(0, str(HERE))
+from _helpers import (
+    cut_lines,
+    find_method_lines,
+    insert_after,
+    replace_call_site,
+)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/39"
-TARGET_COMMIT = "tom_refactor/40"
+BASE = "tom_refactor/39"
+TARGET = "tom_refactor/40"
 
+# New file holding the transport class. Field names mirror the original
+# ModelRunner field names; ``model`` is bound late (after load_model in
+# ModelRunner) because the body only consults it from /42's _build_nixl_*.
 TRANSPORT_HEADER = '''from __future__ import annotations
 
 import logging
@@ -29,70 +50,109 @@ logger = logging.getLogger(__name__)
 
 class RemoteInstanceWeightTransport:
 
-    def __init__(self, *, server_args, model_ref, tp_rank, gpu_id):
+    def __init__(self, *, server_args, model, tp_rank, gpu_id):
         self.server_args = server_args
-        self.model_ref = model_ref
+        self.model = model
         self.tp_rank = tp_rank
         self.gpu_id = gpu_id
-        self.engine = None
-        self.session_id = ""
-        self.weight_info = None
+        self.remote_instance_transfer_engine = None
+        self.remote_instance_transfer_engine_session_id = ""
+        self.remote_instance_transfer_engine_weight_info = None
         self._nixl_manager = None
 
 '''
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    transport = dir_root / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
 
-    start, end = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name="remote_instance_init_transfer_engine")
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+
+    # ---- Cut remote_instance_init_transfer_engine; body refs original fields, ----
+    # ---- so it pastes onto the transport class verbatim (just leading indent).  ----
+    start, end = find_method_lines(
+        mr.read_text(),
+        class_name="ModelRunner",
+        method_name="remote_instance_init_transfer_engine",
+    )
     method_text = cut_lines(mr, start, end)
-    method_text = method_text.replace("self.remote_instance_transfer_engine_session_id", "self.session_id")
-    method_text = method_text.replace("self.remote_instance_transfer_engine", "self.engine")
     transport.write_text(TRANSPORT_HEADER + method_text.rstrip() + "\n")
 
+    # ---- Update ModelRunner: import, replace 3 init lines, rewrite callers ----
     text = mr.read_text()
-    text = text.replace(
-        "from sglang.srt.model_executor.kv_cache_configurator import KVCacheConfigurator\n",
-        "from sglang.srt.model_executor.kv_cache_configurator import KVCacheConfigurator\n"
-        "from sglang.srt.model_executor.remote_instance_weight_transport import RemoteInstanceWeightTransport\n",
+
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig\n",
+        addition=(
+            "from sglang.srt.model_executor.remote_instance_weight_transport import (\n"
+            "    RemoteInstanceWeightTransport,\n"
+            ")\n"
+        ),
     )
-    text = text.replace(
-        "        self.remote_instance_transfer_engine = None\n"
-        '        self.remote_instance_transfer_engine_session_id = ""\n'
-        "        self.remote_instance_transfer_engine_weight_info = None\n",
-        "        self.remote_instance_weight_transport = RemoteInstanceWeightTransport(\n"
-        "            server_args=server_args, model_ref=None, tp_rank=self.tp_rank, gpu_id=self.gpu_id,\n"
-        "        )\n",
+
+    # Replace the 3 init-time field assignments with a single transport ctor.
+    text = replace_call_site(
+        text,
+        old=(
+            "        self.remote_instance_transfer_engine = None\n"
+            '        self.remote_instance_transfer_engine_session_id = ""\n'
+            "        self.remote_instance_transfer_engine_weight_info = None\n"
+        ),
+        new=(
+            "        self.remote_instance_weight_transport = RemoteInstanceWeightTransport(\n"
+            "            server_args=server_args,\n"
+            "            model=None,\n"
+            "            tp_rank=self.tp_rank,\n"
+            "            gpu_id=self.gpu_id,\n"
+            "        )\n"
+        ),
     )
-    text = text.replace(
-        "            self.model = self.loader.load_model(\n"
-        "                model_config=self.model_config,\n"
-        "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
-        "            )\n",
-        "            self.model = self.loader.load_model(\n"
-        "                model_config=self.model_config,\n"
-        "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
-        "            )\n"
-        "            self.remote_instance_weight_transport.model_ref = self.model\n",
+
+    # After load_model populates self.model, propagate the ref onto the transport
+    # so /42's _build_nixl_worker_metadata can read self.model.named_parameters().
+    text = replace_call_site(
+        text,
+        old=(
+            "            self.model = self.loader.load_model(\n"
+            "                model_config=self.model_config,\n"
+            "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
+            "            )\n"
+        ),
+        new=(
+            "            self.model = self.loader.load_model(\n"
+            "                model_config=self.model_config,\n"
+            "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
+            "            )\n"
+            "            self.remote_instance_weight_transport.model = self.model\n"
+        ),
     )
-    text = text.replace(
-        "self.remote_instance_init_transfer_engine()",
-        "self.remote_instance_weight_transport.remote_instance_init_transfer_engine()",
+
+    # Sole call-site of remote_instance_init_transfer_engine.
+    text = replace_call_site(
+        text,
+        old="self.remote_instance_init_transfer_engine()",
+        new="self.remote_instance_weight_transport.remote_instance_init_transfer_engine()",
     )
+
+    # All remaining references to the 3 lifecycle fields move onto the transport.
     text = text.replace(
         "self.remote_instance_transfer_engine_session_id",
-        "self.remote_instance_weight_transport.session_id",
+        "self.remote_instance_weight_transport.remote_instance_transfer_engine_session_id",
     )
     text = text.replace(
         "self.remote_instance_transfer_engine_weight_info",
-        "self.remote_instance_weight_transport.weight_info",
+        "self.remote_instance_weight_transport.remote_instance_transfer_engine_weight_info",
     )
     text = text.replace(
         "self.remote_instance_transfer_engine",
-        "self.remote_instance_weight_transport.engine",
+        "self.remote_instance_weight_transport.remote_instance_transfer_engine",
     )
+    # `_nixl_manager` is only ever written by _build_nixl_worker_metadata
+    # (migrated in /42). Reroute the would-be write site preemptively so /42
+    # does not need to re-touch this file.
     text = text.replace(
         "self._nixl_manager",
         "self.remote_instance_weight_transport._nixl_manager",
@@ -101,9 +161,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Extract RemoteInstanceWeightTransport skeleton with remote_instance_init_transfer_engine",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(base_commit=BASE_COMMIT, target_commit=TARGET_COMMIT, transform=transform)
+    run_pr(transform=transform, base=BASE, target=TARGET)

@@ -1,42 +1,58 @@
 #!/usr/bin/env python3
-"""Reproducible transform: introduce `NgramEmbeddingManager` (PR 1/3 of the
-ngram embedding migration).
+"""Introduce `NgramEmbeddingManager` (PR 1/3 of the ngram embedding migration).
 
-- Create `python/sglang/srt/layers/n_gram_embedding_manager.py` with the new
-  class: `__init__` taking explicit fields; `from_model` classmethod factory
-  (body of `ModelRunner.maybe_init_ngram_embedding`); `update_after_decode`
-  method (body of `ModelRunner.maybe_update_ngram_token_table`).
-- ModelRunner: `maybe_init_ngram_embedding` constructs
-  `self.ngram_embedding_manager` via `NgramEmbeddingManager.from_model(...)`
-  and keeps the legacy `self.use_ngram_embedding` / `self.token_table` fields
-  in sync (double-track) so Scheduler / CudaGraphRunner keep working until
-  PRs 2 and 3 of the chain land.
-- ModelRunner: `maybe_update_ngram_token_table` becomes a 1-line delegate.
+- New file `python/sglang/srt/layers/n_gram_embedding_manager.py`. Class body
+  is assembled from the two ModelRunner method bodies cut via ``cut_lines``
+  -- no hand-written re-implementation of the source code.
+- The manager's 4 fields keep the original ModelRunner / Scheduler field
+  names (``use_ngram_embedding`` / ``token_table`` / ``ngram_embedding_n`` /
+  ``ngram_embedding_k``) so /44's cut Scheduler body and /45's CudaGraphRunner
+  consumer migration do not need to rename anything (Ch1 forbids renames).
+- `maybe_init_ngram_embedding` becomes a classmethod factory (kept the
+  original method name; renaming to a more idiomatic ``from_model`` is
+  deferred to Ch2). Body is the original byte-for-byte except for: signature
+  line swap, ``self.X`` -> kwarg substitutions, the two ``self.Y =``
+  writebacks redirected to local vars, and a final ``return cls(...)``.
+- `maybe_update_ngram_token_table` moves verbatim onto the manager (the
+  original body did not consult any ``self.X`` field of ModelRunner, so no
+  substitutions are required).
+- ModelRunner: delete both methods (no delegates, per Ch1). The two call
+  sites in ``__init__`` and ``sample`` are rewritten inline -- ``__init__``
+  constructs the manager and double-tracks the legacy ``use_ngram_embedding``
+  / ``token_table`` fields so Scheduler / CudaGraphRunner keep working until
+  PRs 2 and 3 land.
+
+Usage:
+    uv run --python 3.12 tom_refactor_43.py run
+    uv run --python 3.12 tom_refactor_43.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from mechanical_refactor_verify_utils import (
-    verify_mechanical_refactor,
-    git_add_and_commit,
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+from _helpers import (
+    cut_lines,
+    find_method_lines,
+    replace_call_site,
 )
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/42"
-TARGET_COMMIT = "tom_refactor/43"
+BASE = "tom_refactor/42"
+TARGET = "tom_refactor/43"
 
 
-MANAGER_PY = '''
-from __future__ import annotations
-
-from typing import Optional
+MANAGER_HEADER = '''from __future__ import annotations
 
 import torch
-from torch import nn
 
 from sglang.jit_kernel.ngram_embedding import update_token_table
-from sglang.srt.configs.model_config import ModelConfig
 
 
 class NgramEmbeddingManager:
@@ -44,194 +60,171 @@ class NgramEmbeddingManager:
     def __init__(
         self,
         *,
-        enabled: bool,
-        table: Optional[torch.Tensor],
-        n: int,
-        k: int,
-    ) -> None:
-        self.enabled = enabled
-        self.table = table
-        self.n = n
-        self.k = k
+        use_ngram_embedding,
+        token_table,
+        ngram_embedding_n,
+        ngram_embedding_k,
+    ):
+        self.use_ngram_embedding = use_ngram_embedding
+        self.token_table = token_table
+        self.ngram_embedding_n = ngram_embedding_n
+        self.ngram_embedding_k = ngram_embedding_k
 
-    @classmethod
-    def from_model(
-        cls,
-        *,
-        model: nn.Module,
-        model_config: ModelConfig,
-        req_to_token_pool,
-        chunked_prefill_size: Optional[int],
-        max_running_requests: int,
-        device: str,
-    ) -> "NgramEmbeddingManager":
-        from sglang.srt.layers.n_gram_embedding import NgramEmbedding
-
-        if not model_config.use_ngram_embedding:
-            return cls(enabled=False, table=None, n=0, k=0)
-
-        assert (
-            chunked_prefill_size is not None and chunked_prefill_size > 0
-        ), "Ngram embedding requires chunked prefill to be enabled (chunked_prefill_size > 0)"
-
-        # Sized to mirror req_to_token (indexed by req_pool_idx).
-        table = torch.empty(
-            req_to_token_pool.req_to_token.shape[0],
-            model_config.context_len,
-            dtype=torch.int32,
-            device=device,
-        )
-        for module in model.modules():
-            if isinstance(module, NgramEmbedding):
-                module.init_buffers(max_running_requests, chunked_prefill_size, device)
-
-        hf_config = model_config.hf_config
-        return cls(
-            enabled=True,
-            table=table,
-            n=hf_config.ngram_embedding_n,
-            k=hf_config.ngram_embedding_k,
-        )
-
-    def update_after_decode(
-        self,
-        *,
-        next_token_ids: torch.Tensor,
-        forward_batch,
-    ) -> None:
-        """Update the ngram embedding token table after sampling."""
-        ngram_embedding_info = forward_batch.ngram_embedding_info
-        if ngram_embedding_info is None:
-            return
-        ngram_embedding_info.out_column_starts[: forward_batch.batch_size] = (
-            forward_batch.seq_lens
-        )
-        ngram_embedding_info.out_req_lens[: forward_batch.batch_size] = 1
-        update_token_table(
-            ne_token_table=ngram_embedding_info.token_table,
-            tokens=next_token_ids.to(torch.int32),
-            row_indices=forward_batch.req_pool_indices,
-            column_starts=ngram_embedding_info.out_column_starts,
-            req_lens=torch.ones_like(ngram_embedding_info.out_column_starts),
-            ignore_tokens=None,
-        )
 '''
 
 
-def transform(dir_root: Path) -> None:
-    # ---- Create new manager file ----
-    manager = dir_root / "python/sglang/srt/layers/n_gram_embedding_manager.py"
-    manager.write_text(MANAGER_PY)
+# Replacement for the call site in ModelRunner.__init__:
+#     self.maybe_init_ngram_embedding()
+INLINE_INIT_CALL = '''        self.ngram_embedding_manager = NgramEmbeddingManager.maybe_init_ngram_embedding(
+            model=self.model,
+            model_config=self.model_config,
+            req_to_token_pool=self.req_to_token_pool,
+            server_args=self.server_args,
+            max_running_requests=self.max_running_requests,
+            device=self.device,
+        )
+        # Legacy double-track fields kept for now; Scheduler / CudaGraphRunner
+        # still read them. PRs 2 and 3 of this chain migrate those callers
+        # to ``self.ngram_embedding_manager`` and then drop the fields below.
+        self.use_ngram_embedding = self.ngram_embedding_manager.use_ngram_embedding
+        if self.ngram_embedding_manager.use_ngram_embedding:
+            self.token_table = self.ngram_embedding_manager.token_table
+'''
 
-    # ---- Update model_runner.py ----
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
+
+def _transform_init_method(method_text: str) -> str:
+    """Convert the cut ``maybe_init_ngram_embedding`` body into a classmethod
+    factory body. Edits are textual:
+      - swap signature, add ``@classmethod`` decorator
+      - prepend defaults so the final ``return cls(...)`` gets a value either
+        branch (the original ``if self.use_ngram_embedding:`` block stays as
+        the gate -- no control-flow restructure)
+      - replace ``self.X`` reads with the matching kwarg name
+      - redirect the two ``self.Y =`` writebacks to local vars whose names
+        match the ctor kwargs (``use_ngram_embedding``, ``token_table``)
+      - append n/k extraction (still inside the ``if`` block) and
+        ``return cls(...)``
+    """
+    text = method_text
+
+    text = text.replace(
+        "    def maybe_init_ngram_embedding(self):\n",
+        "    @classmethod\n"
+        "    def maybe_init_ngram_embedding(\n"
+        "        cls,\n"
+        "        *,\n"
+        "        model,\n"
+        "        model_config,\n"
+        "        req_to_token_pool,\n"
+        "        server_args,\n"
+        "        max_running_requests,\n"
+        "        device,\n"
+        "    ):\n"
+        "        token_table = None\n"
+        "        ngram_embedding_n = 0\n"
+        "        ngram_embedding_k = 0\n",
+    )
+
+    # Redirect the two ``self.Y =`` writebacks to local vars.
+    text = text.replace(
+        "        self.use_ngram_embedding = self.model_config.use_ngram_embedding\n",
+        "        use_ngram_embedding = model_config.use_ngram_embedding\n",
+    )
+    text = text.replace(
+        "            self.token_table = torch.empty(\n",
+        "            token_table = torch.empty(\n",
+    )
+
+    # ``self.X`` -> kwarg / local-var renames (read-only references).
+    text = text.replace("self.use_ngram_embedding", "use_ngram_embedding")
+    text = text.replace("self.req_to_token_pool", "req_to_token_pool")
+    text = text.replace("self.model_config", "model_config")
+    text = text.replace("self.server_args", "server_args")
+    text = text.replace("self.max_running_requests", "max_running_requests")
+    text = text.replace("self.model.modules()", "model.modules()")
+    text = text.replace("self.device", "device")
+
+    body_tail = (
+        "            hf_config = model_config.hf_config\n"
+        "            ngram_embedding_n = hf_config.ngram_embedding_n\n"
+        "            ngram_embedding_k = hf_config.ngram_embedding_k\n"
+        "        return cls(\n"
+        "            use_ngram_embedding=use_ngram_embedding,\n"
+        "            token_table=token_table,\n"
+        "            ngram_embedding_n=ngram_embedding_n,\n"
+        "            ngram_embedding_k=ngram_embedding_k,\n"
+        "        )\n"
+    )
+    return text.rstrip() + "\n" + body_tail
+
+
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    manager = wt / "python/sglang/srt/layers/n_gram_embedding_manager.py"
+
+    # Cut the two method bodies from ModelRunner (source order: init at
+    # ~L2310, update at ~L2332).
+    s, e = find_method_lines(
+        mr.read_text(),
+        class_name="ModelRunner",
+        method_name="maybe_init_ngram_embedding",
+    )
+    init_method_text = cut_lines(mr, s, e)
+
+    s, e = find_method_lines(
+        mr.read_text(),
+        class_name="ModelRunner",
+        method_name="maybe_update_ngram_token_table",
+    )
+    update_method_text = cut_lines(mr, s, e)
+
+    init_block = _transform_init_method(init_method_text)
+    manager.write_text(
+        MANAGER_HEADER + init_block + "\n" + update_method_text.rstrip() + "\n"
+    )
+
+    # Update ModelRunner: import + rewrite both call sites inline.
     text = mr.read_text()
+    text = replace_call_site(
+        text,
+        old=(
+            "from sglang.srt.layers.model_parallel import apply_torch_tp\n"
+            "from sglang.srt.layers.pooler import EmbeddingPoolerOutput\n"
+        ),
+        new=(
+            "from sglang.srt.layers.model_parallel import apply_torch_tp\n"
+            "from sglang.srt.layers.n_gram_embedding_manager import NgramEmbeddingManager\n"
+            "from sglang.srt.layers.pooler import EmbeddingPoolerOutput\n"
+        ),
+    )
 
-    # Add the import.
-    old_import = (
-        "from sglang.srt.layers.model_parallel import apply_torch_tp\n"
-        "from sglang.srt.layers.pooler import EmbeddingPoolerOutput\n"
+    text = replace_call_site(
+        text,
+        old="        self.maybe_init_ngram_embedding()\n",
+        new=INLINE_INIT_CALL,
     )
-    new_import = (
-        "from sglang.srt.layers.model_parallel import apply_torch_tp\n"
-        "from sglang.srt.layers.n_gram_embedding_manager import NgramEmbeddingManager\n"
-        "from sglang.srt.layers.pooler import EmbeddingPoolerOutput\n"
-    )
-    assert old_import in text
-    text = text.replace(old_import, new_import)
 
-    # Replace maybe_init_ngram_embedding body.
-    old_init = (
-        "    def maybe_init_ngram_embedding(self):\n"
-        "        self.use_ngram_embedding = self.model_config.use_ngram_embedding\n"
-        "        if self.use_ngram_embedding:\n"
-        "            from sglang.srt.layers.n_gram_embedding import NgramEmbedding\n"
-        "\n"
-        "            # Sized to mirror req_to_token (indexed by req_pool_idx).\n"
-        "            self.token_table = torch.empty(\n"
-        "                self.req_to_token_pool.req_to_token.shape[0],\n"
-        "                self.model_config.context_len,\n"
-        "                dtype=torch.int32,\n"
-        "                device=self.device,\n"
-        "            )\n"
-        "            chunked_prefill_size = self.server_args.chunked_prefill_size\n"
-        "            assert (\n"
-        "                chunked_prefill_size is not None and chunked_prefill_size > 0\n"
-        '            ), "Ngram embedding requires chunked prefill to be enabled (chunked_prefill_size > 0)"\n'
-        "            for module in self.model.modules():\n"
-        "                if isinstance(module, NgramEmbedding):\n"
-        "                    module.init_buffers(\n"
-        "                        self.max_running_requests, chunked_prefill_size, self.device\n"
-        "                    )\n"
+    text = replace_call_site(
+        text,
+        old="        self.maybe_update_ngram_token_table(next_token_ids, forward_batch)\n",
+        new=(
+            "        self.ngram_embedding_manager.maybe_update_ngram_token_table(\n"
+            "            next_token_ids=next_token_ids,\n"
+            "            forward_batch=forward_batch,\n"
+            "        )\n"
+        ),
     )
-    new_init = (
-        "    def maybe_init_ngram_embedding(self):\n"
-        "        self.ngram_embedding_manager = NgramEmbeddingManager.from_model(\n"
-        "            model=self.model,\n"
-        "            model_config=self.model_config,\n"
-        "            req_to_token_pool=self.req_to_token_pool,\n"
-        "            chunked_prefill_size=self.server_args.chunked_prefill_size,\n"
-        "            max_running_requests=self.max_running_requests,\n"
-        "            device=self.device,\n"
-        "        )\n"
-        "        # Legacy double-track fields kept for now; Scheduler / CudaGraphRunner\n"
-        "        # still read them. PRs 2 and 3 of this chain will migrate those callers\n"
-        "        # to ``self.ngram_embedding_manager`` and remove the fields below.\n"
-        "        self.use_ngram_embedding = self.ngram_embedding_manager.enabled\n"
-        "        if self.ngram_embedding_manager.enabled:\n"
-        "            self.token_table = self.ngram_embedding_manager.table\n"
-    )
-    assert old_init in text
-    text = text.replace(old_init, new_init)
-
-    # Replace maybe_update_ngram_token_table body with a 1-line delegate.
-    old_update = (
-        "    def maybe_update_ngram_token_table(\n"
-        "        self,\n"
-        "        next_token_ids: torch.Tensor,\n"
-        '        forward_batch: "ForwardBatch",\n'
-        "    ):\n"
-        '        """Update the ngram embedding token table after sampling."""\n'
-        "        ngram_embedding_info = forward_batch.ngram_embedding_info\n"
-        "        if ngram_embedding_info is None:\n"
-        "            return\n"
-        "        ngram_embedding_info.out_column_starts[: forward_batch.batch_size] = (\n"
-        "            forward_batch.seq_lens\n"
-        "        )\n"
-        "        ngram_embedding_info.out_req_lens[: forward_batch.batch_size] = 1\n"
-        "        update_token_table(\n"
-        "            ne_token_table=ngram_embedding_info.token_table,\n"
-        "            tokens=next_token_ids.to(torch.int32),\n"
-        "            row_indices=forward_batch.req_pool_indices,\n"
-        "            column_starts=ngram_embedding_info.out_column_starts,\n"
-        "            req_lens=torch.ones_like(ngram_embedding_info.out_column_starts),\n"
-        "            ignore_tokens=None,\n"
-        "        )\n"
-    )
-    new_update = (
-        "    def maybe_update_ngram_token_table(\n"
-        "        self,\n"
-        "        next_token_ids: torch.Tensor,\n"
-        '        forward_batch: "ForwardBatch",\n'
-        "    ):\n"
-        "        self.ngram_embedding_manager.update_after_decode(\n"
-        "            next_token_ids=next_token_ids, forward_batch=forward_batch,\n"
-        "        )\n"
-    )
-    assert old_update in text
-    text = text.replace(old_update, new_update)
 
     mr.write_text(text)
 
     git_add_and_commit(
         "Introduce NgramEmbeddingManager (PR 1/3 of ngram embedding migration)",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

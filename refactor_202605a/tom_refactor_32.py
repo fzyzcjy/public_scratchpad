@@ -71,6 +71,8 @@ def transform(wt: Path) -> None:
             "def init_device_graphs(*, model_runner_ref):\n",
         )
         .replace("self.", "model_runner_ref.")
+        # Bare `self` ctor args (e.g., `GraphRunnerCls(self)`) — replace whole-token.
+        .replace("(self)", "(model_runner_ref)")
     )
 
     dg.write_text(_DEVICE_GRAPHS_HEADER + func_text)

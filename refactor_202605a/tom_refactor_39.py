@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 """Cut `ModelRunner.init_torch_distributed` (139-line method); paste as a free
-function `init_torch_distributed` in `sglang.srt.distributed.bootstrap`.
-
-The body is byte-identical after dedent + `self.X` -> kwarg substitution. The
-three group writebacks (`tp_group`, `pp_group`, `attention_tp_group`) and the
+function `init_torch_distributed` in `sglang.srt.distributed.bootstrap`. Three
+group writebacks (`tp_group`, `pp_group`, `attention_tp_group`) plus the
 returned `pre_model_load_memory` are wrapped in a `TorchDistributedResult`
 dataclass so the caller can copy them onto `self`.
+
+Body is byte-identical after dedent + ``self.X`` -> ``X`` substitution. The
+delegate method is NOT kept on ModelRunner -- the sole caller (in
+``ModelRunner.initialize``) is updated directly to call the free function and
+write back the 3 group fields.
+
+Usage:
+    uv run --python 3.12 tom_refactor_39.py run
+    uv run --python 3.12 tom_refactor_39.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     cut_lines,
     dedent_method_to_function,
@@ -21,28 +32,26 @@ from _helpers import (
     insert_after,
     replace_call_site,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
-)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/38"
-TARGET_COMMIT = "tom_refactor/39"
+BASE = "tom_refactor/38"
+TARGET = "tom_refactor/39"
 
+# Header for the new bootstrap.py file: imports + module-level constants
+# (the original ones live on model_runner.py and are referenced inside the
+# init_torch_distributed body), the result dataclass, and the function
+# signature line. Body is appended after the signature.
 BOOTSTRAP_HEADER = '''from __future__ import annotations
 
 import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Union
 
 import torch
 import torch.distributed as dist
 
-from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.distributed import (
-    get_attention_tp_group,
     get_default_distributed_backend,
     get_pp_group,
     get_tp_group,
@@ -54,19 +63,24 @@ from sglang.srt.distributed import (
     set_torch_symm_mem_all_reduce,
 )
 from sglang.srt.environ import envs
-from sglang.srt.layers.dp_attention import initialize_dp_attention
-from sglang.srt.server_args import ServerArgs
+from sglang.srt.layers.dp_attention import (
+    get_attention_tp_group,
+    initialize_dp_attention,
+)
 from sglang.srt.utils import (
     cpu_has_amx_support,
     get_available_gpu_memory,
     is_host_cpu_arm64,
     is_npu,
     monkey_patch_p2p_access_check,
-    register_sgl_tp_rank,
 )
 from sglang.srt.utils.network import NetworkAddress
+from sglang.srt.utils.patch_torch import register_sgl_tp_rank
 
 logger = logging.getLogger(__name__)
+
+_is_cpu_amx_available = cpu_has_amx_support()
+_is_cpu_arm64 = is_host_cpu_arm64()
 
 
 @dataclass
@@ -79,26 +93,28 @@ class TorchDistributedResult:
 
 def init_torch_distributed(
     *,
-    server_args: ServerArgs,
-    model_config: ModelConfig,
-    device: str,
-    gpu_id: int,
-    tp_rank: int,
-    tp_size: int,
-    pp_rank: int,
-    pp_size: int,
-    dp_size: int,
-    attn_cp_size: int,
-    moe_ep_size: int,
-    moe_dp_size: int,
-    dist_port: int,
-    is_draft_worker: bool,
-    local_omp_cpuid: Optional[Union[List[int], str]],
-) -> TorchDistributedResult:
+    server_args,
+    model_config,
+    device,
+    gpu_id,
+    tp_rank,
+    tp_size,
+    pp_rank,
+    pp_size,
+    dp_size,
+    attn_cp_size,
+    moe_ep_size,
+    moe_dp_size,
+    dist_port,
+    is_draft_worker,
+    local_omp_cpuid,
+):
 '''
 
-DELEGATE = '''    def init_torch_distributed(self):
-        result = _init_torch_distributed(
+# Replacement for the call site `pre_model_load_memory = self.init_torch_distributed()`
+# in `ModelRunner.initialize`. Calls the free function with 15 kwargs and
+# writes the 3 group results back onto `self`.
+INLINE_CALL = '''        result = init_torch_distributed(
             server_args=self.server_args,
             model_config=self.model_config,
             device=self.device,
@@ -118,108 +134,77 @@ DELEGATE = '''    def init_torch_distributed(self):
         self.tp_group = result.tp_group
         self.pp_group = result.pp_group
         self.attention_tp_group = result.attention_tp_group
-        return result.pre_model_load_memory
-
-'''
+        pre_model_load_memory = result.pre_model_load_memory'''
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    bootstrap = dir_root / "python/sglang/srt/distributed/bootstrap.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    bootstrap = wt / "python/sglang/srt/distributed/bootstrap.py"
 
     # ---- Cut the method body from ModelRunner ----
     start, end = find_method_lines(
-        mr.read_text(),
-        class_name="ModelRunner",
-        method_name="init_torch_distributed",
+        mr.read_text(), class_name="ModelRunner", method_name="init_torch_distributed"
     )
     method_text = cut_lines(mr, start, end)
 
-    # ---- Build the function body: dedent + self.X -> kwarg sub ----
+    # ---- Build the function body: dedent, drop signature, s/self.X/X/, ----
+    # ---- replace the 3 group writebacks with local var assigns + return  ----
     body = dedent_method_to_function(method_text)
-    # Drop the original signature line; we'll prepend a new one in the header.
     body = body.replace("def init_torch_distributed(self):\n", "")
 
-    # `self.X` -> `X` for every kwarg.
-    self_to_kwarg = [
-        "device",
-        "gpu_id",
-        "tp_rank",
-        "tp_size",
-        "pp_rank",
-        "pp_size",
-        "dp_size",
-        "attn_cp_size",
-        "moe_ep_size",
-        "moe_dp_size",
-        "dist_port",
-        "is_draft_worker",
-        "local_omp_cpuid",
-        "server_args",
-        "model_config",
-    ]
-    for name in self_to_kwarg:
+    for name in (
+        "device", "gpu_id", "tp_rank", "tp_size", "pp_rank", "pp_size",
+        "dp_size", "attn_cp_size", "moe_ep_size", "moe_dp_size",
+        "dist_port", "is_draft_worker", "local_omp_cpuid",
+        "server_args", "model_config",
+    ):
         body = body.replace(f"self.{name}", name)
 
-    # The 3 group writebacks become local var assignments.
+    # After dedent, original 8-space indent is now 4 spaces (function body).
     body = body.replace(
-        "        self.tp_group = get_tp_group()\n"
-        "        self.pp_group = get_pp_group()\n"
-        "        self.attention_tp_group = get_attention_tp_group()\n",
-        "        tp_group = get_tp_group()\n"
-        "        pp_group = get_pp_group()\n"
-        "        attention_tp_group = get_attention_tp_group()\n",
+        "    self.tp_group = get_tp_group()\n"
+        "    self.pp_group = get_pp_group()\n"
+        "    self.attention_tp_group = get_attention_tp_group()\n",
+        "    tp_group = get_tp_group()\n"
+        "    pp_group = get_pp_group()\n"
+        "    attention_tp_group = get_attention_tp_group()\n",
     )
 
-    # Final return wraps in TorchDistributedResult.
     body = body.replace(
-        "        return pre_model_load_memory\n",
-        "        return TorchDistributedResult(\n"
-        "            tp_group=tp_group,\n"
-        "            pp_group=pp_group,\n"
-        "            attention_tp_group=attention_tp_group,\n"
-        "            pre_model_load_memory=pre_model_load_memory,\n"
-        "        )\n",
+        "    return pre_model_load_memory\n",
+        "    return TorchDistributedResult(\n"
+        "        tp_group=tp_group,\n"
+        "        pp_group=pp_group,\n"
+        "        attention_tp_group=attention_tp_group,\n"
+        "        pre_model_load_memory=pre_model_load_memory,\n"
+        "    )\n",
     )
 
     bootstrap.parent.mkdir(parents=True, exist_ok=True)
     bootstrap.write_text(BOOTSTRAP_HEADER + body)
 
-    # ---- Update ModelRunner: add import + thin delegate ----
+    # ---- Update ModelRunner: add free-function import; rewrite caller ----
     text = mr.read_text()
-
-    # Add the bootstrap import after the parallel_state monkey-patch import.
     text = insert_after(
         text,
         anchor="from sglang.srt.distributed.parallel_state import monkey_patch_vllm_parallel_state\n",
-        addition="from sglang.srt.distributed.bootstrap import init_torch_distributed as _init_torch_distributed\n",
+        addition="from sglang.srt.distributed.bootstrap import init_torch_distributed\n",
     )
-
-    # Splice the delegate where the cut method used to live. The cut left a
-    # gap exactly between the previous method's blank-line tail and the next
-    # method header. We anchor on the unique line that was after the cut.
-    src_lines = mr.read_text().splitlines(keepends=True)
-    # Reinsert delegate at the original `start` line.
-    new_text = "".join(src_lines[:start]) + DELEGATE + "".join(src_lines[start:])
-    mr.write_text(new_text)
-
-    # Sanity check: caller invocation site is unchanged (still
-    # `pre_model_load_memory = self.init_torch_distributed()`).
-    assert "pre_model_load_memory = self.init_torch_distributed()" in mr.read_text()
+    text = replace_call_site(
+        text,
+        old="        pre_model_load_memory = self.init_torch_distributed()\n",
+        new=INLINE_CALL + "\n",
+    )
+    mr.write_text(text)
 
     git_add_and_commit(
         "Extract init_torch_distributed to distributed/bootstrap.py",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
-
-
-# Helper to silence unused-import warnings if ruff strips them.
-_ = replace_call_site
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

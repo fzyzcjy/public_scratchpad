@@ -1,164 +1,116 @@
 #!/usr/bin/env python3
-"""Reproducible transform: migrate Scheduler to NgramEmbeddingManager
-(PR 2/3 of ngram embedding migration).
+"""Migrate `Scheduler._maybe_prepare_ngram_embedding` onto `NgramEmbeddingManager`
+(PR 2/3 of the ngram embedding migration).
 
-- Add `prepare_for_forward(batch)` method to `NgramEmbeddingManager` (body
-  of `Scheduler._maybe_prepare_ngram_embedding`).
-- Scheduler.maybe_init_ngram_embedding: assign
-  `self.ngram_embedding_manager = self.tp_worker.model_runner.ngram_embedding_manager`
-  instead of constructing its own copies.
-- Scheduler._maybe_prepare_ngram_embedding becomes a delegate.
-- Delete the 4 Scheduler fields: `use_ngram_embedding`, `token_table`,
-  `ngram_embedding_n`, `ngram_embedding_k`.
+- Cut `_maybe_prepare_ngram_embedding` from Scheduler via ``cut_lines`` and
+  append it onto `NgramEmbeddingManager`. Body is byte-identical: the method
+  reads ``self.use_ngram_embedding`` / ``self.token_table`` /
+  ``self.ngram_embedding_n``, and the manager (per /43) carries those exact
+  field names -- no renames required.
+- Scheduler.maybe_init_ngram_embedding gains a ``self.ngram_embedding_manager
+  = self.tp_worker.model_runner.ngram_embedding_manager`` line; the existing
+  4 fields (``use_ngram_embedding`` / ``token_table`` / ``ngram_embedding_n``
+  / ``ngram_embedding_k``) stay (Ch1 forbids deleting them; deferred to Ch2).
+- Scheduler caller `ret = self._maybe_prepare_ngram_embedding(ret)` becomes
+  `ret = self.ngram_embedding_manager._maybe_prepare_ngram_embedding(ret)`
+  (method privacy is preserved -- privacy flip is Ch2).
+
+Usage:
+    uv run --python 3.12 tom_refactor_44.py run
+    uv run --python 3.12 tom_refactor_44.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from mechanical_refactor_verify_utils import (
-    verify_mechanical_refactor,
-    git_add_and_commit,
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+from _helpers import (
+    append_to_file,
+    cut_lines,
+    find_method_lines,
+    insert_after,
+    replace_call_site,
 )
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/43"
-TARGET_COMMIT = "tom_refactor/44"
+BASE = "tom_refactor/43"
+TARGET = "tom_refactor/44"
 
 
-def transform(dir_root: Path) -> None:
-    # ---- Append prepare_for_forward to NgramEmbeddingManager ----
-    manager = dir_root / "python/sglang/srt/layers/n_gram_embedding_manager.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    sched = wt / "python/sglang/srt/managers/scheduler.py"
+    manager = wt / "python/sglang/srt/layers/n_gram_embedding_manager.py"
+
+    # The migrated body uses Optional + ScheduleBatch + ForwardMode; add the
+    # imports the new location needs to compile.
     text = manager.read_text()
-
-    new_method = (
-        "\n"
-        "    def prepare_for_forward(self, batch) -> None:\n"
-        "        from sglang.srt.managers.schedule_batch import ForwardMode\n"
-        "\n"
-        "        batch.ne_token_table = self.table\n"
-        "        if batch.forward_mode != ForwardMode.EXTEND:\n"
-        "            return\n"
-        "        all_tokens = []\n"
-        "        column_starts = []\n"
-        "        request_lengths = []\n"
-        "        for req in batch.reqs:\n"
-        "            start = len(req.prefix_indices)\n"
-        "            end = start + req.extend_input_len\n"
-        "            fill_ids = req.origin_input_ids + req.output_ids\n"
-        "            if start == 0:\n"
-        "                tokens = fill_ids[start:end]\n"
-        "                column_starts.append(0)\n"
-        "            elif start < self.n:\n"
-        "                tokens = fill_ids[0:end]\n"
-        "                column_starts.append(0)\n"
-        "            else:\n"
-        "                # Prepend n-1 tokens before prefix_len for n-gram context\n"
-        "                tokens = fill_ids[start - self.n + 1 : end]\n"
-        "                column_starts.append(start - self.n + 1)\n"
-        "            all_tokens.extend(tokens)\n"
-        "            request_lengths.append(len(tokens))\n"
-        "        dtype = self.table.dtype\n"
-        "        device = self.table.device\n"
-        "        update_token_table(\n"
-        "            ne_token_table=self.table,\n"
-        "            tokens=torch.tensor(all_tokens, dtype=dtype, device=device),\n"
-        "            row_indices=batch.req_pool_indices,\n"
-        "            column_starts=torch.tensor(column_starts, dtype=torch.int32, device=device),\n"
-        "            req_lens=torch.tensor(request_lengths, dtype=torch.int32, device=device),\n"
-        "            ignore_tokens=None,\n"
-        "        )\n"
+    text = insert_after(
+        text,
+        anchor="from __future__ import annotations\n",
+        addition="\nfrom typing import Optional\n",
     )
-    text = text.rstrip() + "\n" + new_method
+    text = insert_after(
+        text,
+        anchor="from sglang.jit_kernel.ngram_embedding import update_token_table\n",
+        addition=(
+            "from sglang.srt.managers.schedule_batch import ForwardMode, ScheduleBatch\n"
+        ),
+    )
     manager.write_text(text)
 
+    # ---- Cut _maybe_prepare_ngram_embedding from Scheduler. ----
+    s, e = find_method_lines(
+        sched.read_text(),
+        class_name="Scheduler",
+        method_name="_maybe_prepare_ngram_embedding",
+    )
+    method_text = cut_lines(sched, s, e)
+
+    append_to_file(manager, method_text.rstrip() + "\n")
+
     # ---- Update Scheduler ----
-    sched = dir_root / "python/sglang/srt/managers/scheduler.py"
     text = sched.read_text()
 
-    old_init = (
-        "    def maybe_init_ngram_embedding(self):\n"
-        "        self.use_ngram_embedding = self.tp_worker.model_config.use_ngram_embedding\n"
-        "        if self.use_ngram_embedding:\n"
-        "            self.token_table = self.tp_worker.model_runner.token_table\n"
-        "            hf_config = self.tp_worker.model_config.hf_config\n"
-        "            self.ngram_embedding_n = hf_config.ngram_embedding_n\n"
-        "            self.ngram_embedding_k = hf_config.ngram_embedding_k\n"
+    # Add the manager-ref assignment to maybe_init_ngram_embedding -- prepend
+    # the new line, keep the existing 4 field assignments untouched (Ch1
+    # forbids deleting Scheduler fields here -- that is Ch2 work).
+    text = replace_call_site(
+        text,
+        old=(
+            "    def maybe_init_ngram_embedding(self):\n"
+            "        self.use_ngram_embedding = self.tp_worker.model_config.use_ngram_embedding\n"
+        ),
+        new=(
+            "    def maybe_init_ngram_embedding(self):\n"
+            "        self.ngram_embedding_manager = self.tp_worker.model_runner.ngram_embedding_manager\n"
+            "        self.use_ngram_embedding = self.tp_worker.model_config.use_ngram_embedding\n"
+        ),
     )
-    new_init = (
-        "    def maybe_init_ngram_embedding(self):\n"
-        "        self.ngram_embedding_manager = self.tp_worker.model_runner.ngram_embedding_manager\n"
-    )
-    assert old_init in text
-    text = text.replace(old_init, new_init)
 
-    old_prepare = (
-        "    def _maybe_prepare_ngram_embedding(\n"
-        "        self, batch: Optional[ScheduleBatch]\n"
-        "    ) -> Optional[ScheduleBatch]:\n"
-        '        """Fill the token table for ngram embedding before a forward pass."""\n'
-        "        if batch is None or not self.use_ngram_embedding:\n"
-        "            return batch\n"
-        "        batch.ne_token_table = self.token_table\n"
-        "        if batch.forward_mode == ForwardMode.EXTEND:\n"
-        "            all_tokens = []\n"
-        "            column_starts = []\n"
-        "            request_lengths = []\n"
-        "            for req in batch.reqs:\n"
-        "                start = len(req.prefix_indices)\n"
-        "                end = start + req.extend_input_len\n"
-        "                fill_ids = req.origin_input_ids + req.output_ids\n"
-        "                if start == 0:\n"
-        "                    tokens = fill_ids[start:end]\n"
-        "                    column_starts.append(0)\n"
-        "                elif start < self.ngram_embedding_n:\n"
-        "                    tokens = fill_ids[0:end]\n"
-        "                    column_starts.append(0)\n"
-        "                else:\n"
-        "                    # Prepend n-1 tokens before prefix_len for n-gram context\n"
-        "                    tokens = fill_ids[start - self.ngram_embedding_n + 1 : end]\n"
-        "                    column_starts.append(start - self.ngram_embedding_n + 1)\n"
-        "                all_tokens.extend(tokens)\n"
-        "                request_lengths.append(len(tokens))\n"
-        "            dtype = self.token_table.dtype\n"
-        "            device = self.token_table.device\n"
-        "            update_token_table(\n"
-        "                ne_token_table=self.token_table,\n"
-        "                tokens=torch.tensor(all_tokens, dtype=dtype, device=device),\n"
-        "                row_indices=batch.req_pool_indices,\n"
-        "                column_starts=torch.tensor(\n"
-        "                    column_starts, dtype=torch.int32, device=device\n"
-        "                ),\n"
-        "                req_lens=torch.tensor(\n"
-        "                    request_lengths, dtype=torch.int32, device=device\n"
-        "                ),\n"
-        "                ignore_tokens=None,\n"
-        "            )\n"
-        "        return batch\n"
+    # Update the sole caller in Scheduler.run_batch (or wherever). Method
+    # privacy is preserved (Ch1 forbids privacy flip).
+    text = replace_call_site(
+        text,
+        old="self._maybe_prepare_ngram_embedding(",
+        new="self.ngram_embedding_manager._maybe_prepare_ngram_embedding(",
     )
-    new_prepare = (
-        "    def _maybe_prepare_ngram_embedding(\n"
-        "        self, batch: Optional[ScheduleBatch]\n"
-        "    ) -> Optional[ScheduleBatch]:\n"
-        '        """Fill the token table for ngram embedding before a forward pass."""\n'
-        "        if batch is None or not self.ngram_embedding_manager.enabled:\n"
-        "            return batch\n"
-        "        self.ngram_embedding_manager.prepare_for_forward(batch)\n"
-        "        return batch\n"
-    )
-    assert old_prepare in text
-    text = text.replace(old_prepare, new_prepare)
 
     sched.write_text(text)
 
     git_add_and_commit(
-        "Migrate Scheduler to NgramEmbeddingManager (PR 2/3)",
-        cwd=str(dir_root),
+        "Migrate _maybe_prepare_ngram_embedding to NgramEmbeddingManager (PR 2/3)",
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

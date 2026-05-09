@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Delete the 7 hybrid-arch property delegates (and `_get_linear_attn_registry_result`)
-left behind by /34 on ModelRunner; ripple all consumers to call the free
-functions in `configs.hybrid_arch` directly.
+"""Delete the 7 hybrid-arch property delegates left behind by /34 on
+ModelRunner; ripple all consumers to call the free functions in
+`configs.hybrid_arch` directly.
 
 Per Ch1 rule "**不留 1 行 delegate**", drop the delegates as soon as consumers
-are updated to call the free function. Field `_linear_attn_registry_cache`
-(and the `_UNSET` sentinel) stay — Ch1 forbids dead-code deletion.
+are updated to call the free function. The `_get_linear_attn_registry_result`
+helper (and the `_UNSET` sentinel + `_linear_attn_registry_cache` field) stay
+on ModelRunner — that helper writes back to per-instance cache state, so it
+isn't a property delegate.
 """
 
 # /// script
@@ -27,16 +29,6 @@ from _runner import run_pr
 BASE = "tom_refactor/34"
 TARGET = "tom_refactor/35"
 
-# Properties that take only `model_config`.
-_SIMPLE = {
-    "hybrid_gdn_config",
-    "hybrid_lightning_config",
-    "kimi_linear_config",
-    "linear_attn_model_spec",
-    "qwen3_next_config",
-}
-
-
 def _import_block(names: list[str]) -> str:
     names = sorted(set(names))
     if len(names) == 1:
@@ -46,21 +38,12 @@ def _import_block(names: list[str]) -> str:
 
 
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
+    """Each free function takes a single `model_runner_ref` kwarg (R4 unified
+    approach in /34); rewrite `<accessor>.<name>` -> `<name>(model_runner_ref=<accessor>)`."""
     for name in function_names:
-        if name in _SIMPLE:
-            text = text.replace(
-                f"{accessor}.{name}",
-                f"{name}({accessor}.model_config)",
-            )
-    if "mamba2_config" in function_names:
         text = text.replace(
-            f"{accessor}.mamba2_config",
-            f"mamba2_config({accessor}.model_config, is_draft_worker={accessor}.is_draft_worker)",
-        )
-    if "mambaish_config" in function_names:
-        text = text.replace(
-            f"{accessor}.mambaish_config",
-            f"mambaish_config({accessor}.model_config, is_draft_worker={accessor}.is_draft_worker)",
+            f"{accessor}.{name}",
+            f"{name}(model_runner_ref={accessor})",
         )
     return text
 
@@ -91,7 +74,6 @@ def transform(wt: Path) -> None:
         "hybrid_gdn_config",
         "mamba2_config",
         "kimi_linear_config",
-        "_get_linear_attn_registry_result",
         "linear_attn_model_spec",
         "mambaish_config",
     ]
@@ -103,7 +85,6 @@ def transform(wt: Path) -> None:
     text = mr.read_text()
     alias_import = (
         "from sglang.srt.configs.hybrid_arch import (\n"
-        "    _get_linear_attn_registry_result as _free__get_linear_attn_registry_result,\n"
         "    hybrid_gdn_config as _free_hybrid_gdn_config,\n"
         "    hybrid_lightning_config as _free_hybrid_lightning_config,\n"
         "    kimi_linear_config as _free_kimi_linear_config,\n"

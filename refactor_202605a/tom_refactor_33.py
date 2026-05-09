@@ -53,6 +53,8 @@ def transform(wt: Path) -> None:
             "def init_piecewise_cuda_graphs(*, model_runner_ref, resolve_language_model):\n",
         )
         .replace("self.", "model_runner_ref.")
+        # Bare `self` ctor args (e.g., `BreakableCudaGraphRunner(self)`).
+        .replace("(self)", "(model_runner_ref)")
     )
 
     # Append the function (with required imports) to device_graphs.py.
