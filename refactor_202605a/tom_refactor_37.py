@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Cut `kernel_warmup` and `_flashinfer_autotune` from ModelRunner; paste as
 free functions in existing `model_executor/kernel_warmup.py`. Forward
-`self._dummy_run` as `dummy_run_callable: Callable` (R4 concession).
-ModelRunner methods DELETED; the sole external caller in `initialize()`
-is updated to call the free function.
+`self._dummy_run` as `dummy_run_callable` (R4 concession). ModelRunner methods
+DELETED; the sole external caller in `initialize()` is updated to call the
+free function.
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
@@ -20,65 +24,58 @@ from _helpers import (
     insert_after,
     replace_call_site,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
-)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/36"
-TARGET_COMMIT = "tom_refactor/37"
+BASE = "tom_refactor/36"
+TARGET = "tom_refactor/37"
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    kw = dir_root / "python/sglang/srt/model_executor/kernel_warmup.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
 
-    # ---- Extend kernel_warmup.py imports for Callable + logging. ----
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
+
+    # ---- Extend kernel_warmup.py with logger. ----
     kw_text = kw.read_text()
-    kw_text = replace_call_site(
-        kw_text,
-        old="from typing import Optional\n",
-        new="import logging\nfrom typing import Callable, Optional\n",
-    )
     kw_text = insert_after(
         kw_text,
-        anchor="from sglang.srt.speculative.spec_info import SpeculativeAlgorithm\n",
-        addition="\nlogger = logging.getLogger(__name__)\n",
+        anchor="from sglang.srt.environ import envs\n",
+        addition="\nimport logging\n\nlogger = logging.getLogger(__name__)\n",
     )
     kw.write_text(kw_text)
 
     # ---- Cut kernel_warmup. ----
-    start, end = find_method_lines(
+    s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="kernel_warmup"
     )
-    method_text = cut_lines(mr, start, end)
-    fn = dedent_method_to_function(method_text)
+    fn = dedent_method_to_function(cut_lines(mr, s, e))
     fn = fn.replace(
         "def kernel_warmup(self):\n",
         "def kernel_warmup(\n"
         "    *,\n"
-        "    device: str,\n"
-        "    server_args: ServerArgs,\n"
-        "    spec_algorithm: SpeculativeAlgorithm,\n"
-        "    is_draft_worker: bool,\n"
-        "    model_config: ModelConfig,\n"
-        "    dtype: torch.dtype,\n"
-        "    forward_stream: torch.cuda.Stream,\n"
-        "    req_to_token_pool_size: int,\n"
-        "    tp_rank: int,\n"
-        "    tp_size: int,\n"
-        "    pp_rank: int,\n"
-        "    pp_size: int,\n"
-        "    dp_rank: Optional[int],\n"
-        "    dp_size: int,\n"
-        "    moe_ep_size: int,\n"
-        "    dummy_run_callable: Callable[..., None],\n"
-        ") -> None:\n",
+        "    device,\n"
+        "    server_args,\n"
+        "    spec_algorithm,\n"
+        "    is_draft_worker,\n"
+        "    model_config,\n"
+        "    dtype,\n"
+        "    forward_stream,\n"
+        "    req_to_token_pool_size,\n"
+        "    tp_rank,\n"
+        "    tp_size,\n"
+        "    pp_rank,\n"
+        "    pp_size,\n"
+        "    dp_rank,\n"
+        "    dp_size,\n"
+        "    moe_ep_size,\n"
+        "    dummy_run_callable,\n"
+        "):\n",
     )
-    fn = fn.replace("self.device", "device")
-    fn = fn.replace("self.server_args", "server_args")
-    fn = fn.replace("self.spec_algorithm", "spec_algorithm")
-    fn = fn.replace("self.is_draft_worker", "is_draft_worker")
+    # Inside kernel_warmup body: replace the `self._flashinfer_autotune()` call
+    # with the free function (it's about to be cut on the next step). The
+    # `_should_run_flashinfer_autotune(...)` call was already rewritten by /36.
     fn = fn.replace(
         "    ):\n        self._flashinfer_autotune()\n",
         "    ):\n"
@@ -99,38 +96,43 @@ def transform(dir_root: Path) -> None:
         "            dummy_run_callable=dummy_run_callable,\n"
         "        )\n",
     )
+    fn = fn.replace("self.device", "device")
+    fn = fn.replace("self.server_args", "server_args")
+    fn = fn.replace("self.spec_algorithm", "spec_algorithm")
+    fn = fn.replace("self.is_draft_worker", "is_draft_worker")
     append_to_file(kw, fn)
 
     # ---- Cut _flashinfer_autotune. ----
-    start, end = find_method_lines(
+    s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="_flashinfer_autotune"
     )
-    method_text = cut_lines(mr, start, end)
-    fn = dedent_method_to_function(method_text)
+    fn = dedent_method_to_function(cut_lines(mr, s, e))
     fn = fn.replace(
         "def _flashinfer_autotune(self):\n",
         "def _flashinfer_autotune(\n"
         "    *,\n"
-        "    server_args: ServerArgs,\n"
-        "    model_config: ModelConfig,\n"
-        "    dtype: torch.dtype,\n"
-        "    device: str,\n"
-        "    forward_stream: torch.cuda.Stream,\n"
-        "    req_to_token_pool_size: int,\n"
-        "    tp_rank: int,\n"
-        "    tp_size: int,\n"
-        "    pp_rank: int,\n"
-        "    pp_size: int,\n"
-        "    dp_rank: Optional[int],\n"
-        "    dp_size: int,\n"
-        "    moe_ep_size: int,\n"
-        "    dummy_run_callable: Callable[..., None],\n"
-        ") -> None:\n",
+        "    server_args,\n"
+        "    model_config,\n"
+        "    dtype,\n"
+        "    device,\n"
+        "    forward_stream,\n"
+        "    req_to_token_pool_size,\n"
+        "    tp_rank,\n"
+        "    tp_size,\n"
+        "    pp_rank,\n"
+        "    pp_size,\n"
+        "    dp_rank,\n"
+        "    dp_size,\n"
+        "    moe_ep_size,\n"
+        "    dummy_run_callable,\n"
+        "):\n",
     )
-    # Substitute self.X → kwarg references throughout the body. Do longer
-    # paths first so they don't get partially eaten by shorter ones.
-    fn = fn.replace("self._dummy_run(batch_size=self.req_to_token_pool.size)",
-                    "dummy_run_callable(batch_size=req_to_token_pool_size)")
+    # The body already has the rewritten `_flashinfer_autotune_cache_path(...)`
+    # call from /36; just need to redirect each kwarg from self.X to local X.
+    fn = fn.replace(
+        "self._dummy_run(batch_size=self.req_to_token_pool.size)",
+        "dummy_run_callable(batch_size=req_to_token_pool_size)",
+    )
     fn = fn.replace("self.server_args", "server_args")
     fn = fn.replace("self.model_config", "model_config")
     fn = fn.replace("self.forward_stream", "forward_stream")
@@ -173,7 +175,6 @@ def transform(dir_root: Path) -> None:
         ),
     )
 
-    # Extend the existing kernel_warmup import to also pull in `kernel_warmup`.
     old_import = (
         "from sglang.srt.model_executor.kernel_warmup import (\n"
         "    _flashinfer_autotune_cache_path,\n"
@@ -193,13 +194,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Extract kernel_warmup and _flashinfer_autotune to free functions",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

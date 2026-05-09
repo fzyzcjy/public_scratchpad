@@ -1,178 +1,171 @@
 #!/usr/bin/env python3
-"""Cut 7 hybrid-arch ModelRunner properties + 1 helper to free functions in
-`configs/hybrid_arch.py`. Each property body is cut byte-identical (via
-`find_method_lines` + line-range slice) and reassembled with `self.X`
-substitutions. ModelRunner properties become 1-line delegates.
+"""Cut 7 hybrid-arch ModelRunner properties + 1 helper to free functions in a
+new `configs/hybrid_arch.py`.
+
+Free functions keep the original property/method names (no Ch1 rename). Each
+free function takes `model_config` (and `is_draft_worker` where needed) as
+kwargs in place of `self`. ModelRunner keeps a 1-line property delegate to
+avoid a Ch1 cross-file rename ripple — the delegate calls the free function
+via an aliased import (`as _free_X`). Delegate deletion happens in /35.
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
+    cut_lines,
     dedent_method_to_function,
     find_method_lines,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
+from _runner import run_pr
+
+BASE = "tom_refactor/33"
+TARGET = "tom_refactor/34"
+
+
+_HEADER = (
+    "from __future__ import annotations\n"
+    "\n"
+    "\n"
+    "from sglang.srt.configs import (\n"
+    "    BailingHybridConfig,\n"
+    "    FalconH1Config,\n"
+    "    GraniteMoeHybridConfig,\n"
+    "    JetNemotronConfig,\n"
+    "    JetVLMConfig,\n"
+    "    KimiLinearConfig,\n"
+    "    Lfm2Config,\n"
+    "    Lfm2MoeConfig,\n"
+    "    Lfm2VlConfig,\n"
+    "    NemotronH_Nano_VL_V2_Config,\n"
+    "    NemotronHConfig,\n"
+    "    Qwen3_5Config,\n"
+    "    Qwen3_5MoeConfig,\n"
+    "    Qwen3NextConfig,\n"
+    ")\n"
+    "from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config\n"
 )
 
-BASE_COMMIT = "tom_refactor/33"
-TARGET_COMMIT = "tom_refactor/34"
 
-
-def _swap_method(mr: Path, *, method_name: str, delegate: str) -> str:
-    """Cut method [start, end) from ModelRunner, splice ``delegate`` in its place,
-    and return the original method text for free-function construction."""
-    text = mr.read_text()
+def _extract_property_to_function(
+    mr_path: Path,
+    *,
+    method_name: str,
+    new_signature: str,
+    self_subs: dict[str, str],
+    delegate_body: str,
+    is_property: bool = True,
+) -> str:
+    """Cut a method from ModelRunner; replace with a 1-line delegate; return the
+    free-function source built from the original method body."""
+    text = mr_path.read_text()
     start, end = find_method_lines(text, class_name="ModelRunner", method_name=method_name)
     src = text.splitlines(keepends=True)
     method_text = "".join(src[start:end])
-    mr.write_text("".join(src[:start] + [delegate] + src[end:]))
-    return method_text
-
-
-def _to_free_func(method_text: str, *, old_sig: str, new_sig: str, subs: dict[str, str]) -> str:
-    """Dedent method body, drop @property decorator, swap signature, apply subs."""
-    fn = dedent_method_to_function(method_text)
-    fn = fn.replace("@property\n", "", 1)
-    fn = fn.replace(old_sig, new_sig)
-    for old, new in subs.items():
-        fn = fn.replace(old, new)
-    return fn
-
-
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    ha = dir_root / "python/sglang/srt/configs/hybrid_arch.py"
-
-    # Bootstrap target file with imports.
-    ha.write_text(
-        "from __future__ import annotations\n"
-        "\n"
-        "\n"
-        "from sglang.srt.configs import (\n"
-        "    BailingHybridConfig,\n"
-        "    FalconH1Config,\n"
-        "    GraniteMoeHybridConfig,\n"
-        "    JetNemotronConfig,\n"
-        "    JetVLMConfig,\n"
-        "    KimiLinearConfig,\n"
-        "    Lfm2Config,\n"
-        "    Lfm2MoeConfig,\n"
-        "    Lfm2VlConfig,\n"
-        "    NemotronH_Nano_VL_V2_Config,\n"
-        "    NemotronHConfig,\n"
-        "    Qwen3_5Config,\n"
-        "    Qwen3_5MoeConfig,\n"
-        "    Qwen3NextConfig,\n"
-        ")\n"
-        "from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config\n"
-        "from sglang.srt.configs.model_config import ModelConfig\n"
+    delegate_lines = (
+        ("    @property\n" if is_property else "")
+        + f"    def {method_name}(self):\n"
+        + f"        {delegate_body}\n"
+        + "\n"
     )
+    mr_path.write_text("".join(src[:start] + [delegate_lines] + src[end:]))
 
-    mc_subs = {"self.model_config": "model_config"}
-    mc_idw_subs = {**mc_subs, "self.is_draft_worker": "is_draft_worker"}
+    func_text = dedent_method_to_function(method_text)
+    func_text = func_text.replace("@property\n", "", 1)
+    # Replace the original `def NAME(self):\n` with the new signature.
+    old_sig = f"def {method_name}(self):\n"
+    func_text = func_text.replace(old_sig, new_signature)
+    for old, new in self_subs.items():
+        func_text = func_text.replace(old, new)
+    return func_text
 
-    # Cut each property; replace with 1-line delegate; build free function.
-    properties = [
-        ("qwen3_next_config", "get_qwen3_next_config",
-         "def qwen3_next_config(self):\n",
-         "def get_qwen3_next_config(model_config: ModelConfig):\n",
-         mc_subs,
-         "    @property\n    def qwen3_next_config(self):\n        return get_qwen3_next_config(self.model_config)\n\n"),
-        ("hybrid_lightning_config", "get_hybrid_lightning_config",
-         "def hybrid_lightning_config(self):\n",
-         "def get_hybrid_lightning_config(model_config: ModelConfig):\n",
-         mc_subs,
-         "    @property\n    def hybrid_lightning_config(self):\n        return get_hybrid_lightning_config(self.model_config)\n\n"),
-        ("hybrid_gdn_config", "get_hybrid_gdn_config",
-         "def hybrid_gdn_config(self):\n",
-         "def get_hybrid_gdn_config(model_config: ModelConfig):\n",
-         mc_subs,
-         "    @property\n    def hybrid_gdn_config(self):\n        return get_hybrid_gdn_config(self.model_config)\n\n"),
-        ("mamba2_config", "get_mamba2_config",
-         "def mamba2_config(self):\n",
-         "def get_mamba2_config(model_config: ModelConfig, *, is_draft_worker: bool):\n",
-         mc_idw_subs,
-         "    @property\n    def mamba2_config(self):\n        return get_mamba2_config(self.model_config, is_draft_worker=self.is_draft_worker)\n\n"),
-        ("kimi_linear_config", "get_kimi_linear_config",
-         "def kimi_linear_config(self):\n",
-         "def get_kimi_linear_config(model_config: ModelConfig):\n",
-         mc_subs,
-         "    @property\n    def kimi_linear_config(self):\n        return get_kimi_linear_config(self.model_config)\n\n"),
+
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    ha = wt / "python/sglang/srt/configs/hybrid_arch.py"
+
+    ha.write_text(_HEADER)
+
+    mc = {"self.model_config": "model_config"}
+    mc_idw = {**mc, "self.is_draft_worker": "is_draft_worker"}
+
+    simple_properties = [
+        ("qwen3_next_config", mc),
+        ("hybrid_lightning_config", mc),
+        ("hybrid_gdn_config", mc),
+        ("kimi_linear_config", mc),
     ]
-    for name, _, old_sig, new_sig, subs, delegate in properties:
-        method_text = _swap_method(mr, method_name=name, delegate=delegate)
-        append_to_file(ha, _to_free_func(method_text, old_sig=old_sig, new_sig=new_sig, subs=subs))
+    for name, subs in simple_properties:
+        fn = _extract_property_to_function(
+            mr,
+            method_name=name,
+            new_signature=f"def {name}(model_config):\n",
+            self_subs=subs,
+            delegate_body=f"return _free_{name}(self.model_config)",
+        )
+        append_to_file(ha, fn)
 
-    # `_get_linear_attn_registry_result` is a method (not @property). The free
-    # function drops the per-instance cache (cache field deletion lands in /35);
-    # body is hand-written to match the documented exception.
-    _swap_method(
+    fn = _extract_property_to_function(
         mr,
-        method_name="_get_linear_attn_registry_result",
-        delegate=(
-            "    def _get_linear_attn_registry_result(self):\n"
-            "        return _get_linear_attn_registry_result(self.model_config)\n\n"
-        ),
-    )
-    append_to_file(
-        ha,
-        "def _get_linear_attn_registry_result(model_config: ModelConfig):\n"
-        "    return get_linear_attn_config(model_config.hf_config)\n",
-    )
-
-    # Remaining two properties depend on the helper.
-    method_text = _swap_method(
-        mr,
-        method_name="linear_attn_model_spec",
-        delegate=(
-            "    @property\n"
-            "    def linear_attn_model_spec(self):\n"
-            "        return get_linear_attn_model_spec(self.model_config)\n\n"
-        ),
-    )
-    fn = _to_free_func(
-        method_text,
-        old_sig="def linear_attn_model_spec(self):\n",
-        new_sig="def get_linear_attn_model_spec(model_config: ModelConfig):\n",
-        subs={"self._get_linear_attn_registry_result()": "_get_linear_attn_registry_result(model_config)"},
+        method_name="mamba2_config",
+        new_signature="def mamba2_config(model_config, *, is_draft_worker):\n",
+        self_subs=mc_idw,
+        delegate_body="return _free_mamba2_config(self.model_config, is_draft_worker=self.is_draft_worker)",
     )
     append_to_file(ha, fn)
 
-    method_text = _swap_method(
+    fn = _extract_property_to_function(
         mr,
-        method_name="mambaish_config",
-        delegate=(
-            "    @property\n"
-            "    def mambaish_config(self):\n"
-            "        return get_mambaish_config(self.model_config, is_draft_worker=self.is_draft_worker)\n"
-        ),
+        method_name="_get_linear_attn_registry_result",
+        new_signature="def _get_linear_attn_registry_result(model_config):\n",
+        self_subs=mc,
+        delegate_body="return _free__get_linear_attn_registry_result(self.model_config)",
+        is_property=False,
     )
-    fn = _to_free_func(
-        method_text,
-        old_sig="def mambaish_config(self):\n",
-        new_sig="def get_mambaish_config(model_config: ModelConfig, *, is_draft_worker: bool):\n",
-        subs={
-            "self.mamba2_config": "get_mamba2_config(model_config, is_draft_worker=is_draft_worker)",
-            "self.hybrid_gdn_config": "get_hybrid_gdn_config(model_config)",
-            "self.kimi_linear_config": "get_kimi_linear_config(model_config)",
-            "self.hybrid_lightning_config": "get_hybrid_lightning_config(model_config)",
+    append_to_file(ha, fn)
+
+    fn = _extract_property_to_function(
+        mr,
+        method_name="linear_attn_model_spec",
+        new_signature="def linear_attn_model_spec(model_config):\n",
+        self_subs={
+            **mc,
             "self._get_linear_attn_registry_result()": "_get_linear_attn_registry_result(model_config)",
         },
+        delegate_body="return _free_linear_attn_model_spec(self.model_config)",
+    )
+    append_to_file(ha, fn)
+
+    fn = _extract_property_to_function(
+        mr,
+        method_name="mambaish_config",
+        new_signature="def mambaish_config(model_config, *, is_draft_worker):\n",
+        self_subs={
+            **mc_idw,
+            "self.mamba2_config": "mamba2_config(model_config, is_draft_worker=is_draft_worker)",
+            "self.hybrid_gdn_config": "hybrid_gdn_config(model_config)",
+            "self.kimi_linear_config": "kimi_linear_config(model_config)",
+            "self.hybrid_lightning_config": "hybrid_lightning_config(model_config)",
+            "self._get_linear_attn_registry_result()": "_get_linear_attn_registry_result(model_config)",
+        },
+        delegate_body="return _free_mambaish_config(self.model_config, is_draft_worker=self.is_draft_worker)",
     )
     append_to_file(ha, fn)
 
     # ---- Update model_runner.py imports. ----
     text = mr.read_text()
 
-    # Drop the `from sglang.srt.configs import (...)` block (now only used in
-    # hybrid_arch.py).
     old_configs_block = (
         "from sglang.srt.configs import (\n"
         "    BailingHybridConfig,\n"
@@ -194,21 +187,19 @@ def transform(dir_root: Path) -> None:
     assert old_configs_block in text, "configs import block not found"
     text = text.replace(old_configs_block, "")
 
-    # Replace the `linear_attn_model_registry` import with the new hybrid_arch
-    # import block.
     old_import = (
         "from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config\n"
     )
     new_import = (
         "from sglang.srt.configs.hybrid_arch import (\n"
-        "    _get_linear_attn_registry_result,\n"
-        "    get_hybrid_gdn_config,\n"
-        "    get_hybrid_lightning_config,\n"
-        "    get_kimi_linear_config,\n"
-        "    get_linear_attn_model_spec,\n"
-        "    get_mamba2_config,\n"
-        "    get_mambaish_config,\n"
-        "    get_qwen3_next_config,\n"
+        "    _get_linear_attn_registry_result as _free__get_linear_attn_registry_result,\n"
+        "    hybrid_gdn_config as _free_hybrid_gdn_config,\n"
+        "    hybrid_lightning_config as _free_hybrid_lightning_config,\n"
+        "    kimi_linear_config as _free_kimi_linear_config,\n"
+        "    linear_attn_model_spec as _free_linear_attn_model_spec,\n"
+        "    mamba2_config as _free_mamba2_config,\n"
+        "    mambaish_config as _free_mambaish_config,\n"
+        "    qwen3_next_config as _free_qwen3_next_config,\n"
         ")\n"
     )
     assert old_import in text, "linear_attn_model_registry import not found"
@@ -218,13 +209,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Extract 7 hybrid-arch properties to free functions in configs.hybrid_arch",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

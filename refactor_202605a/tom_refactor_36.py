@@ -2,16 +2,20 @@
 """Cut leaf helpers `_should_run_flashinfer_autotune` and
 `_flashinfer_autotune_cache_path` from ModelRunner; paste as free functions
 in new file `model_executor/kernel_warmup.py`. Update the in-class callers
-(inside `kernel_warmup` / `_flashinfer_autotune` methods, which are still on
-ModelRunner at this point) and add an import.
+(inside `kernel_warmup` / `_flashinfer_autotune`, still on ModelRunner) and
+add an aliased import.
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
@@ -20,50 +24,47 @@ from _helpers import (
     insert_after,
     replace_call_site,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
+from _runner import run_pr
+
+BASE = "tom_refactor/35"
+TARGET = "tom_refactor/36"
+
+
+_HEADER = (
+    "from __future__ import annotations\n"
+    "\n"
+    "import hashlib\n"
+    "from pathlib import Path\n"
+    "\n"
+    "import torch\n"
+    "\n"
+    "from sglang.srt.environ import envs\n"
 )
 
-BASE_COMMIT = "tom_refactor/35"
-TARGET_COMMIT = "tom_refactor/36"
 
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    kw = dir_root / "python/sglang/srt/model_executor/kernel_warmup.py"
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
 
-    # Bootstrap target file with imports.
-    kw.write_text(
-        "from __future__ import annotations\n"
-        "\n"
-        "import hashlib\n"
-        "from pathlib import Path\n"
-        "from typing import Optional\n"
-        "\n"
-        "import torch\n"
-        "\n"
-        "from sglang.srt.configs.model_config import ModelConfig\n"
-        "from sglang.srt.environ import envs\n"
-        "from sglang.srt.server_args import ServerArgs\n"
-        "from sglang.srt.speculative.spec_info import SpeculativeAlgorithm\n"
-    )
+    kw.write_text(_HEADER)
 
     # ---- Cut _should_run_flashinfer_autotune. ----
-    start, end = find_method_lines(
+    s, e = find_method_lines(
         mr.read_text(),
         class_name="ModelRunner",
         method_name="_should_run_flashinfer_autotune",
     )
-    method_text = cut_lines(mr, start, end)
-    fn = dedent_method_to_function(method_text)
+    fn = dedent_method_to_function(cut_lines(mr, s, e))
     fn = fn.replace(
         "def _should_run_flashinfer_autotune(self) -> bool:\n",
         "def _should_run_flashinfer_autotune(\n"
         "    *,\n"
-        "    server_args: ServerArgs,\n"
-        "    spec_algorithm: SpeculativeAlgorithm,\n"
-        "    is_draft_worker: bool,\n"
+        "    server_args,\n"
+        "    spec_algorithm,\n"
+        "    is_draft_worker,\n"
         ") -> bool:\n",
     )
     fn = fn.replace("self.server_args", "server_args")
@@ -72,33 +73,32 @@ def transform(dir_root: Path) -> None:
     append_to_file(kw, fn)
 
     # ---- Cut _flashinfer_autotune_cache_path. ----
-    start, end = find_method_lines(
+    s, e = find_method_lines(
         mr.read_text(),
         class_name="ModelRunner",
         method_name="_flashinfer_autotune_cache_path",
     )
-    method_text = cut_lines(mr, start, end)
-    fn = dedent_method_to_function(method_text)
+    fn = dedent_method_to_function(cut_lines(mr, s, e))
     fn = fn.replace(
         "def _flashinfer_autotune_cache_path(self) -> Path:\n",
         "def _flashinfer_autotune_cache_path(\n"
         "    *,\n"
-        "    server_args: ServerArgs,\n"
-        "    model_config: ModelConfig,\n"
-        "    dtype: torch.dtype,\n"
-        "    device: str,\n"
-        "    tp_rank: int,\n"
-        "    tp_size: int,\n"
-        "    pp_rank: int,\n"
-        "    pp_size: int,\n"
-        "    dp_rank: Optional[int],\n"
-        "    dp_size: int,\n"
-        "    moe_ep_size: int,\n"
+        "    server_args,\n"
+        "    model_config,\n"
+        "    dtype,\n"
+        "    device,\n"
+        "    tp_rank,\n"
+        "    tp_size,\n"
+        "    pp_rank,\n"
+        "    pp_size,\n"
+        "    dp_rank,\n"
+        "    dp_size,\n"
+        "    moe_ep_size,\n"
         ") -> Path:\n",
     )
     fn = fn.replace("torch.cuda.get_device_capability(self.device)",
                     "torch.cuda.get_device_capability(device)")
-    fn = fn.replace("    server_args = self.server_args\n", "")
+    fn = fn.replace("self.server_args", "server_args")
     fn = fn.replace("self.dtype", "dtype")
     fn = fn.replace("self.tp_size", "tp_size")
     fn = fn.replace("self.pp_size", "pp_size")
@@ -165,13 +165,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Extract _should_run_flashinfer_autotune and _flashinfer_autotune_cache_path to free functions",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

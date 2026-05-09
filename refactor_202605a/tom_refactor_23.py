@@ -1,83 +1,129 @@
 #!/usr/bin/env python3
-"""Cut `configure_kv_cache_dtype` and `TORCH_DTYPE_TO_KV_CACHE_STR` to new file mem_cache/kv_cache_dtype.py."""
+"""Cut `configure_kv_cache_dtype` and `TORCH_DTYPE_TO_KV_CACHE_STR` from
+ModelRunner to a new file `mem_cache/kv_cache_dtype.py`. The free function
+returns a `@dataclass` carrying the two writeback fields.
+
+Usage:
+    uv run --python 3.12 tom_refactor_23.py run
+    uv run --python 3.12 tom_refactor_23.py verify
+"""
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
-from _helpers import append_to_file, cut_lines, dedent_method_to_function, find_method_lines
-from mechanical_refactor_verify_utils import git_add_and_commit, verify_mechanical_refactor
+sys.path.insert(0, str(HERE))
+from _helpers import (
+    append_to_file,
+    cut_lines,
+    dedent_method_to_function,
+    find_method_lines,
+    insert_after,
+    replace_call_site,
+)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/22"
-TARGET_COMMIT = "tom_refactor/23"
+BASE = "tom_refactor/22"
+TARGET = "tom_refactor/23"
+
 
 NEW_HEADER = (
-    "import logging\n\nimport torch\n\n"
+    "import logging\n"
+    "from dataclasses import dataclass\n\n"
+    "import torch\n\n"
     "from sglang.srt.layers.quantization.fp8_kernel import fp8_dtype\n"
     "from sglang.srt.utils import is_hip, log_info_on_rank0\n\n"
-    "logger = logging.getLogger(__name__)\n\n_is_hip = is_hip()\n"
+    "logger = logging.getLogger(__name__)\n\n"
+    "_is_hip = is_hip()\n\n\n"
+    "@dataclass\n"
+    "class KVCacheDtypeResult:\n"
+    "    server_args_kv_cache_dtype: str\n"
+    "    kv_cache_dtype: torch.dtype\n"
+)
+
+OLD_CONST = (
+    "TORCH_DTYPE_TO_KV_CACHE_STR = {\n"
+    '    torch.float8_e4m3fn: "fp8_e4m3",\n'
+    '    torch.float8_e4m3fnuz: "fp8_e4m3",\n'
+    '    torch.float8_e5m2: "fp8_e5m2",\n'
+    '    torch.bfloat16: "bf16",\n'
+    "}\n\n\n"
 )
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    new_file = dir_root / "python/sglang/srt/mem_cache/kv_cache_dtype.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    new_file = wt / "python/sglang/srt/mem_cache/kv_cache_dtype.py"
 
     start, end = find_method_lines(
-        mr.read_text(), class_name="ModelRunner", method_name="configure_kv_cache_dtype"
+        mr.read_text(),
+        class_name="ModelRunner",
+        method_name="configure_kv_cache_dtype",
     )
     method_text = cut_lines(mr, start, end)
-    fn = dedent_method_to_function(method_text)
-    fn = fn.replace(
-        "def configure_kv_cache_dtype(self):\n",
-        "def configure_kv_cache_dtype(server_args, *, quant_config, model_dtype):\n",
+    fn = (
+        dedent_method_to_function(method_text)
+        .replace(
+            "def configure_kv_cache_dtype(self):\n",
+            "def configure_kv_cache_dtype(\n    *,\n    server_args,\n    model,\n    model_dtype,\n):\n",
+        )
+        .replace("self.server_args", "server_args")
+        .replace("self.model", "model")
+        .replace("self.kv_cache_dtype = ", "kv_cache_dtype = ")
+        .replace("self.kv_cache_dtype", "kv_cache_dtype")
+        .replace("self.dtype", "model_dtype")
     )
-    fn = fn.replace(
-        '    if server_args.kv_cache_dtype == "auto":\n        quant_config = getattr(self.model, "quant_config", None)\n        kv_cache_quant_algo',
-        '    if server_args.kv_cache_dtype == "auto":\n        kv_cache_quant_algo',
+    fn = fn.rstrip() + (
+        "\n    return KVCacheDtypeResult(\n"
+        "        server_args_kv_cache_dtype=server_args.kv_cache_dtype,\n"
+        "        kv_cache_dtype=kv_cache_dtype,\n"
+        "    )\n"
     )
-    fn = fn.replace("self.server_args", "server_args")
-    fn = fn.replace("self.kv_cache_dtype = ", "kv_cache_dtype = ")
-    fn = fn.replace("self.kv_cache_dtype", "kv_cache_dtype")
-    fn = fn.replace("self.dtype", "model_dtype")
-    fn = fn.rstrip() + "\n    return server_args.kv_cache_dtype, kv_cache_dtype\n"
 
     text = mr.read_text()
-    old_const = (
-        "TORCH_DTYPE_TO_KV_CACHE_STR = {\n"
-        '    torch.float8_e4m3fn: "fp8_e4m3",\n'
-        '    torch.float8_e4m3fnuz: "fp8_e4m3",\n'
-        '    torch.float8_e5m2: "fp8_e5m2",\n'
-        '    torch.bfloat16: "bf16",\n'
-        "}\n\n\n"
+    assert OLD_CONST in text, "TORCH_DTYPE_TO_KV_CACHE_STR not found"
+    text = text.replace(OLD_CONST, "")
+    text = replace_call_site(
+        text,
+        old="        self.configure_kv_cache_dtype()\n",
+        new=(
+            "        _kv_cache_dtype_result = configure_kv_cache_dtype(\n"
+            "            server_args=self.server_args,\n"
+            "            model=self.model,\n"
+            "            model_dtype=self.dtype,\n"
+            "        )\n"
+            "        self.server_args.kv_cache_dtype = (\n"
+            "            _kv_cache_dtype_result.server_args_kv_cache_dtype\n"
+            "        )\n"
+            "        self.kv_cache_dtype = _kv_cache_dtype_result.kv_cache_dtype\n"
+        ),
     )
-    assert old_const in text, "TORCH_DTYPE_TO_KV_CACHE_STR not found"
-    text = text.replace(old_const, "")
-    text = text.replace(
-        "        self.configure_kv_cache_dtype()\n",
-        "        self.server_args.kv_cache_dtype, self.kv_cache_dtype = (\n"
-        "            configure_kv_cache_dtype(\n                self.server_args,\n"
-        '                quant_config=getattr(self.model, "quant_config", None),\n'
-        "                model_dtype=self.dtype,\n            )\n        )\n")
-    text = text.replace(
-        "from sglang.srt.mem_cache.memory_pool import ReqToTokenPool\n",
-        "from sglang.srt.mem_cache.kv_cache_dtype import configure_kv_cache_dtype\n"
-        "from sglang.srt.mem_cache.memory_pool import ReqToTokenPool\n",
+    text = replace_call_site(
+        text,
+        old="from sglang.srt.mem_cache.memory_pool import ReqToTokenPool\n",
+        new=(
+            "from sglang.srt.mem_cache.kv_cache_dtype import configure_kv_cache_dtype\n"
+            "from sglang.srt.mem_cache.memory_pool import ReqToTokenPool\n"
+        ),
     )
     mr.write_text(text)
 
-    new_file.write_text(NEW_HEADER + "\n" + old_const.rstrip() + "\n")
+    new_file.write_text(NEW_HEADER + "\n" + OLD_CONST.rstrip() + "\n")
     append_to_file(new_file, fn)
 
     git_add_and_commit(
         "Extract configure_kv_cache_dtype to mem_cache.kv_cache_dtype",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT, target_commit=TARGET_COMMIT, transform=transform
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)

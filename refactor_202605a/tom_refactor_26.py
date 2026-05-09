@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """Cut `update_weights_from_distributed` and the private helper
 `_update_bucketed_weights_from_distributed` from ModelRunner; paste both into
-`weight_updater.py` as free functions. Update the sole caller in
-`tp_worker.py` to call the free function directly with explicit kwargs.
+`weight_updater.py` as free functions. Update sole caller in `tp_worker.py`.
+
+Usage:
+    uv run --python 3.12 tom_refactor_26.py run
+    uv run --python 3.12 tom_refactor_26.py verify
 """
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["typer"]
+# ///
 
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.append(str(HERE))
-sys.path.append(".claude/skills/mechanical-refactor-verify")
+sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
@@ -19,19 +26,19 @@ from _helpers import (
     insert_after,
     replace_call_site,
 )
-from mechanical_refactor_verify_utils import (
-    git_add_and_commit,
-    verify_mechanical_refactor,
-)
+from _runner import run_pr
 
-BASE_COMMIT = "tom_refactor/25"
-TARGET_COMMIT = "tom_refactor/26"
+BASE = "tom_refactor/25"
+TARGET = "tom_refactor/26"
 
 
-def transform(dir_root: Path) -> None:
-    mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
-    wu = dir_root / "python/sglang/srt/model_executor/weight_updater.py"
-    tw = dir_root / "python/sglang/srt/managers/tp_worker.py"
+def transform(wt: Path) -> None:
+    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
+    from mechanical_refactor_verify_utils import git_add_and_commit
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
     # Cut from bottom to top so earlier line ranges stay valid.
     s, e = find_method_lines(
@@ -79,18 +86,18 @@ def transform(dir_root: Path) -> None:
             "    dtypes,\n"
             "    shapes,\n"
             "    group_name,\n"
-            "    load_format=None,\n"
+            "    load_format: Optional[str] = None,\n"
             "):",
         )
         .replace("self.device", "device")
         .replace("self._model_update_group", "_model_update_group")
         .replace("self.model.load_weights", "model.load_weights")
         .replace(
-            "    if load_format == \"flattened_bucket\":\n"
+            '    if load_format == "flattened_bucket":\n'
             "        return self._update_bucketed_weights_from_distributed(\n"
             "            names, dtypes, shapes, group_name\n"
             "        )",
-            "    if load_format == \"flattened_bucket\":\n"
+            '    if load_format == "flattened_bucket":\n'
             "        return _update_bucketed_weights_from_distributed(\n"
             "            model=model,\n"
             "            _model_update_group=_model_update_group,\n"
@@ -103,6 +110,13 @@ def transform(dir_root: Path) -> None:
         )
     )
 
+    text = wu.read_text()
+    text = insert_after(
+        text,
+        anchor="import logging\n",
+        addition="from typing import Optional\n",
+    )
+    wu.write_text(text)
     appended = (
         "\nfrom sglang.srt.weight_sync.tensor_bucket import FlattenedTensorBucket\n\n\n"
         + uwd_text
@@ -111,7 +125,6 @@ def transform(dir_root: Path) -> None:
     )
     append_to_file(wu, appended)
 
-    # Add import to model_runner.py (third weight_updater import block).
     text = mr.read_text()
     text = insert_after(
         text,
@@ -128,7 +141,6 @@ def transform(dir_root: Path) -> None:
     )
     mr.write_text(text)
 
-    # Update tp_worker.py caller.
     text = tw.read_text()
     text = insert_after(
         text,
@@ -167,13 +179,9 @@ def transform(dir_root: Path) -> None:
 
     git_add_and_commit(
         "Extract update_weights_from_distributed to free function in weight_updater",
-        cwd=str(dir_root),
+        cwd=str(wt),
     )
 
 
 if __name__ == "__main__":
-    verify_mechanical_refactor(
-        base_commit=BASE_COMMIT,
-        target_commit=TARGET_COMMIT,
-        transform=transform,
-    )
+    run_pr(transform=transform, base=BASE, target=TARGET)
