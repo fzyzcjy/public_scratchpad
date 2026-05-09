@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
-"""Reproducible transform: extract `ModelRunner.init_cublas` to a free function
-in `sglang.srt.utils.common`. The original method already had a docstring; the
-new free function carries the same docstring.
+"""Cut `init_cublas` method from ModelRunner; paste as a free function in
+`utils/common.py`. Update the sole caller and add an import.
 
 Run from the repo root:
-    python3 /tmp/transform_init_cublas.py
+    python3 tom_refactor_18.py
 """
 
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).parent
+sys.path.append(str(HERE))
 sys.path.append(".claude/skills/mechanical-refactor-verify")
+from _helpers import (
+    append_to_file,
+    cut_lines,
+    dedent_method_to_function,
+    find_method_lines,
+)
 from mechanical_refactor_verify_utils import (
-    verify_mechanical_refactor,
     git_add_and_commit,
+    verify_mechanical_refactor,
 )
 
 BASE_COMMIT = "tom_refactor/17"
@@ -21,34 +28,22 @@ TARGET_COMMIT = "tom_refactor/18"
 
 
 def transform(dir_root: Path) -> None:
-    common = dir_root / "python/sglang/srt/utils/common.py"
-    text = common.read_text()
-    text = text.rstrip() + '\n\n\ndef init_cublas() -> None:\n    """We need to run a small matmul to init cublas. Otherwise, it will raise some errors later."""\n    dtype = torch.float16\n    device = "cuda"\n    a = torch.ones((16, 16), dtype=dtype, device=device)\n    b = torch.ones((16, 16), dtype=dtype, device=device)\n    a @ b\n'
-    common.write_text(text)
-
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
+    common = dir_root / "python/sglang/srt/utils/common.py"
+
+    start, end = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name="init_cublas")
+    method_text = cut_lines(mr, start, end)
+    function_text = dedent_method_to_function(method_text).replace(
+        "def init_cublas(self):", "def init_cublas():"
+    )
+    append_to_file(common, function_text)
+
     text = mr.read_text()
-
-    old_method = (
-        '    def init_cublas(self):\n'
-        '        """We need to run a small matmul to init cublas. Otherwise, it will raise some errors later."""\n'
-        '        dtype = torch.float16\n'
-        '        device = "cuda"\n'
-        '        a = torch.ones((16, 16), dtype=dtype, device=device)\n'
-        '        b = torch.ones((16, 16), dtype=dtype, device=device)\n'
-        '        c = a @ b\n'
-        '        return c\n\n'
-    )
-    assert old_method in text, "init_cublas method not found"
-    text = text.replace(old_method, "")
-
     text = text.replace("self.init_cublas()", "init_cublas()")
-
     text = text.replace(
-        "    get_cpu_ids_by_node,\n    init_custom_process_group,",
-        "    get_cpu_ids_by_node,\n    init_cublas,\n    init_custom_process_group,",
+        "    init_custom_process_group,\n",
+        "    init_cublas,\n    init_custom_process_group,\n",
     )
-
     mr.write_text(text)
 
     git_add_and_commit(

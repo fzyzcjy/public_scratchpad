@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Reproducible transform: inline `ModelRunner.max_token_pool_size` property at
-its sole consumer in `tp_worker.py`. Strict-minimal mechanical move:
-- Delete the @property.
-- Inline the body at the single call site (tp_worker.py).
-
-Run from the repo root:
-    python3 /tmp/transform_inline_max_token_pool_size.py
+"""Inline `ModelRunner.max_token_pool_size` property at its sole consumer in
+`tp_worker.py`. The @property is short (~6 lines); use a small text.replace for
+the property block (find_method_lines does not include the `@property`
+decorator line) and cut_lines for nothing here — exception to the cut-and-paste
+rule for this tiny inline.
 """
 
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).parent
+sys.path.append(str(HERE))
 sys.path.append(".claude/skills/mechanical-refactor-verify")
 from mechanical_refactor_verify_utils import (
-    verify_mechanical_refactor,
     git_add_and_commit,
+    verify_mechanical_refactor,
 )
 
 BASE_COMMIT = "tom_refactor/20"
@@ -22,7 +22,6 @@ TARGET_COMMIT = "tom_refactor/21"
 
 
 def transform(dir_root: Path) -> None:
-    # --- Step 1: Delete the property in model_runner.py ---
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
     text = mr.read_text()
     old = (
@@ -38,7 +37,6 @@ def transform(dir_root: Path) -> None:
     text = text.replace(old, "")
     mr.write_text(text)
 
-    # --- Step 2: Inline at the sole consumer in tp_worker.py ---
     tp = dir_root / "python/sglang/srt/managers/tp_worker.py"
     text = tp.read_text()
     old = (
@@ -50,7 +48,9 @@ def transform(dir_root: Path) -> None:
     new = (
         "        mr = self.model_runner\n"
         "        pool_tokens = (\n"
-        "            mr.full_max_total_num_tokens if mr.is_hybrid_swa else mr.max_total_num_tokens\n"
+        "            mr.full_max_total_num_tokens\n"
+        "            if mr.is_hybrid_swa\n"
+        "            else mr.max_total_num_tokens\n"
         "        )\n"
         "        self.max_req_len = min(\n"
         "            self.model_config.context_len - 1,\n"
