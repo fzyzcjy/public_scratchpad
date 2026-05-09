@@ -75,20 +75,24 @@ def transform(dir_root: Path) -> None:
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
     text = mr.read_text()
 
-    # Extend the existing weight_exporter import.
+    # /29 added one import per name. Append three more imports same style.
     old_imp = (
         "from sglang.srt.model_executor.weight_exporter import (\n"
-        "    init_weights_send_group_for_remote_instance as _free_init_weights_send_group_for_remote_instance,\n"
         "    send_weights_to_remote_instance as _free_send_weights_to_remote_instance,\n"
         ")\n"
     )
     new_imp = (
         "from sglang.srt.model_executor.weight_exporter import (\n"
-        "    get_weights_by_name as _free_get_weights_by_name,\n"
-        "    init_weights_send_group_for_remote_instance as _free_init_weights_send_group_for_remote_instance,\n"
-        "    save_remote_model as _free_save_remote_model,\n"
-        "    save_sharded_model as _free_save_sharded_model,\n"
         "    send_weights_to_remote_instance as _free_send_weights_to_remote_instance,\n"
+        ")\n"
+        "from sglang.srt.model_executor.weight_exporter import (\n"
+        "    get_weights_by_name as _free_get_weights_by_name,\n"
+        ")\n"
+        "from sglang.srt.model_executor.weight_exporter import (\n"
+        "    save_remote_model as _free_save_remote_model,\n"
+        ")\n"
+        "from sglang.srt.model_executor.weight_exporter import (\n"
+        "    save_sharded_model as _free_save_sharded_model,\n"
         ")\n"
     )
     assert old_imp in text, "weight_exporter import block not found"

@@ -140,17 +140,18 @@ def transform(dir_root: Path) -> None:
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
     text = mr.read_text()
 
-    # Extend the existing weight_updater import.
+    # Add update_weights_from_distributed import. /24 uses two separate import
+    # statements (one per name) due to formatting, so just append a third.
     old_imp = (
         "from sglang.srt.model_executor.weight_updater import (\n"
-        "    destroy_weights_update_group as _free_destroy_weights_update_group,\n"
         "    init_weights_update_group as _free_init_weights_update_group,\n"
         ")\n"
     )
     new_imp = (
         "from sglang.srt.model_executor.weight_updater import (\n"
-        "    destroy_weights_update_group as _free_destroy_weights_update_group,\n"
         "    init_weights_update_group as _free_init_weights_update_group,\n"
+        ")\n"
+        "from sglang.srt.model_executor.weight_updater import (\n"
         "    update_weights_from_distributed as _free_update_weights_from_distributed,\n"
         ")\n"
     )

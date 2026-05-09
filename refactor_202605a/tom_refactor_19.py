@@ -72,21 +72,21 @@ def transform(dir_root: Path) -> None:
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
     text = mr.read_text()
 
-    # Replace the method body with a 1-line delegate (do NOT delete the method;
-    # caller is `self.apply_torch_tp()` and that stays unchanged).
+    # Delete method entirely + update sole caller in initialize() to call free function.
     old_method = (
         "    def apply_torch_tp(self):\n"
         '        logger.info(f"Enabling torch tensor parallelism on {self.tp_size} devices.")\n'
         "        from sglang.srt.layers.model_parallel import tensor_parallel\n\n"
         "        device_mesh = torch.distributed.init_device_mesh(self.device, (self.tp_size,))\n"
-        "        tensor_parallel(self.model, device_mesh)\n"
-    )
-    new_method = (
-        "    def apply_torch_tp(self):\n"
-        "        apply_torch_tp(model=self.model, device=self.device, tp_size=self.tp_size)\n"
+        "        tensor_parallel(self.model, device_mesh)\n\n"
     )
     assert old_method in text, "apply_torch_tp method not found"
-    text = text.replace(old_method, new_method)
+    text = text.replace(old_method, "")
+
+    text = text.replace(
+        "        if self.tp_size > 1 and supports_torch_tp:\n            self.apply_torch_tp()",
+        "        if self.tp_size > 1 and supports_torch_tp:\n            apply_torch_tp(model=self.model, device=self.device, tp_size=self.tp_size)",
+    )
 
     # Add import for the new free function (alphabetical position right after
     # logits_processor).
