@@ -186,15 +186,15 @@ def transform(dir_root: Path) -> None:
     # cuda_graph_runner / piecewise_cuda_graph_runner imports — pick a
     # neighbouring stable import that exists at /31.
     old_import = (
-        "from sglang.srt.model_executor.cuda_graph_runner import CudaGraphRunner\n"
+        "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n"
     )
     new_import = (
-        "from sglang.srt.model_executor.cuda_graph_runner import CudaGraphRunner\n"
+        "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n"
         "from sglang.srt.model_executor.device_graphs import (\n"
         "    init_device_graphs as _init_device_graphs_impl,\n"
         ")\n"
     )
-    assert old_import in text, "CudaGraphRunner import not found"
+    assert old_import in text, "CPUGraphRunner import not found"
     text = text.replace(old_import, new_import)
 
     # The delegate above calls `init_device_graphs(...)` — that name shadows
