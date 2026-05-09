@@ -218,27 +218,29 @@ def transform(dir_root: Path) -> None:
         assert text.count(line) == 1, f"line not unique: {line!r}"
         text = text.replace(line, "")
 
-    OLD_UNPACK = (
-        "        self.attn_tp_rank, self.attn_tp_size, self.attn_dp_rank = (\n"
-        "            compute_dp_attention_world_info(\n"
-        "                server_args.enable_dp_attention,\n"
+    # Promote LHS from `self.attn_tp_*` 3-tuple to local 4-tuple (extra attn_dp_size).
+    text = text.replace(
+        "self.attn_tp_rank, self.attn_tp_size, self.attn_dp_rank = (",
+        "attn_tp_rank, attn_tp_size, attn_dp_rank, attn_dp_size = (",
+    )
+
+    # Switch the call's args from `self.X` (about to be removed) to constructor
+    # locals / `server_args.X`. The 4-line clump is unique to this call site.
+    text = text.replace(
         "                self.tp_rank,\n"
         "                self.tp_size,\n"
         "                self.dp_size,\n"
-        "                self.attn_cp_size,\n"
-        "            )\n"
-        "        )\n"
-    )
-    NEW_UNPACK = (
-        "        attn_tp_rank, attn_tp_size, attn_dp_rank, attn_dp_size = (\n"
-        "            compute_dp_attention_world_info(\n"
-        "                server_args.enable_dp_attention,\n"
+        "                self.attn_cp_size,\n",
         "                tp_rank,\n"
         "                server_args.tp_size,\n"
         "                server_args.dp_size,\n"
-        "                server_args.attn_cp_size,\n"
-        "            )\n"
-        "        )\n"
+        "                server_args.attn_cp_size,\n",
+    )
+
+    # Insert the ParallelState construction directly after the call's closing
+    # ``)``. Anchor on `# Init model configs` (uniquely 2 lines below the
+    # insertion point) so we don't depend on the long preceding context.
+    PARALLEL_STATE_CONSTRUCTION = (
         "        self.ps = ParallelState(\n"
         "            tp_rank=tp_rank,\n"
         "            tp_size=server_args.tp_size,\n"
@@ -259,8 +261,9 @@ def transform(dir_root: Path) -> None:
         "            gpu_id=gpu_id,\n"
         "        )\n"
     )
-    assert OLD_UNPACK in text, "compute_dp_attention_world_info unpack block not found"
-    text = text.replace(OLD_UNPACK, NEW_UNPACK)
+    ANCHOR = "        )\n\n        # Init model configs\n"
+    assert ANCHOR in text, "anchor before `# Init model configs` not found"
+    text = text.replace(ANCHOR, "        )\n" + PARALLEL_STATE_CONSTRUCTION + "\n        # Init model configs\n")
 
     text = SELF_PATTERN.sub(r"self.ps.\1", text)
     sched.write_text(text)

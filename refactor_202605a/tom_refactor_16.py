@@ -33,61 +33,39 @@ def transform(dir_root: Path) -> None:
     assert OLD_IMPORT in text, "io_struct anchor import not found"
     text = text.replace(OLD_IMPORT, NEW_IMPORT)
 
-    OLD_PM_INIT = (
-        "    def __init__(self, tp_rank: int, cpu_group, gpu_id: int):\n"
-        "        self.stage_based_trigger = _StageBasedTrigger(\n"
-        "            on_start=self._do_start,\n"
-        "            on_stop=self._do_stop,\n"
-        "        )\n"
-        "        self.tp_rank = tp_rank\n"
-        "        self.cpu_group = cpu_group\n"
-        "        self.first_rank_in_node = gpu_id == get_global_server_args().base_gpu_id\n"
-    )
-    NEW_PM_INIT = (
-        "    def __init__(self, ps: ParallelState, cpu_group):\n"
-        "        self.stage_based_trigger = _StageBasedTrigger(\n"
-        "            on_start=self._do_start,\n"
-        "            on_stop=self._do_stop,\n"
-        "        )\n"
-        "        self.ps = ps\n"
-        "        self.cpu_group = cpu_group\n"
-        "        self.first_rank_in_node = ps.gpu_id == get_global_server_args().base_gpu_id\n"
-    )
-    assert OLD_PM_INIT in text, "ProfileManager.__init__ not found verbatim"
-    text = text.replace(OLD_PM_INIT, NEW_PM_INIT)
-
-    OLD_DO_START_KW = (
-        "        self.profiler = _ProfilerBase.create(\n"
-        "            **self.profiler_kwargs,\n"
-        "            tp_rank=self.tp_rank,\n"
-        "            cpu_group=self.cpu_group,\n"
-        "            first_rank_in_node=self.first_rank_in_node,\n"
-        "            output_suffix=f\"-{stage}\" if stage else \"\",\n"
-        "        )\n"
-    )
-    NEW_DO_START_KW = (
-        "        self.profiler = _ProfilerBase.create(\n"
-        "            **self.profiler_kwargs,\n"
-        "            ps=self.ps,\n"
-        "            cpu_group=self.cpu_group,\n"
-        "            first_rank_in_node=self.first_rank_in_node,\n"
-        "            output_suffix=f\"-{stage}\" if stage else \"\",\n"
-        "        )\n"
-    )
-    assert OLD_DO_START_KW in text, "_do_start kwargs not found verbatim"
-    text = text.replace(OLD_DO_START_KW, NEW_DO_START_KW)
-
-    # Replace tp_rank parameter with ps in _ProfilerConcreteBase.__init__.
+    # ProfileManager.__init__: drop tp_rank/gpu_id params, gain ps.
     text = text.replace(
-        "        profile_id: str,\n        tp_rank: int,\n",
-        "        profile_id: str,\n        ps: ParallelState,\n",
+        "def __init__(self, tp_rank: int, cpu_group, gpu_id: int):",
+        "def __init__(self, ps: ParallelState, cpu_group):",
     )
+    # gpu_id read in ProfileManager.__init__ body (unique to that line).
     text = text.replace(
-        "        self.profile_id = profile_id\n        self.tp_rank = tp_rank\n",
-        "        self.profile_id = profile_id\n        self.ps = ps\n",
+        "self.first_rank_in_node = gpu_id == get_global_server_args().base_gpu_id",
+        "self.first_rank_in_node = ps.gpu_id == get_global_server_args().base_gpu_id",
     )
 
-    # Rename the live self.tp_rank usages. Each fragment is unique.
+    # _ProfilerBase.create() kwarg in ProfileManager._do_start.
+    text = text.replace(
+        "tp_rank=self.tp_rank,",
+        "ps=self.ps,",
+    )
+
+    # _ProfilerConcreteBase.__init__: tp_rank: int param → ps: ParallelState.
+    # The 8-space indent + trailing comma make this fragment unique.
+    text = text.replace(
+        "        tp_rank: int,\n",
+        "        ps: ParallelState,\n",
+    )
+
+    # Field-store assignment present in BOTH ProfileManager and
+    # _ProfilerConcreteBase bodies — both rename to self.ps = ps.
+    text = text.replace(
+        "        self.tp_rank = tp_rank\n",
+        "        self.ps = ps\n",
+    )
+
+    # Remaining live self.tp_rank reads (filename construction + barrier guards).
+    # Each fragment is unique within the file.
     fragment_replacements = [
         ('f"TP-{self.tp_rank}"', 'f"TP-{self.ps.tp_rank}"'),
         ('f"-TP-{self.tp_rank}-memory"', 'f"-TP-{self.ps.tp_rank}-memory"'),
@@ -100,23 +78,17 @@ def transform(dir_root: Path) -> None:
 
     pu.write_text(text)
 
+    # Caller in scheduler_profiler_mixin.init_profiler: rename one kwarg, drop another.
     spm = dir_root / "python/sglang/srt/managers/scheduler_profiler_mixin.py"
     text = spm.read_text()
-    OLD_CALLER = (
-        "            self._profile_manager = ProfileManager(\n"
-        "                tp_rank=self.ps.tp_rank,\n"
-        "                cpu_group=self.dp_tp_cpu_group,\n"
-        "                gpu_id=self.ps.gpu_id,\n"
-        "            )\n"
+    text = text.replace(
+        "                tp_rank=self.ps.tp_rank,\n",
+        "                ps=self.ps,\n",
     )
-    NEW_CALLER = (
-        "            self._profile_manager = ProfileManager(\n"
-        "                ps=self.ps,\n"
-        "                cpu_group=self.dp_tp_cpu_group,\n"
-        "            )\n"
+    text = text.replace(
+        "                gpu_id=self.ps.gpu_id,\n",
+        "",
     )
-    assert OLD_CALLER in text, "ProfileManager caller not found verbatim"
-    text = text.replace(OLD_CALLER, NEW_CALLER)
     spm.write_text(text)
 
     git_add_and_commit(
