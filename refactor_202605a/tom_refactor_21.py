@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Reproducible transform: inline `ModelRunner.max_token_pool_size` property at
-its sole consumer in `tp_worker.py`.
+its sole consumer in `tp_worker.py`. Strict-minimal mechanical move:
+- Delete the @property.
+- Inline the body at the single call site (tp_worker.py).
 
 Run from the repo root:
     python3 /tmp/transform_inline_max_token_pool_size.py
@@ -20,6 +22,7 @@ TARGET_COMMIT = "tom_refactor/21"
 
 
 def transform(dir_root: Path) -> None:
+    # --- Step 1: Delete the property in model_runner.py ---
     mr = dir_root / "python/sglang/srt/model_executor/model_runner.py"
     text = mr.read_text()
     old = (
@@ -31,10 +34,11 @@ def transform(dir_root: Path) -> None:
         "        else:\n"
         "            return self.max_total_num_tokens\n\n"
     )
-    assert old in text, "property not found"
+    assert old in text, "max_token_pool_size property not found"
     text = text.replace(old, "")
     mr.write_text(text)
 
+    # --- Step 2: Inline at the sole consumer in tp_worker.py ---
     tp = dir_root / "python/sglang/srt/managers/tp_worker.py"
     text = tp.read_text()
     old = (
@@ -53,7 +57,7 @@ def transform(dir_root: Path) -> None:
         "            pool_tokens - 1,\n"
         "        )"
     )
-    assert old in text, "tp_worker callsite not found"
+    assert old in text, "tp_worker max_token_pool_size callsite not found"
     text = text.replace(old, new)
     tp.write_text(text)
 
