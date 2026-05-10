@@ -45,6 +45,17 @@ def transform(wt: Path) -> None:
     elu = wt / "python/sglang/srt/eplb/expert_location_updater.py"
     eplb = wt / "python/sglang/srt/eplb/eplb_manager.py"
 
+    # Add `from torch import nn` to expert_location_updater.py for the new
+    # `model: nn.Module` annotation on the extracted free function.
+    elu_text = elu.read_text()
+    if "from torch import nn\n" not in elu_text:
+        elu_text = insert_after(
+            elu_text,
+            anchor="import torch\n",
+            addition="from torch import nn\n",
+        )
+        elu.write_text(elu_text)
+
     # ---- Cut method body from ModelRunner. ----
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="update_expert_location"

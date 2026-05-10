@@ -64,6 +64,27 @@ def transform(wt: Path) -> None:
         "def build_step_span_name(",
     )
 
+    # The signature uses `forward_batch: ForwardBatch` annotation; ensure the
+    # import lands at the top of profile_utils.py (TYPE_CHECKING is fine but
+    # global import is simpler since profile_utils already has runtime imports
+    # from forward_batch_info).
+    pu_text = profile_utils.read_text()
+    if "from sglang.srt.model_executor.forward_batch_info import ForwardBatch" not in pu_text:
+        # Anchor on an existing import in profile_utils that we know exists.
+        if "from sglang.srt.model_executor.forward_batch_info import ForwardMode\n" in pu_text:
+            pu_text = pu_text.replace(
+                "from sglang.srt.model_executor.forward_batch_info import ForwardMode\n",
+                "from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode\n",
+            )
+        else:
+            # Fallback: insert at top after any logging import.
+            pu_text = insert_after(
+                pu_text,
+                anchor="import logging\n",
+                addition="from sglang.srt.model_executor.forward_batch_info import ForwardBatch\n",
+            )
+        profile_utils.write_text(pu_text)
+
     append_to_file(profile_utils, func_text.rstrip() + "\n")
 
     # Update model_runner.py: add import, rewrite call site.
