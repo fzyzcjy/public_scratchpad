@@ -99,18 +99,24 @@ def transform(wt: Path) -> None:
         )
         .replace("self.device", "device")
         .replace("self.tp_rank", "tp_rank")
+        # NOTE: indentation 8/12/8 after one dedent_method_to_function level.
         .replace(
             "self._update_weights_from_flattened_bucket(\n"
-            "                flattened_tensor_bucket_dict=named_tensors\n"
-            "            )",
+            "            flattened_tensor_bucket_dict=named_tensors\n"
+            "        )",
             "_update_weights_from_flattened_bucket(\n"
-            "                model=model, flattened_tensor_bucket_dict=named_tensors\n"
-            "            )",
+            "            model=model, flattened_tensor_bucket_dict=named_tensors\n"
+            "        )",
         )
         .replace("self.server_args.custom_weight_loader", "custom_weight_loader")
         .replace(
             "_model_load_weights_direct(self.model, named_tensors)",
             "_model_load_weights_direct(model, named_tensors)",
+        )
+        # `custom_loader(self.model, ...)` is the elif branch; rewrite to `model`.
+        .replace(
+            "custom_loader(self.model, named_tensors)",
+            "custom_loader(model, named_tensors)",
         )
         .replace(
             "self.model.load_weights(named_tensors)",

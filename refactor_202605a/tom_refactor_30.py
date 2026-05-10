@@ -103,6 +103,17 @@ def transform(wt: Path) -> None:
         )
     )
 
+    # weight_exporter.py needs `Optional` for the new function signatures
+    # (save_sharded_model, get_weights_by_name kwargs).
+    we_text = we.read_text()
+    if "from typing import Optional\n" not in we_text:
+        we_text = insert_after(
+            we_text,
+            anchor="import logging\n",
+            addition="from typing import Optional\n",
+        )
+        we.write_text(we_text)
+
     append_to_file(we, remote_text + "\n" + sharded_text + "\n" + gwbn_text)
 
     # tp_worker.py already imports `weight_exporter` (added in /29); just
