@@ -1,22 +1,33 @@
-"""Shared runner for tom_refactor_<N>.py transform scripts.
+"""Shared runner for `<id>.py` transform scripts in tom_refactor_202605a chain.
 
-Each per-PR script defines a `transform(wt: Path)` function and calls
-`run_pr(transform=transform, base="tom_refactor/<N-1>", target="tom_refactor/<N>")`.
+Each per-PR script defines a `transform(wt: Path)` function that mutates the
+worktree (no commit) and calls `run_pr(transform=..., base=..., target=...,
+id=..., subject=..., body=...)`. The runner builds the commit message itself
+from `id`/`subject`/`body` so that commit message and PR description stay in
+lockstep — see PR_CHAIN.md "PR body / commit description 规则".
 
 Three modes (typer subcommand):
 
-    run     create a fresh worktree at BASE, run transform, pre-commit, and
-            force-push the resulting commit as TARGET. This is the production
-            flow used to (re-)build the chain.
-    verify  create a fresh worktree at BASE, run transform, pre-commit, and
-            diff against the existing TARGET on upstream. PASS = no diff.
-            Use for review of an already-pushed PR.
-    apply   run transform on a caller-supplied worktree directory (no clone,
-            no commit, no push). Use for manual debugging — point at a local
-            checkout of BASE and inspect the resulting working tree.
+    run     create a fresh worktree at BASE, run transform, commit with the
+            formatted message, run pre-commit, and force-push the resulting
+            commit as TARGET. This is the production flow used to (re-)build
+            the chain.
+    verify  create a fresh worktree at BASE, run transform, commit, run
+            pre-commit, and diff against the existing TARGET on upstream.
+            PASS = no diff. Use for review of an already-pushed PR.
+    apply   run transform on a caller-supplied worktree directory (no commit,
+            no push). Use for manual debugging — point at a local checkout of
+            BASE and inspect the resulting working tree.
 
-The transform is also responsible for calling `git_add_and_commit(...)` so
-the runner just orchestrates the worktree + push.
+Commit message format:
+
+    <id>: <subject>
+
+    <body>
+
+    Refactor chain ID: <id>
+
+Transform must NOT call `git add` / `git commit` itself — runner handles that.
 """
 
 # /// script
@@ -26,7 +37,6 @@ the runner just orchestrates the worktree + push.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -55,6 +65,23 @@ def _make_worktree(target_dir: Path, base_ref: str) -> None:
     _exec(["git", "worktree", "add", "--detach", str(target_dir), f"upstream/{base_ref}"], cwd=REPO)
 
 
+def _build_commit_message(*, id: str, subject: str, body: str) -> str:
+    body_clean = body.rstrip()
+    parts = [f"{id}: {subject}"]
+    if body_clean:
+        parts.extend(["", body_clean])
+    parts.extend(["", f"Refactor chain ID: {id}"])
+    return "\n".join(parts) + "\n"
+
+
+def _commit(wt: Path, *, message: str) -> None:
+    porcelain = _exec(["git", "status", "--porcelain"], cwd=wt).strip()
+    if not porcelain:
+        return
+    _exec(["git", "add", "-A"], cwd=wt)
+    _exec(["git", "commit", "-m", message, "--quiet"], cwd=wt)
+
+
 def _run_pre_commit(wt: Path) -> None:
     files = _exec(["git", "diff", "--name-only", "HEAD~1", "HEAD"], cwd=wt).split()
     if not files:
@@ -70,25 +97,33 @@ def _cleanup(wt: Path) -> None:
     _exec(["git", "worktree", "remove", "--force", str(wt)], cwd=REPO, check=False)
 
 
+def _safe_wt_name(target: str) -> str:
+    return target.replace("/", "-")
+
+
 def run_pr(
     *,
     transform: Callable[[Path], None],
     base: str,
     target: str,
+    id: str,
+    subject: str,
+    body: str,
 ) -> None:
     """Entry point used by per-PR scripts. Reads sys.argv via typer."""
     app = typer.Typer(add_completion=False, no_args_is_help=True)
+    commit_message = _build_commit_message(id=id, subject=subject, body=body)
 
     @app.command()
     def run(
         keep: Annotated[bool, typer.Option(help="Keep worktree after push (for inspection)")] = False,
     ) -> None:
         """Build the PR commit and force-push to upstream."""
-        wt_name = f"refactor-wt-{target.replace('/', '-')}"
-        wt = Path(f"/tmp/{wt_name}")
+        wt = Path(f"/tmp/refactor-wt-{_safe_wt_name(target)}")
         _make_worktree(wt, base)
         sys.path.insert(0, str(SKILL_PATH))
         transform(wt)
+        _commit(wt, message=commit_message)
         head_after = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
         head_base = _exec(["git", "rev-parse", f"upstream/{base}"], cwd=REPO).strip()
         if head_after == head_base:
@@ -118,11 +153,11 @@ def run_pr(
     @app.command()
     def verify() -> None:
         """Re-run transform and diff against upstream/<target>; PASS if no diff."""
-        wt_name = f"verify-wt-{target.replace('/', '-')}"
-        wt = Path(f"/tmp/{wt_name}")
+        wt = Path(f"/tmp/verify-wt-{_safe_wt_name(target)}")
         _make_worktree(wt, base)
         sys.path.insert(0, str(SKILL_PATH))
         transform(wt)
+        _commit(wt, message=commit_message)
         head_after = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
         head_base = _exec(["git", "rev-parse", f"upstream/{base}"], cwd=REPO).strip()
         if head_after != head_base:
@@ -149,5 +184,10 @@ def run_pr(
         sys.path.insert(0, str(SKILL_PATH))
         transform(worktree)
         print(f"applied transform to {worktree}")
+
+    @app.command(name="show-message")
+    def show_message() -> None:
+        """Print the commit message that `run`/`verify` will use."""
+        print(commit_message, end="")
 
     app()
