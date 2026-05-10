@@ -195,48 +195,7 @@ def _migrate_as_is(body: str) -> str:
     return _global_subs(body)
 
 
-def _build_configure_body() -> str:
-    """The new ``configure`` method, custom-written. Mirrors the shape of
-    ``init_memory_pool`` + ``_apply_memory_pool_config`` + the ``_init_pools``
-    call, but with the new dataclass return and frozen-friendly local-var
-    flow.
-    """
-    return '''    def configure(self, *, pre_model_load_memory: int) -> KVCacheConfigResult:
-        if not self.spec_algorithm.is_none() and self.is_draft_worker:
-            assert (
-                self.memory_pool_config is not None
-            ), "Draft worker requires memory_pool_config"
-            config = self.memory_pool_config
-        else:
-            config = self._resolve_memory_pool_config(pre_model_load_memory)
-
-        max_total_num_tokens = config.max_total_num_tokens
-        max_running_requests = config.max_running_requests
-        if self.is_hybrid_swa:
-            full_max_total_num_tokens = config.full_max_total_num_tokens
-            swa_max_total_num_tokens = config.swa_max_total_num_tokens
-        else:
-            full_max_total_num_tokens = None
-            swa_max_total_num_tokens = None
-
-        # DSV4 c4/c128 budgets — draft worker zeroes them out (it reuses target's
-        # full/swa sizes but does not own c4/c128/state pools).
-        if self.is_draft_worker:
-            c4_max_total_num_tokens = 0
-            c128_max_total_num_tokens = 0
-            c4_state_pool_size = 0
-            c128_state_pool_size = 0
-        else:
-            c4_max_total_num_tokens = config.c4_max_total_num_tokens
-            c128_max_total_num_tokens = config.c128_max_total_num_tokens
-            c4_state_pool_size = config.c4_state_pool_size
-            c128_state_pool_size = config.c128_state_pool_size
-
-        # state_dtype is a DSV4 architectural constant (fp32 for c4/c128 state buffers).
-        state_dtype: Optional[torch.dtype] = (
-            torch.float32 if is_deepseek_v4(self.model_config.hf_config) else None
-        )
-
+_INIT_POOLS_CALL_REPLACEMENT = '''\
         req_to_token_pool, token_to_kv_pool, token_to_kv_pool_allocator = self._init_pools(
             max_total_num_tokens=max_total_num_tokens,
             max_running_requests=max_running_requests,
@@ -250,11 +209,10 @@ def _build_configure_body() -> str:
             req_to_token_pool=self.req_to_token_pool,
             token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
         )
+'''
 
-        logger.info(
-            f"Memory pool end. "
-            f"avail mem={get_available_gpu_memory(self.device, self.gpu_id):.2f} GB"
-        )
+
+_RETURN_BLOCK = '''\
 
         return KVCacheConfigResult(
             max_total_num_tokens=max_total_num_tokens,
@@ -267,6 +225,128 @@ def _build_configure_body() -> str:
             memory_pool_config=config,
         )
 '''
+
+
+# 8 `self.X = config.X` writes inside _apply_memory_pool_config that
+# convert to local-var assignments. The c4/c128 quartet has both
+# branches (``self.is_draft_worker`` else `else:`) that need converting.
+_APC_FIELDS = [
+    "max_total_num_tokens",
+    "max_running_requests",
+    "full_max_total_num_tokens",
+    "swa_max_total_num_tokens",
+    "c4_max_total_num_tokens",
+    "c128_max_total_num_tokens",
+    "c4_state_pool_size",
+    "c128_state_pool_size",
+]
+
+
+def _strip_def_and_docstring(method_text: str) -> str:
+    """Drop the ``def ...:\\n`` line and any single-line docstring; keep the
+    body lines (with original leading indent intact)."""
+    lines = method_text.splitlines(keepends=True)
+    # Skip leading blank lines.
+    i = 0
+    while i < len(lines) and lines[i].strip() == "":
+        i += 1
+    # Skip the def line (single line — no multiline-def support needed here).
+    if i < len(lines) and lines[i].lstrip().startswith("def "):
+        i += 1
+    # Skip the docstring (single-line """...""").
+    if i < len(lines) and lines[i].lstrip().startswith('"""'):
+        i += 1
+    return "".join(lines[i:])
+
+
+def _build_configure_body(extract) -> str:
+    """Synthesize ``configure`` by cut+substitute+inline from
+    ``init_memory_pool`` + ``_apply_memory_pool_config``.
+
+    Steps:
+      1. Cut ``init_memory_pool`` body verbatim.
+      2. Signature swap: ``init_memory_pool(self: ModelRunner, pre_model_load_memory)``
+         → ``configure(self, *, pre_model_load_memory) -> KVCacheConfigResult``.
+      3. Introduce ``config`` local: rename
+         ``self.memory_pool_config = self._resolve_memory_pool_config(...)``
+         to ``config = self._resolve_memory_pool_config(...)`` and add
+         ``config = self.memory_pool_config`` after the draft-worker assert.
+      4. Cut ``_apply_memory_pool_config`` body, strip its def+docstring,
+         convert its 8 result-style ``self.X = config.X`` writes to local
+         vars, predeclare ``state_dtype = None`` before the deepseek_v4
+         conditional, and replace its ``self._init_pools()`` call with the
+         kwarg-tuple form.
+      5. Inline the converted apc body in place of
+         ``self._apply_memory_pool_config(self.memory_pool_config)``.
+      6. Append the ``return KVCacheConfigResult(...)`` block.
+    """
+    body = extract("init_memory_pool")
+
+    # 2) Signature swap.
+    body = body.replace(
+        "    def init_memory_pool(self: ModelRunner, pre_model_load_memory: int):\n",
+        "    def configure(self, *, pre_model_load_memory: int) -> KVCacheConfigResult:\n",
+    )
+
+    # 3a) Rename `self.memory_pool_config = self._resolve_memory_pool_config(`
+    # to `config = self._resolve_memory_pool_config(`.
+    body = body.replace(
+        "            self.memory_pool_config = self._resolve_memory_pool_config(\n",
+        "            config = self._resolve_memory_pool_config(\n",
+    )
+    # 3b) Add `config = self.memory_pool_config` after the draft-worker assert.
+    body = body.replace(
+        '            ), "Draft worker requires memory_pool_config"\n        else:\n',
+        '            ), "Draft worker requires memory_pool_config"\n'
+        "            config = self.memory_pool_config\n"
+        "        else:\n",
+    )
+
+    # 4) Inline _apply_memory_pool_config body, with the 4 transforms.
+    apc = extract("_apply_memory_pool_config")
+    apc = _strip_def_and_docstring(apc)
+    # Convert the 8 result-style ``self.X = ...`` writes to local-var. Indent
+    # varies between 8 (method body) and 12 (inside ``if`` branches), so use
+    # an indent-agnostic regex.
+    for field in _APC_FIELDS:
+        apc = re.sub(
+            rf"^(\s+)self\.{field} = ",
+            rf"\1{field} = ",
+            apc,
+            flags=re.MULTILINE,
+        )
+    # Predeclare full/swa to None — they're conditionally set.
+    apc = apc.replace(
+        "        if self.is_hybrid_swa:\n",
+        "        full_max_total_num_tokens = None\n"
+        "        swa_max_total_num_tokens = None\n"
+        "        if self.is_hybrid_swa:\n",
+    )
+    # Predeclare state_dtype to None before the deepseek_v4 conditional;
+    # convert the conditional self.X write to local-var.
+    apc = apc.replace(
+        "        if is_deepseek_v4(self.model_config.hf_config):\n"
+        "            self.state_dtype = torch.float32\n",
+        "        state_dtype: Optional[torch.dtype] = None\n"
+        "        if is_deepseek_v4(self.model_config.hf_config):\n"
+        "            state_dtype = torch.float32\n",
+    )
+    # Replace self._init_pools() with the kwarg-tuple form.
+    apc = apc.replace(
+        "        self._init_pools()\n",
+        _INIT_POOLS_CALL_REPLACEMENT,
+    )
+
+    # 5) Inline apc at the call site.
+    body = body.replace(
+        "        self._apply_memory_pool_config(self.memory_pool_config)\n",
+        apc,
+    )
+
+    # 6) Append return.
+    body = body.rstrip() + "\n" + _RETURN_BLOCK
+
+    return body
 
 
 def transform(wt: Path) -> None:
@@ -288,8 +368,9 @@ def transform(wt: Path) -> None:
 
     migrated_parts: list[str] = []
 
-    # configure (custom, replaces init_memory_pool + _apply_memory_pool_config)
-    migrated_parts.append(_build_configure_body())
+    # configure: synthesized by cut+substitute+inline from init_memory_pool +
+    # _apply_memory_pool_config — see _build_configure_body for the steps.
+    migrated_parts.append(_build_configure_body(extract))
 
     # _profile_available_bytes / _calculate_mamba_ratio / _apply_token_constraints
     # / _resolve_max_num_reqs / _resolve_memory_pool_config — as-is.
