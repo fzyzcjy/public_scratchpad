@@ -104,6 +104,27 @@ def transform(wt: Path) -> None:
 
     sched.write_text(text)
 
+    # Test fake fix: test_scheduler_chunked_req_gate.py constructs a partial
+    # Scheduler via `__new__`, stubbing `_maybe_prepare_ngram_embedding` as a
+    # MagicMock attribute. After /44, the call path is
+    # `self.ngram_embedding_manager._maybe_prepare_ngram_embedding(...)`, so
+    # the stub needs to be relocated onto a fake `ngram_embedding_manager`.
+    test_chunked = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
+    text = test_chunked.read_text()
+    text = replace_call_site(
+        text,
+        old=(
+            "    s._maybe_prepare_ngram_embedding = MagicMock(side_effect=lambda batch: batch)\n"
+        ),
+        new=(
+            "    s.ngram_embedding_manager = MagicMock()\n"
+            "    s.ngram_embedding_manager._maybe_prepare_ngram_embedding = MagicMock(\n"
+            "        side_effect=lambda batch: batch\n"
+            "    )\n"
+        ),
+    )
+    test_chunked.write_text(text)
+
     git_add_and_commit(
         "Migrate _maybe_prepare_ngram_embedding to NgramEmbeddingManager (PR 2/3)",
         cwd=str(wt),

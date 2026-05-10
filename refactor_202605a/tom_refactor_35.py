@@ -167,6 +167,20 @@ def transform(wt: Path) -> None:
             import_anchor=spec_anchor,
         )
 
+    # Test fake fix: pool_configurator's test mocks `mr.mambaish_config = None`
+    # directly on a MagicMock. After /35, consumers call hybrid_arch.X(mr)
+    # which traverses `mr.model_config.hf_config.get_text_config()`. The fake
+    # `hf_config = SimpleNamespace(...)` lacks `get_text_config`. Add it
+    # returning `hf_config` itself (HF default for non-multimodal configs).
+    test_pc = wt / "test/registered/unit/model_executor/test_pool_configurator.py"
+    text = test_pc.read_text()
+    text = text.replace(
+        '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n',
+        '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n'
+        '    mc.hf_config.get_text_config = lambda: mc.hf_config\n',
+    )
+    test_pc.write_text(text)
+
     git_add_and_commit(
         "Drop hybrid-arch property delegates from ModelRunner; update consumers",
         cwd=str(wt),

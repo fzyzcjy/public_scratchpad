@@ -50,9 +50,15 @@ TARGET = "tom_refactor/43"
 
 MANAGER_HEADER = '''from __future__ import annotations
 
+from typing import TYPE_CHECKING, Optional
+
 import torch
 
 from sglang.jit_kernel.ngram_embedding import update_token_table
+
+if TYPE_CHECKING:
+    from sglang.srt.managers.schedule_batch import ScheduleBatch
+    from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
 
 class NgramEmbeddingManager:
