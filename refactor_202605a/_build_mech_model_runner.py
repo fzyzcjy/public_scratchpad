@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
@@ -82,6 +83,30 @@ def commit_message(*, id: str, subject: str) -> str:
     return f"{id}: {subject}\n\n\nRefactor chain ID: {id}\n"
 
 
+def backup_old_chain_head() -> None:
+    """Tag the current upstream/<CHAIN_BRANCH> HEAD before any force-push.
+
+    Per PR_CHAIN.md backup rule. Tag name encodes a UTC second-precision
+    timestamp so multiple rebuilds in one day each get a distinct backup tag.
+    Skips silently on first build (no upstream branch yet).
+    """
+    run(["git", "fetch", "upstream", CHAIN_BRANCH], cwd=REPO, check=False)
+    sha = run(
+        ["git", "rev-parse", "--verify", "--quiet", f"upstream/{CHAIN_BRANCH}"],
+        cwd=REPO,
+        check=False,
+    ).strip()
+    if not sha:
+        print(f"\n=== no existing upstream/{CHAIN_BRANCH} — skipping backup tag ===", flush=True)
+        return
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    area = CHAIN_BRANCH.split("/")[-1]
+    tag_name = f"backup/{timestamp}/{area}"
+    print(f"\n=== backing up old upstream/{CHAIN_BRANCH} ({sha[:12]}) as {tag_name} ===", flush=True)
+    run(["git", "tag", tag_name, sha], cwd=REPO)
+    run(["git", "push", "upstream", f"refs/tags/{tag_name}"], cwd=REPO)
+
+
 def main() -> None:
     make_worktree()
     for n, id, subject in MAPPING:
@@ -92,6 +117,7 @@ def main() -> None:
     print("\n=== chain built. final HEAD ===", flush=True)
     run(["git", "log", "--oneline", "-32"], cwd=WT)
     head = run(["git", "rev-parse", "HEAD"], cwd=WT).strip()
+    backup_old_chain_head()
     print(
         f"\nTo publish, force-push the chain head:\n"
         f"  git -C {WT} push -f upstream HEAD:refs/heads/{CHAIN_BRANCH}\n"
