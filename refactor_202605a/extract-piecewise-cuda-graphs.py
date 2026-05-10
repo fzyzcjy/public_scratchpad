@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """Cut `init_piecewise_cuda_graphs` from ModelRunner; paste as a free
 function in `model_executor/device_graphs.py` taking
-`model_runner: ModelRunner`.
+`model_runner: ModelRunner` and returning the constructed runner.
 
-Body is a mechanical copy of the original method with `self` →
-`model_runner`. Writebacks (``piecewise_cuda_graph_runner``,
-``attention_layers``, ``moe_layers``, ``moe_fusions``) happen in-place
-via the ref, so the function returns ``None`` and the bail paths become
-bare ``return``. Caller side becomes a single line:
+Body is a near-mechanical copy of the original method with `self` →
+`model_runner`. The function returns the runner (or ``None`` on a bail);
+the caller assigns the return value to
+``self.piecewise_cuda_graph_runner``. Side effect: the function attaches
+``attention_layers`` / ``moe_layers`` / ``moe_fusions`` onto the model
+runner, because the downstream runner ctor reads them off the model
+runner ref.
+
+Caller becomes a single line:
 ``self.init_piecewise_cuda_graphs()`` →
-``device_graphs.init_piecewise_cuda_graphs(self)``.
+``self.piecewise_cuda_graph_runner = device_graphs.init_piecewise_cuda_graphs(self)``.
 
 Usage:
     uv run --python 3.12 extract-piecewise-cuda-graphs.py run
@@ -45,54 +49,43 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 _PIECEWISE_FN = '''\
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PiecewiseCudaGraphsResult:
-    piecewise_cuda_graph_runner: Any
-    attention_layers: Optional[list[Any]]
-    moe_layers: Optional[list[Any]]
-    moe_fusions: Optional[list[Any]]
-
-
-_PIECEWISE_BAIL = PiecewiseCudaGraphsResult(
-    piecewise_cuda_graph_runner=None,
-    attention_layers=None,
-    moe_layers=None,
-    moe_fusions=None,
-)
-
-
-def init_piecewise_cuda_graphs(
-    model_runner: "ModelRunner",
-) -> PiecewiseCudaGraphsResult:
+def init_piecewise_cuda_graphs(model_runner: "ModelRunner") -> Any:
     """Initialize piecewise CUDA graph runner.
 
-    Reads ``model_runner`` fields only; does not write any new ``model_runner``
-    attributes — the 4 result fields ride back through the dataclass and the
-    caller writes them onto ``self``.
+    Returns the constructed runner (or ``None`` on a bail). The caller
+    assigns the return value to ``self.piecewise_cuda_graph_runner``.
+
+    Side effect: writes ``model_runner.attention_layers``,
+    ``model_runner.moe_layers`` and ``model_runner.moe_fusions``. These
+    are needed because the downstream ``PiecewiseCudaGraphRunner`` /
+    ``BreakableCudaGraphRunner`` ctors read those layer lists off the
+    model runner ref. We attach them here rather than ferrying them
+    through the runner ctor so the public surface of those runner
+    classes stays unchanged.
     """
     if model_runner.server_args.disable_piecewise_cuda_graph:
         logger.info(
             "Disable piecewise CUDA graph because --disable-piecewise-cuda-graph is set"
         )
-        return _PIECEWISE_BAIL
+        return None
 
     # Draft models use decode CUDA graphs, not PCG
     if model_runner.is_draft_worker:
-        return _PIECEWISE_BAIL
+        return None
 
     # Disable piecewise CUDA graph for non-language models
     if not hasattr(model_runner.model, "model"):
         logger.warning(
             "Disable piecewise CUDA graph because the model is not a language model"
         )
-        return _PIECEWISE_BAIL
+        return None
 
     # Disable piecewise CUDA graph for non capture size
     if not model_runner.server_args.piecewise_cuda_graph_tokens:
         logger.warning(
             "Disable piecewise CUDA graph because the capture size is not set"
         )
-        return _PIECEWISE_BAIL
+        return None
 
     # Collect attention layers and moe layers from the model
     model_runner.model.model = resolve_language_model(model_runner.model)
@@ -107,7 +100,7 @@ def init_piecewise_cuda_graphs(
         logger.warning(
             "Disable piecewise CUDA graph because the model does not have a 'layers' attribute"
         )
-        return _PIECEWISE_BAIL
+        return None
 
     attention_layers: list[Any] = []
     moe_layers: list[Any] = []
@@ -165,18 +158,21 @@ def init_piecewise_cuda_graphs(
         moe_layers.append(moe_block)
         moe_fusions.append(moe_fusion)
 
+    # Attach the collected layer lists onto the model runner so the
+    # downstream PiecewiseCudaGraphRunner / BreakableCudaGraphRunner ctor
+    # can read them off ``self.model_runner``. (See the function-level
+    # docstring above for why this side-effect lives here.)
+    model_runner.attention_layers = attention_layers
+    model_runner.moe_layers = moe_layers
+    model_runner.moe_fusions = moe_fusions
+
     if len(attention_layers) < model_runner.model_config.num_hidden_layers:
         # TODO(yuwei): support Non-Standard GQA
         log_info_on_rank0(
             logger,
             "Disable piecewise CUDA graph because some layers do not apply Standard GQA",
         )
-        return PiecewiseCudaGraphsResult(
-            piecewise_cuda_graph_runner=None,
-            attention_layers=attention_layers,
-            moe_layers=moe_layers,
-            moe_fusions=moe_fusions,
-        )
+        return None
 
     tic = time.perf_counter()
     before_mem = get_available_gpu_memory(model_runner.device, model_runner.gpu_id)
@@ -186,9 +182,9 @@ def init_piecewise_cuda_graphs(
 
     if model_runner.server_args.enable_breakable_cuda_graph:
         # Experimental feature
-        piecewise_cuda_graph_runner = BreakableCudaGraphRunner(model_runner)
+        runner = BreakableCudaGraphRunner(model_runner)
     else:
-        piecewise_cuda_graph_runner = PiecewiseCudaGraphRunner(model_runner)
+        runner = PiecewiseCudaGraphRunner(model_runner)
 
     after_mem = get_available_gpu_memory(model_runner.device, model_runner.gpu_id)
     mem_usage = before_mem - after_mem
@@ -196,12 +192,7 @@ def init_piecewise_cuda_graphs(
         f"Capture piecewise CUDA graph end. Time elapsed: {time.perf_counter() - tic:.2f} s. "
         f"mem usage={mem_usage:.2f} GB. avail mem={after_mem:.2f} GB."
     )
-    return PiecewiseCudaGraphsResult(
-        piecewise_cuda_graph_runner=piecewise_cuda_graph_runner,
-        attention_layers=attention_layers,
-        moe_layers=moe_layers,
-        moe_fusions=moe_fusions,
-    )
+    return runner
 '''
 
 
@@ -252,12 +243,6 @@ def transform(wt: Path) -> None:
         old="from sglang.srt.utils import get_available_gpu_memory\n",
         new="from sglang.srt.utils import get_available_gpu_memory, log_info_on_rank0\n",
     )
-    # Add `dataclass` + `Optional` for PiecewiseCudaGraphsResult.
-    dg_text = replace_call_site(
-        dg_text,
-        old="from typing import TYPE_CHECKING, Any\n",
-        new="from dataclasses import dataclass\nfrom typing import TYPE_CHECKING, Any, Optional\n",
-    )
     # `resolve_language_model` lives in model_runner.py at this point; the
     # later `move-resolve-language-model` commit will move it to
     # `model_loader.utils`. For now import it from model_runner via a local
@@ -290,11 +275,8 @@ def transform(wt: Path) -> None:
         text,
         old="        self.init_piecewise_cuda_graphs()\n",
         new=(
-            "        _piecewise_result = device_graphs.init_piecewise_cuda_graphs(self)\n"
-            "        self.piecewise_cuda_graph_runner = _piecewise_result.piecewise_cuda_graph_runner\n"
-            "        self.attention_layers = _piecewise_result.attention_layers\n"
-            "        self.moe_layers = _piecewise_result.moe_layers\n"
-            "        self.moe_fusions = _piecewise_result.moe_fusions\n"
+            "        self.piecewise_cuda_graph_runner = "
+            "device_graphs.init_piecewise_cuda_graphs(self)\n"
         ),
     )
     mr.write_text(text)
