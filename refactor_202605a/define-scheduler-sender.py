@@ -49,10 +49,25 @@ class SchedulerSender(Protocol):
 
 
 def transform(wt: Path) -> None:
+    # The repo .gitignore matches bare ``inputs/`` and ``outputs/`` at any
+    # depth (lines ~248-249). Without negation rules our new
+    # ``python/sglang/srt/managers/{inputs,outputs}/`` packages are silently
+    # skipped by ``git add -A`` -- the dirs end up on disk but not in the
+    # commit, which manifests as ``ModuleNotFoundError`` in CI tests that
+    # use the chain branch's source. Add negation entries so the new
+    # subpackages are tracked.
+    gi = wt / ".gitignore"
+    gi_text = gi.read_text()
+    gi_text = gi_text.rstrip() + (
+        "\n\n# refactor_202605a: tokenizer manager owner-class subpackages\n"
+        "!python/sglang/srt/managers/inputs/\n"
+        "!python/sglang/srt/managers/inputs/**\n"
+        "!python/sglang/srt/managers/outputs/\n"
+        "!python/sglang/srt/managers/outputs/**\n"
+    )
+    gi.write_text(gi_text)
+
     # Create all 5 manager subpackage dirs upfront with non-empty __init__.py.
-    # Empty __init__.py files on some setuptools editable-install paths fail
-    # to register as packages, manifesting as ModuleNotFoundError on the
-    # subpackage. A short docstring is enough to side-step that.
     base = wt / "python/sglang/srt/managers"
     for sub, doc in [
         ("io", "IPC channel abstractions for tokenizer process."),
