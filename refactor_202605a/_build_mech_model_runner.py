@@ -78,6 +78,7 @@ ORDER: list[str] = [
     "nem-mech-frozen",
     "rwt-mech-rename",
     "rwt-mech-slots",
+    "fix-mla-ci-workflow",
 ]
 
 
