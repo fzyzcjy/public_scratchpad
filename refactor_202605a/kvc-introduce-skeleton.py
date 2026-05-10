@@ -152,7 +152,9 @@ _CTOR_INSERT = '''\
             is_hybrid_swa_compress=self.is_hybrid_swa_compress,
             use_mla_backend=self.use_mla_backend,
             enable_hisparse=self.enable_hisparse,
-            mambaish_config=mambaish_config(self),
+            mambaish_config=mambaish_config(
+                self.model_config, is_draft_worker=self.is_draft_worker
+            ),
             hybrid_gdn_config=hybrid_gdn_config(self.model_config),
             start_layer=self.start_layer,
             end_layer=self.end_layer,
@@ -184,17 +186,16 @@ def transform(wt: Path) -> None:
                 ")\n"
             ),
         )
-    if "from sglang.srt.configs.hybrid_arch import (" not in text:
+    if "from sglang.srt.configs.hybrid_arch import" not in text:
         # `mambaish_config` and `hybrid_gdn_config` are needed at the ctor
-        # site; the only existing hybrid_arch import in model_runner.py is
-        # the bare `_UNSET` line. Replace it with a grouped from-import that
-        # also pulls the two callable names. isort will normalize the order.
-        text = replace_call_site(
+        # site. After `drop-hybrid-arch-delegates` (which removed the module
+        # import), model_runner.py has no remaining hybrid_arch import — add
+        # a fresh from-import. isort will normalize the position.
+        text = insert_after(
             text,
-            old="from sglang.srt.configs.hybrid_arch import _UNSET\n",
-            new=(
+            anchor="from sglang.srt.configs.device_config import DeviceConfig\n",
+            addition=(
                 "from sglang.srt.configs.hybrid_arch import (\n"
-                "    _UNSET,\n"
                 "    hybrid_gdn_config,\n"
                 "    mambaish_config,\n"
                 ")\n"

@@ -54,7 +54,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 _HEADER = '''from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import Any, Optional, Union
 
 from sglang.srt.configs import (
     BailingHybridConfig,
@@ -75,22 +75,24 @@ from sglang.srt.configs import (
 from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config
 from sglang.srt.configs.model_config import ModelConfig
 
-if TYPE_CHECKING:
-    from sglang.srt.model_executor.model_runner import ModelRunner
-
 
 # Sentinel distinct from None so the linear-attn registry cache can store
 # None as a real result (see _get_linear_attn_registry_result).
 # Rust analogue: OnceCell<Option<...>>.
 _UNSET: Any = object()
 
+# Module-global lazy cache for `get_linear_attn_config(hf_config)`. Process
+# only ever holds one ModelRunner / one model config, so a single global
+# slot mirrors the original per-instance ``self._linear_attn_registry_cache``
+# semantics with one less hop.
+_linear_attn_registry_cache: Any = _UNSET
 
-def _get_linear_attn_registry_result(model_runner: "ModelRunner") -> Any:
-    if model_runner._linear_attn_registry_cache is _UNSET:
-        model_runner._linear_attn_registry_cache = get_linear_attn_config(
-            model_runner.model_config.hf_config
-        )
-    return model_runner._linear_attn_registry_cache
+
+def _get_linear_attn_registry_result(model_config: ModelConfig) -> Any:
+    global _linear_attn_registry_cache
+    if _linear_attn_registry_cache is _UNSET:
+        _linear_attn_registry_cache = get_linear_attn_config(model_config.hf_config)
+    return _linear_attn_registry_cache
 
 
 def qwen3_next_config(model_config: ModelConfig) -> Optional[Qwen3NextConfig]:
@@ -180,41 +182,43 @@ def kimi_linear_config(model_config: ModelConfig) -> Optional[KimiLinearConfig]:
     return None
 
 
-def linear_attn_model_spec(model_runner: "ModelRunner") -> Optional[Any]:
-    result = _get_linear_attn_registry_result(model_runner)
+def linear_attn_model_spec(model_config: ModelConfig) -> Optional[Any]:
+    result = _get_linear_attn_registry_result(model_config)
     return result[0] if result else None
 
 
-def mambaish_config(model_runner: "ModelRunner") -> Optional[Any]:
+def mambaish_config(
+    model_config: ModelConfig,
+    *,
+    is_draft_worker: bool,
+) -> Optional[Any]:
     existing = (
-        mamba2_config(
-            model_runner.model_config, is_draft_worker=model_runner.is_draft_worker
-        )
-        or hybrid_gdn_config(model_runner.model_config)
-        or kimi_linear_config(model_runner.model_config)
-        or hybrid_lightning_config(model_runner.model_config)
+        mamba2_config(model_config, is_draft_worker=is_draft_worker)
+        or hybrid_gdn_config(model_config)
+        or kimi_linear_config(model_config)
+        or hybrid_lightning_config(model_config)
     )
     if existing:
         return existing
-    result = _get_linear_attn_registry_result(model_runner)
+    result = _get_linear_attn_registry_result(model_config)
     return result[1] if result else None
 '''
 
 
-# 7 properties. The 2 cache-using ones (`linear_attn_model_spec`,
-# `mambaish_config`) take `self`; the rest take `self.model_config`. The
-# 1 with an extra kwarg (`mamba2_config`) calls with `is_draft_worker=`.
+# 7 properties. All take `self.model_config`; the 2 with an extra
+# `is_draft_worker` kwarg (`mamba2_config`, `mambaish_config`) call it
+# explicitly. The cache for `linear_attn_model_spec` / `mambaish_config`
+# now lives in a module-global var inside `hybrid_arch.py` — no per-instance
+# state on ModelRunner.
 _PROPS_MODEL_CONFIG = [
     "qwen3_next_config",
     "hybrid_lightning_config",
     "hybrid_gdn_config",
     "kimi_linear_config",
+    "linear_attn_model_spec",
 ]
 _PROPS_MODEL_CONFIG_WITH_DRAFT = [
     "mamba2_config",
-]
-_PROPS_MODEL_RUNNER = [
-    "linear_attn_model_spec",
     "mambaish_config",
 ]
 
@@ -228,8 +232,6 @@ def _delegate(name: str, *, kind: str) -> str:
             "            self.model_config, is_draft_worker=self.is_draft_worker\n"
             "        )\n"
         )
-    elif kind == "model_runner":
-        body = f"        return hybrid_arch.{name}(self)\n"
     else:
         raise ValueError(f"unknown delegate kind: {kind}")
     return f"    @property\n    def {name}(self):\n{body}\n"
@@ -255,10 +257,6 @@ def transform(wt: Path) -> None:
         text = "".join(
             src[:s] + [_delegate(name, kind="model_config_with_draft")] + src[e:]
         )
-    for name in _PROPS_MODEL_RUNNER:
-        s, e = find_method_lines(text, class_name="ModelRunner", method_name=name)
-        src = text.splitlines(keepends=True)
-        text = "".join(src[:s] + [_delegate(name, kind="model_runner")] + src[e:])
 
     # Delete `_get_linear_attn_registry_result` helper from ModelRunner — it
     # moved to hybrid_arch.py.
@@ -269,10 +267,10 @@ def transform(wt: Path) -> None:
     text = "".join(src[:s] + src[e:])
 
     # Delete the module-level _UNSET sentinel + its 3-line comment — moved to
-    # hybrid_arch.py. The `self._linear_attn_registry_cache: Any = _UNSET`
-    # field init in ModelRunner.__init__ stays — the cache still lives on
-    # the ModelRunner instance — but the bare `_UNSET` name now needs to be
-    # imported from hybrid_arch.
+    # hybrid_arch.py. The cache itself is now a module-global in
+    # hybrid_arch.py (not per-instance), so the
+    # ``self._linear_attn_registry_cache: Any = _UNSET`` field init in
+    # ModelRunner.__init__ goes away too.
     text = replace_call_site(
         text,
         old=(
@@ -281,6 +279,16 @@ def transform(wt: Path) -> None:
             "# Rust analogue: OnceCell<Option<...>>.\n"
             "_UNSET: Any = object()\n"
             "\n"
+            "\n"
+        ),
+        new="",
+    )
+    text = replace_call_site(
+        text,
+        old=(
+            "        # Linear-attn registry result is computed lazily; _UNSET distinguishes\n"
+            '        # "not yet computed" from "computed and got None".\n'
+            "        self._linear_attn_registry_cache: Any = _UNSET\n"
             "\n"
         ),
         new="",
@@ -318,15 +326,11 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Insert the new module-qualified hybrid_arch import + the bare `_UNSET`
-    # from-import (used by ModelRunner.__init__'s field init).
+    # Insert the new module-qualified hybrid_arch import.
     text = insert_after(
         text,
         anchor="from sglang.srt.configs.device_config import DeviceConfig\n",
-        addition=(
-            "from sglang.srt.configs import hybrid_arch\n"
-            "from sglang.srt.configs.hybrid_arch import _UNSET\n"
-        ),
+        addition="from sglang.srt.configs import hybrid_arch\n",
     )
 
     mr.write_text(text)

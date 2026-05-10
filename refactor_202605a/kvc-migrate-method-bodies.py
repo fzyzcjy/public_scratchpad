@@ -121,9 +121,15 @@ def _global_subs(body: str) -> str:
         "self: ModelRunner, token_capacity: int",
         "self, token_capacity: int",
     )
-    # ``mambaish_config(self)`` may span multiple lines (black-wrapped form
-    # ``mambaish_config(\n    self\n)``) — match both.
-    body = re.sub(r"mambaish_config\(\s*self\s*\)", "self.mambaish_config", body)
+    # ``mambaish_config(self.model_config, is_draft_worker=self.is_draft_worker)``
+    # may span multiple lines (black-wrapped). Match both forms — the cached
+    # ``self.mambaish_config`` field on KVCacheConfigurator already holds the
+    # value from the constructor; reuse it instead of recomputing.
+    body = re.sub(
+        r"mambaish_config\(\s*self\.model_config,\s*is_draft_worker=self\.is_draft_worker\s*\)",
+        "self.mambaish_config",
+        body,
+    )
     body = body.replace(
         "hybrid_gdn_config(self.model_config)", "self.hybrid_gdn_config"
     )
