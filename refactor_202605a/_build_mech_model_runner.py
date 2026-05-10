@@ -74,6 +74,10 @@ ORDER: list[str] = [
     "dg-mech-rename",
     "kw-mech-rename",
     "ha-mech-drop-is-draft-worker",
+    "nem-mech-rename",
+    "nem-mech-frozen",
+    "rwt-mech-rename",
+    "rwt-mech-slots",
 ]
 
 
