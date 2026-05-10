@@ -42,8 +42,8 @@ from collections import defaultdict
 from sglang.srt.hardware_backend.npu.graph_runner.npu_graph_runner import NPUGraphRunner
 from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner
 from sglang.srt.model_executor.cuda_graph_runner import CudaGraphRunner
+from sglang.srt.configs.model_config import ModelImpl
 from sglang.srt.platforms import current_platform
-from sglang.srt.server_args import ModelImpl
 from sglang.srt.utils import get_available_gpu_memory
 
 logger = logging.getLogger(__name__)
