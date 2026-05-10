@@ -83,18 +83,20 @@ def transform(wt: Path) -> None:
         .replace("self.tp_rank", "tp_rank")
         .replace("self.expert_backup_client", "expert_backup_client")
         .replace("self.model", "model")
+        # NOTE: indentation is 12 spaces (one `dedent_method_to_function` level
+        # already stripped from the original 16-space deeply-nested block).
         .replace(
-            "weight_updater.update_weights_from_disk(\n"
-            "                    model_runner_ref=self,\n"
-            "                    model_path=get_global_server_args().model_path,\n"
-            "                    load_format=get_global_server_args().load_format,\n"
-            "                    weight_name_filter=weight_name_filter,\n"
-            "                )",
-            "update_weights_from_disk_callable(\n"
-            "                    model_path=get_global_server_args().model_path,\n"
-            "                    load_format=get_global_server_args().load_format,\n"
-            "                    weight_name_filter=weight_name_filter,\n"
-            "                )",
+            "            weight_updater.update_weights_from_disk(\n"
+            "                model_runner_ref=self,\n"
+            "                model_path=get_global_server_args().model_path,\n"
+            "                load_format=get_global_server_args().load_format,\n"
+            "                weight_name_filter=weight_name_filter,\n"
+            "            )",
+            "            update_weights_from_disk_callable(\n"
+            "                model_path=get_global_server_args().model_path,\n"
+            "                load_format=get_global_server_args().load_format,\n"
+            "                weight_name_filter=weight_name_filter,\n"
+            "            )",
         )
     )
 

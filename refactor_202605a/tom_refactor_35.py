@@ -169,15 +169,19 @@ def transform(wt: Path) -> None:
 
     # Test fake fix: pool_configurator's test mocks `mr.mambaish_config = None`
     # directly on a MagicMock. After /35, consumers call hybrid_arch.X(mr)
-    # which traverses `mr.model_config.hf_config.get_text_config()`. The fake
-    # `hf_config = SimpleNamespace(...)` lacks `get_text_config`. Add it
-    # returning `hf_config` itself (HF default for non-multimodal configs).
+    # which traverses `mr.model_config.hf_config.get_text_config()` and falls
+    # back to `mr._get_linear_attn_registry_result()`. The fake
+    # `hf_config = SimpleNamespace(...)` lacks `get_text_config`, and
+    # `_get_linear_attn_registry_result` defaults to a truthy MagicMock that
+    # makes `mambaish_config(...)` return `MagicMock()` instead of `None`.
+    # Stub both so mambaish_config evaluates to None as the test intends.
     test_pc = wt / "test/registered/unit/model_executor/test_pool_configurator.py"
     text = test_pc.read_text()
     text = text.replace(
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n',
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n'
-        '    mc.hf_config.get_text_config = lambda: mc.hf_config\n',
+        '    mc.hf_config.get_text_config = lambda: mc.hf_config\n'
+        '    mr._get_linear_attn_registry_result = lambda: None\n',
     )
     test_pc.write_text(text)
 
