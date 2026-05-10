@@ -157,6 +157,16 @@ def transform(wt: Path) -> None:
     )
     test_uwt.write_text(text)
 
+    # weight_sync/utils.py imports the dataclass from the old home — rewire.
+    ws_utils = wt / "python/sglang/srt/weight_sync/utils.py"
+    text = ws_utils.read_text()
+    text = replace_call_site(
+        text,
+        old="from sglang.srt.model_executor.model_runner import LocalSerializedTensor\n",
+        new="from sglang.srt.model_executor.weight_updater import LocalSerializedTensor\n",
+    )
+    ws_utils.write_text(text)
+
 if __name__ == "__main__":
     run_pr(
         transform=transform,
