@@ -235,9 +235,13 @@ def transform(wt: Path) -> None:
     )
     dg_text = replace_call_site(
         dg_text,
-        old="from sglang.srt.model_executor.npu_graph_runner import NPUGraphRunner\n",
+        old=(
+            "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n"
+            "from sglang.srt.model_executor.cuda_graph_runner import CudaGraphRunner\n"
+        ),
         new=(
-            "from sglang.srt.model_executor.npu_graph_runner import NPUGraphRunner\n"
+            "from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n"
+            "from sglang.srt.model_executor.cuda_graph_runner import CudaGraphRunner\n"
             "from sglang.srt.model_executor.piecewise_cuda_graph_runner import (\n"
             "    PiecewiseCudaGraphRunner,\n"
             ")\n"
