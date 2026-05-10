@@ -131,9 +131,11 @@ def backup_old_chain_head() -> None:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
     area = TARGET.split("/")[-1]
     tag_name = f"backup/{timestamp}/{area}"
-    print(f"\n=== backing up old upstream/{TARGET} ({sha[:12]}) as {tag_name} ===", flush=True)
+    # Push backup tag to origin (fzyzcjy/sglang fork) — upstream sgl-project
+    # repo rules reject `backup/*` namespace.
+    print(f"\n=== backing up old upstream/{TARGET} ({sha[:12]}) as {tag_name} on origin ===", flush=True)
     run(["git", "tag", tag_name, sha], cwd=REPO)
-    run(["git", "push", "upstream", f"refs/tags/{tag_name}"], cwd=REPO)
+    run(["git", "push", "origin", f"refs/tags/{tag_name}"], cwd=REPO)
 
 
 def main() -> None:
