@@ -83,18 +83,22 @@ def transform(wt: Path) -> None:
         .replace("self.tp_rank", "tp_rank")
         .replace("self.expert_backup_client", "expert_backup_client")
         .replace("self.model", "model")
+        # After /24-/30 reshuffle, the body calls
+        # `self.weight_updater.update_weights_from_disk(...)` (instance method
+        # on WeightUpdater, positional args). Free-function form takes a
+        # `update_weights_from_disk_callable` kwarg; caller (eplb_manager)
+        # passes the bound method directly.
         # NOTE: indentation is 12 spaces (one `dedent_method_to_function` level
         # already stripped from the original 16-space deeply-nested block).
         .replace(
-            "            weight_updater.update_weights_from_disk(\n"
-            "                model_runner_ref=self,\n"
-            "                model_path=get_global_server_args().model_path,\n"
-            "                load_format=get_global_server_args().load_format,\n"
+            "            self.weight_updater.update_weights_from_disk(\n"
+            "                get_global_server_args().model_path,\n"
+            "                get_global_server_args().load_format,\n"
             "                weight_name_filter=weight_name_filter,\n"
             "            )",
             "            update_weights_from_disk_callable(\n"
-            "                model_path=get_global_server_args().model_path,\n"
-            "                load_format=get_global_server_args().load_format,\n"
+            "                get_global_server_args().model_path,\n"
+            "                get_global_server_args().load_format,\n"
             "                weight_name_filter=weight_name_filter,\n"
             "            )",
         )
@@ -106,15 +110,9 @@ def transform(wt: Path) -> None:
     text = eplb.read_text()
     text = insert_after(
         text,
-        anchor="import time\n",
-        addition="import functools\n",
-    )
-    text = insert_after(
-        text,
         anchor="from sglang.srt.eplb.expert_location import ExpertLocationMetadata\n",
         addition=(
             "from sglang.srt.eplb.expert_location_updater import update_expert_location\n"
-            "from sglang.srt.model_executor import weight_updater\n"
         ),
     )
     text = replace_call_site(
@@ -134,10 +132,7 @@ def transform(wt: Path) -> None:
             "                nnodes=self._model_runner.server_args.nnodes,\n"
             "                tp_rank=self._model_runner.tp_rank,\n"
             "                expert_backup_client=self._model_runner.expert_backup_client,\n"
-            "                update_weights_from_disk_callable=functools.partial(\n"
-            "                    weight_updater.update_weights_from_disk,\n"
-            "                    model_runner_ref=self._model_runner,\n"
-            "                ),\n"
+            "                update_weights_from_disk_callable=self._model_runner.weight_updater.update_weights_from_disk,\n"
             "            )\n"
         ),
     )
