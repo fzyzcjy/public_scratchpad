@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+"""Build tom_refactor_202605a/primary/mech_tokenizer_manager from `<id>.py` scripts.
+
+Mirrors `_build_mech_model_runner.py`. See PR_CHAIN.md / CLAUDE.md (refactor-sprint).
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).parent
+REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
+WT = Path("/tmp/refactor-wt-mech-tokenizer-manager")
+BASE = "tom_refactor_202605a/primary/mech_preflight"
+CHAIN_BRANCH = "tom_refactor_202605a/primary/mech_tokenizer_manager"
+SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
+
+
+# Chain ordering (per plan §V2.2). Each entry = `<id>` of `<id>.py` script.
+ORDER: list[str] = [
+    # Stage 0 — 基础设施
+    "move-req-state",
+    "move-logprob-ops",
+    "move-request-tracing",
+    "move-spec-decoding-meta",
+    "define-scheduler-sender",
+    # Stage 1 — score handler early
+    "introduce-score-request-handler",
+    # Stage 2 — inputs
+    "introduce-raw-tokenizer-wrapper",
+    "rtw-move-tokenize-helpers",
+    "introduce-request-validator",
+    "introduce-tokenized-request-builder",
+    "introduce-multimodal-processor",
+    "introduce-request-preparer",
+    # Stage 3 — observability
+    "introduce-request-log-manager",
+    "introduce-request-metrics-recorder",
+    # Stage 4 — control (session first; splits init_request_dispatcher)
+    "introduce-session-controller",
+    "introduce-pause-controller",
+    "introduce-weight-disk-update-controller",
+    "introduce-lora-controller",
+    "introduce-corpus-controller",
+    # Stage 5 — outputs
+    "introduce-output-processor",
+    "introduce-response-emitter",
+    # Stage 6 — _handle_batch_request 切段
+    "extract-handle-batch-request-wait-yield",
+    # Stage 7 — MM 分支抽出
+    "mmp-extract-tokenize-branch",
+]
+
+
+def run(cmd: list[str], *, cwd: Path, check: bool = True) -> str:
+    print(f"$ {' '.join(cmd)}", flush=True)
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
+    if result.stdout:
+        print(result.stdout, end="", flush=True)
+    if result.stderr:
+        print(result.stderr, end="", flush=True)
+    return result.stdout + result.stderr
+
+
+def make_worktree() -> None:
+    if WT.exists():
+        run(["git", "worktree", "remove", "--force", str(WT)], cwd=REPO, check=False)
+        if WT.exists():
+            shutil.rmtree(WT)
+    run(["git", "fetch", "upstream", BASE], cwd=REPO)
+    run(["git", "worktree", "add", "--detach", str(WT), f"upstream/{BASE}"], cwd=REPO)
+
+
+def load_script(id: str):
+    script_path = HERE / f"{id}.py"
+    if not script_path.exists():
+        raise FileNotFoundError(f"missing transform script: {script_path}")
+    spec = importlib.util.spec_from_file_location(f"_chain_{id.replace('-', '_')}", script_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def commit_message(*, id: str, subject: str, body: str) -> str:
+    body_clean = (body or "").rstrip()
+    parts = [f"{id}: {subject}"]
+    if body_clean:
+        parts.extend(["", body_clean])
+    parts.extend(["", f"Refactor chain ID: {id}"])
+    return "\n".join(parts) + "\n"
+
+
+def run_pre_commit(wt: Path) -> None:
+    files = run(["git", "diff", "--name-only", "HEAD~1", "HEAD"], cwd=wt).split()
+    if not files:
+        return
+    run(["pre-commit", "run", "--files", *files], cwd=wt, check=False)
+    porcelain = run(["git", "status", "--porcelain"], cwd=wt).strip()
+    if porcelain:
+        run(["git", "add", "-A"], cwd=wt)
+        run(["git", "commit", "--amend", "--no-edit", "--quiet"], cwd=wt)
+
+
+def backup_old_chain_head() -> None:
+    """Tag current upstream/<CHAIN_BRANCH> HEAD before force-push (per PR_CHAIN.md)."""
+    run(["git", "fetch", "upstream", CHAIN_BRANCH], cwd=REPO, check=False)
+    sha = run(
+        ["git", "rev-parse", "--verify", "--quiet", f"upstream/{CHAIN_BRANCH}"],
+        cwd=REPO,
+        check=False,
+    ).strip()
+    if not sha:
+        print(f"\n=== no existing upstream/{CHAIN_BRANCH} — skipping backup tag ===", flush=True)
+        return
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    area = CHAIN_BRANCH.split("/")[-1]
+    tag_name = f"backup/{timestamp}/{area}"
+    print(f"\n=== backing up old upstream/{CHAIN_BRANCH} ({sha[:12]}) as {tag_name} on origin ===", flush=True)
+    run(["git", "tag", tag_name, sha], cwd=REPO)
+    run(["git", "push", "origin", f"refs/tags/{tag_name}"], cwd=REPO)
+
+
+def main() -> None:
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    if SKILL_PATH.exists() and str(SKILL_PATH) not in sys.path:
+        sys.path.insert(0, str(SKILL_PATH))
+
+    make_worktree()
+    for id in ORDER:
+        print(f"\n=== {id} ===", flush=True)
+        module = load_script(id)
+        subject = getattr(module, "SUBJECT", "")
+        body = getattr(module, "BODY", "")
+        if not subject:
+            raise RuntimeError(f"{id}.py is missing SUBJECT")
+        module.transform(WT)
+        msg = commit_message(id=id, subject=subject, body=body)
+        run(["git", "add", "-A"], cwd=WT)
+        run(["git", "commit", "-m", msg, "--quiet"], cwd=WT)
+        run_pre_commit(WT)
+
+    print("\n=== chain built. final HEAD ===", flush=True)
+    run(["git", "log", "--oneline", "-32"], cwd=WT)
+    head = run(["git", "rev-parse", "HEAD"], cwd=WT).strip()
+    backup_old_chain_head()
+    print(
+        f"\nTo publish, force-push the chain head:\n"
+        f"  git -C {WT} push -f upstream HEAD:refs/heads/{CHAIN_BRANCH}\n"
+        f"(HEAD={head[:12]})\n",
+        flush=True,
+    )
+
+
+if __name__ == "__main__":
+    main()

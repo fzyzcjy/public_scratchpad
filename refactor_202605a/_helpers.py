@@ -20,17 +20,18 @@ def find_method_lines(text: str, *, class_name: str, method_name: str) -> Tuple[
     next method or class end — convenient for cut-and-paste.
     """
     tree = ast.parse(text)
+    func_types = (ast.FunctionDef, ast.AsyncFunctionDef)
     for cls in ast.walk(tree):
         if isinstance(cls, ast.ClassDef) and cls.name == class_name:
             for i, node in enumerate(cls.body):
-                if isinstance(node, ast.FunctionDef) and node.name == method_name:
+                if isinstance(node, func_types) and node.name == method_name:
                     start = node.lineno - 1
                     if node.decorator_list:
                         start = node.decorator_list[0].lineno - 1
                     if i + 1 < len(cls.body):
                         next_start = cls.body[i + 1].lineno - 1
                         nxt = cls.body[i + 1]
-                        if isinstance(nxt, (ast.FunctionDef, ast.ClassDef)) and nxt.decorator_list:
+                        if isinstance(nxt, func_types + (ast.ClassDef,)) and nxt.decorator_list:
                             next_start = nxt.decorator_list[0].lineno - 1
                     else:
                         next_start = node.end_lineno
@@ -44,14 +45,15 @@ def find_function_lines(text: str, *, function_name: str) -> Tuple[int, int]:
     Includes any leading decorators.
     """
     tree = ast.parse(text)
+    func_types = (ast.FunctionDef, ast.AsyncFunctionDef)
     for i, node in enumerate(tree.body):
-        if isinstance(node, ast.FunctionDef) and node.name == function_name:
+        if isinstance(node, func_types) and node.name == function_name:
             start = node.lineno - 1
             if node.decorator_list:
                 start = node.decorator_list[0].lineno - 1
             if i + 1 < len(tree.body):
                 next_start = tree.body[i + 1].lineno - 1
-                if isinstance(tree.body[i + 1], (ast.FunctionDef, ast.ClassDef)) and tree.body[i + 1].decorator_list:
+                if isinstance(tree.body[i + 1], func_types + (ast.ClassDef,)) and tree.body[i + 1].decorator_list:
                     next_start = tree.body[i + 1].decorator_list[0].lineno - 1
             else:
                 next_start = node.end_lineno
