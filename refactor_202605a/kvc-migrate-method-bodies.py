@@ -15,7 +15,7 @@ Method-by-method changes:
 | ``_resolve_max_num_reqs``     | ``_resolve_max_num_reqs`` (as-is)          |
 | ``_apply_memory_pool_config`` | (absorbed into ``configure``)              |
 | ``_resolve_memory_pool_config`` | ``_resolve_memory_pool_config`` (as-is)  |
-| ``calculate_mla_kv_cache_dim`` | (already extracted to kv_cache_dim.py)    |
+| ``calculate_mla_kv_cache_dim`` | (already in this file as a free function) |
 
 Substitutions across all migrated bodies:
 
@@ -23,7 +23,8 @@ Substitutions across all migrated bodies:
 - ``mambaish_config(self)`` → ``self.mambaish_config`` (use cached field).
 - ``hybrid_gdn_config(self.model_config)`` → ``self.hybrid_gdn_config``.
 - ``self.calculate_mla_kv_cache_dim()`` →
-  ``kv_cache_dim.calculate_mla_kv_cache_dim(model_config=..., kv_cache_dtype=..., server_args=...)``.
+  ``calculate_mla_kv_cache_dim(model_config=..., kv_cache_dtype=..., server_args=...)``
+  (bare call — the helper lives in the same module).
 
 `_init_pools` body extras:
 
@@ -135,7 +136,7 @@ def _global_subs(body: str) -> str:
     )
     body = body.replace(
         "self.calculate_mla_kv_cache_dim()",
-        "kv_cache_dim.calculate_mla_kv_cache_dim(\n"
+        "calculate_mla_kv_cache_dim(\n"
         "    model_config=self.model_config,\n"
         "    kv_cache_dtype=self.kv_cache_dtype,\n"
         "    server_args=self.server_args,\n"
@@ -413,7 +414,6 @@ from sglang.srt.configs.model_config import (
 from sglang.srt.distributed.parallel_state import get_world_group
 from sglang.srt.environ import envs
 from sglang.srt.layers.dp_attention import get_attention_tp_size
-from sglang.srt.mem_cache import kv_cache_dim
 from sglang.srt.mem_cache.allocator import (
     PagedTokenToKVPoolAllocator,
     TokenToKVPoolAllocator,
@@ -431,20 +431,17 @@ from sglang.srt.mem_cache.memory_pool import (
     MHATokenToKVPoolFP4,
     MLATokenToKVPool,
     MLATokenToKVPoolFP4,
-    NSATokenToKVPool,
 )
 from sglang.srt.mem_cache.swa_memory_pool import SWAKVPool, SWATokenToKVPoolAllocator
 from sglang.srt.utils.common import (
     get_available_gpu_memory,
     is_float4_e2m1fn_x2,
-    is_hip,
     is_npu,
 )
 
 logger = logging.getLogger(__name__)
 
 _is_npu = is_npu()
-_is_hip = is_hip()
 
 # the ratio of mamba cache pool size to max_running_requests
 MAMBA_CACHE_SIZE_MAX_RUNNING_REQUESTS_RATIO = 3

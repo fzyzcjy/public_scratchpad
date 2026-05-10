@@ -28,8 +28,8 @@ CHAIN_BRANCH = "tom_refactor_202605a/primary/nonmech_model_runner"
 # Chain ordering. Each entry is the `<id>` part of a `<id>.py` script in this
 # directory.
 ORDER: list[str] = [
-    "kvc-extract-mla-dim",
     "kvc-introduce-skeleton",
+    "kvc-extract-mla-dim",
     "kvc-migrate-method-bodies",
     "kvc-drop-mixin-inheritance",
 ]

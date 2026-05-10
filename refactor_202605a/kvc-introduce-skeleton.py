@@ -38,7 +38,7 @@ ID = "kvc-introduce-skeleton"
 SUBJECT = "Introduce KVCacheConfigurator + KVCacheConfigResult skeletons"
 BODY = ""
 AREA = "nonmech_model_runner"
-BASE = "tom_refactor_202605a/primary/nonmech_model_runner/kvc-extract-mla-dim"
+BASE = "tom_refactor_202605a/primary/mech_model_runner"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
@@ -88,40 +88,40 @@ class KVCacheConfigurator:
     attribute writes on ``self``.
     """
 
-    # 部署 env
+    # deployment env
     device: str
     gpu_id: int
     mem_fraction_static: float
     page_size: int
-    # 并行 rank / size
+    # parallel rank / size
     tp_rank: int
     tp_size: int
     pp_size: int
     dp_size: int
     attention_tp_size: int
-    # 模型 / dtype
+    # model / dtype
     model_config: ModelConfig
     server_args: ServerArgs
     dtype: torch.dtype
     kv_cache_dtype: torch.dtype
-    # 推测
+    # speculative decoding
     spec_algorithm: SpeculativeAlgorithm
     is_draft_worker: bool
-    # 架构 flag
+    # arch flags
     is_hybrid_swa: bool
     is_hybrid_swa_compress: bool
     use_mla_backend: bool
     enable_hisparse: bool
     mambaish_config: Optional[Any]
     hybrid_gdn_config: Optional[Any]
-    # PP 切片
+    # PP slice
     start_layer: int
     end_layer: int
     num_effective_layers: int
-    # 可选预注入（draft worker 复用 target 的 pool）
+    # optional pre-injection (draft worker reuses target's pool)
     req_to_token_pool: Optional[ReqToTokenPool]
     token_to_kv_pool_allocator: Optional[BaseTokenToKVPoolAllocator]
-    # draft worker 预算
+    # draft worker budget
     memory_pool_config: Optional["MemoryPoolConfig"]
 
     def configure(self, *, pre_model_load_memory: int) -> KVCacheConfigResult:
