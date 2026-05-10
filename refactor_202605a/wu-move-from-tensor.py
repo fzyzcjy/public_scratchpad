@@ -167,6 +167,21 @@ def transform(wt: Path) -> None:
     )
     ws_utils.write_text(text)
 
+    # SafeUnpickler's allowlist gates pickle deserialization (CVE-2025-10164).
+    # ``LocalSerializedTensor`` ships across the IPC boundary; after the move
+    # the new module path needs to be allowed too.
+    common = wt / "python/sglang/srt/utils/common.py"
+    text = common.read_text()
+    text = replace_call_site(
+        text,
+        old='        "sglang.srt.model_executor.model_runner.",\n',
+        new=(
+            '        "sglang.srt.model_executor.model_runner.",\n'
+            '        "sglang.srt.model_executor.weight_updater.",\n'
+        ),
+    )
+    common.write_text(text)
+
 if __name__ == "__main__":
     run_pr(
         transform=transform,
