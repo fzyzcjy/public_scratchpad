@@ -60,6 +60,7 @@ from sglang.srt.configs import (
     BailingHybridConfig,
     FalconH1Config,
     GraniteMoeHybridConfig,
+    InternS2PreviewConfig,
     JetNemotronConfig,
     JetVLMConfig,
     KimiLinearConfig,
@@ -116,6 +117,7 @@ def hybrid_gdn_config(
         Qwen3NextConfig,
         Qwen3_5Config,
         Qwen3_5MoeConfig,
+        InternS2PreviewConfig,
         JetNemotronConfig,
         JetVLMConfig,
     ]
@@ -126,6 +128,7 @@ def hybrid_gdn_config(
         Qwen3NextConfig
         | Qwen3_5Config
         | Qwen3_5MoeConfig
+        | InternS2PreviewConfig
         | JetNemotronConfig
         | JetVLMConfig,
     ):
@@ -303,6 +306,7 @@ def transform(wt: Path) -> None:
         "    BailingHybridConfig,\n"
         "    FalconH1Config,\n"
         "    GraniteMoeHybridConfig,\n"
+        "    InternS2PreviewConfig,\n"
         "    JetNemotronConfig,\n"
         "    JetVLMConfig,\n"
         "    KimiLinearConfig,\n"
