@@ -50,11 +50,14 @@ TARGET = "tom_refactor/43"
 
 MANAGER_HEADER = '''from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import torch
 
 from sglang.jit_kernel.ngram_embedding import update_token_table
+from sglang.srt.configs.model_config import ModelConfig
+from sglang.srt.mem_cache.memory_pool import ReqToTokenPool
+from sglang.srt.server_args import ServerArgs
 
 if TYPE_CHECKING:
     from sglang.srt.model_executor.forward_batch_info import ForwardBatch
@@ -65,10 +68,10 @@ class NgramEmbeddingManager:
     def __init__(
         self,
         *,
-        use_ngram_embedding,
-        token_table,
-        ngram_embedding_n,
-        ngram_embedding_k,
+        use_ngram_embedding: bool,
+        token_table: Optional[torch.Tensor],
+        ngram_embedding_n: int,
+        ngram_embedding_k: int,
     ):
         self.use_ngram_embedding = use_ngram_embedding
         self.token_table = token_table
@@ -118,12 +121,12 @@ def _transform_init_method(method_text: str) -> str:
         "    def maybe_init_ngram_embedding(\n"
         "        cls,\n"
         "        *,\n"
-        "        model,\n"
-        "        model_config,\n"
-        "        req_to_token_pool,\n"
-        "        server_args,\n"
-        "        max_running_requests,\n"
-        "        device,\n"
+        "        model: torch.nn.Module,\n"
+        "        model_config: ModelConfig,\n"
+        "        req_to_token_pool: ReqToTokenPool,\n"
+        "        server_args: ServerArgs,\n"
+        "        max_running_requests: int,\n"
+        "        device: str,\n"
         "    ):\n"
         "        token_table = None\n"
         "        ngram_embedding_n = 0\n"

@@ -66,14 +66,17 @@ def transform(wt: Path) -> None:
             "    new_expert_location_metadata: ExpertLocationMetadata,\n"
             "    update_layer_ids: List[int],\n"
             "):\n",
+            # Preserve original typed params `new_expert_location_metadata` /
+            # `update_layer_ids` exactly as on the source method; new kwargs
+            # get fresh annotations.
             "def update_expert_location(\n"
             "    *,\n"
-            "    expert_location_updater,\n"
-            "    model,\n"
-            "    new_expert_location_metadata,\n"
-            "    update_layer_ids,\n"
-            "    nnodes,\n"
-            "    tp_rank,\n"
+            "    expert_location_updater: ExpertLocationUpdater,\n"
+            "    model: nn.Module,\n"
+            "    new_expert_location_metadata: ExpertLocationMetadata,\n"
+            "    update_layer_ids: List[int],\n"
+            "    nnodes: int,\n"
+            "    tp_rank: int,\n"
             "    expert_backup_client,\n"
             "    update_weights_from_disk_callable,\n"
             "):\n",

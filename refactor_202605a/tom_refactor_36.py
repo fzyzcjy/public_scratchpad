@@ -38,7 +38,10 @@ _HEADER = (
     "\n"
     "import torch\n"
     "\n"
+    "from sglang.srt.configs.model_config import ModelConfig\n"
     "from sglang.srt.environ import envs\n"
+    "from sglang.srt.server_args import ServerArgs\n"
+    "from sglang.srt.speculative.spec_info import SpeculativeAlgorithm\n"
 )
 
 
@@ -62,9 +65,9 @@ def transform(wt: Path) -> None:
         "def _should_run_flashinfer_autotune(self) -> bool:\n",
         "def _should_run_flashinfer_autotune(\n"
         "    *,\n"
-        "    server_args,\n"
-        "    spec_algorithm,\n"
-        "    is_draft_worker,\n"
+        "    server_args: ServerArgs,\n"
+        "    spec_algorithm: SpeculativeAlgorithm,\n"
+        "    is_draft_worker: bool,\n"
         ") -> bool:\n",
     )
     fn = fn.replace("self.server_args", "server_args")
@@ -83,17 +86,17 @@ def transform(wt: Path) -> None:
         "def _flashinfer_autotune_cache_path(self) -> Path:\n",
         "def _flashinfer_autotune_cache_path(\n"
         "    *,\n"
-        "    server_args,\n"
-        "    model_config,\n"
-        "    dtype,\n"
-        "    device,\n"
-        "    tp_rank,\n"
-        "    tp_size,\n"
-        "    pp_rank,\n"
-        "    pp_size,\n"
-        "    dp_rank,\n"
-        "    dp_size,\n"
-        "    moe_ep_size,\n"
+        "    server_args: ServerArgs,\n"
+        "    model_config: ModelConfig,\n"
+        "    dtype: torch.dtype,\n"
+        "    device: str,\n"
+        "    tp_rank: int,\n"
+        "    tp_size: int,\n"
+        "    pp_rank: int,\n"
+        "    pp_size: int,\n"
+        "    dp_rank: int,\n"
+        "    dp_size: int,\n"
+        "    moe_ep_size: int,\n"
         ") -> Path:\n",
     )
     fn = fn.replace("torch.cuda.get_device_capability(self.device)",

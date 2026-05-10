@@ -46,10 +46,10 @@ def transform(wt: Path) -> None:
         "def _init_lora_cuda_graph_moe_buffers(self):\n",
         "def _init_lora_cuda_graph_moe_buffers(\n"
         "    *,\n"
-        "    server_args,\n"
-        "    model,\n"
-        "    lora_manager,\n"
-        "    dtype,\n"
+        "    server_args: ServerArgs,\n"
+        "    model: torch.nn.Module,\n"
+        "    lora_manager: LoRAManager,\n"
+        "    dtype: torch.dtype,\n"
         "):\n",
     )
     fn = fn.replace("self.server_args", "server_args")

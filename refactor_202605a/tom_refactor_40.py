@@ -42,7 +42,10 @@ TRANSPORT_HEADER = '''from __future__ import annotations
 
 import logging
 
+import torch
+
 from sglang.srt.environ import envs
+from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils.network import NetworkAddress, get_local_ip_auto
 
 logger = logging.getLogger(__name__)
@@ -50,7 +53,14 @@ logger = logging.getLogger(__name__)
 
 class RemoteInstanceWeightTransport:
 
-    def __init__(self, *, server_args, model, tp_rank, gpu_id):
+    def __init__(
+        self,
+        *,
+        server_args: ServerArgs,
+        model: torch.nn.Module,
+        tp_rank: int,
+        gpu_id: int,
+    ):
         self.server_args = server_args
         self.model = model
         self.tp_rank = tp_rank

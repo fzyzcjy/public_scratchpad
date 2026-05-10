@@ -47,10 +47,12 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from typing import List, Optional
 
 import torch
 import torch.distributed as dist
 
+from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.distributed import (
     get_default_distributed_backend,
     get_pp_group,
@@ -67,6 +69,7 @@ from sglang.srt.layers.dp_attention import (
     get_attention_tp_group,
     initialize_dp_attention,
 )
+from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils import (
     cpu_has_amx_support,
     get_available_gpu_memory,
@@ -93,21 +96,21 @@ class TorchDistributedResult:
 
 def init_torch_distributed(
     *,
-    server_args,
-    model_config,
-    device,
-    gpu_id,
-    tp_rank,
-    tp_size,
-    pp_rank,
-    pp_size,
-    dp_size,
-    attn_cp_size,
-    moe_ep_size,
-    moe_dp_size,
-    dist_port,
-    is_draft_worker,
-    local_omp_cpuid,
+    server_args: ServerArgs,
+    model_config: ModelConfig,
+    device: str,
+    gpu_id: int,
+    tp_rank: int,
+    tp_size: int,
+    pp_rank: int,
+    pp_size: int,
+    dp_size: int,
+    attn_cp_size: int,
+    moe_ep_size: int,
+    moe_dp_size: int,
+    dist_port: int,
+    is_draft_worker: bool,
+    local_omp_cpuid: Optional[List[int]],
 ):
 '''
 
