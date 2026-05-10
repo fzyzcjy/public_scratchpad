@@ -80,8 +80,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Optional
 
-from sglang.srt.observability.event_publisher_factory import EventPublisherFactory
-from sglang.srt.observability.kv_event_publisher import KVEventBatch
+from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch
 
 
 # ``SchedulerStats`` referenced only as a type hint in ``emit_kv_metrics`` —
