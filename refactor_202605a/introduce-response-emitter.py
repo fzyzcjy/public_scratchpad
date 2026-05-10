@@ -68,6 +68,7 @@ from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
 import fastapi
+from fastapi import BackgroundTasks
 
 from sglang.srt.environ import envs
 from sglang.srt.managers import logprob_ops
