@@ -2,10 +2,9 @@
 """Cut `update_weights_from_ipc` from ModelRunner; paste as a free function in
 `weight_updater.py`. Update tp_worker.py call site.
 
-The free function takes the awkwardly-named kwarg
-`model_runner_for_checkpoint_engine` to flag the R4 violation: the worker
-extension constructor still takes a full `ModelRunner` reference. That R4
-hand-off lives at the call site instead of being hidden behind `self`.
+R4 concession: takes `model_runner_ref` kwarg because
+`SGLangCheckpointEngineWorkerExtensionImpl` ctor accepts a full `ModelRunner`
+reference. Standard R4 kwarg name (matches /25, /32, /33, /34, /35).
 
 Usage:
     uv run --python 3.12 tom_refactor_28.py run
@@ -53,11 +52,11 @@ def transform(wt: Path) -> None:
         dedent_method_to_function(cut_lines(mr, s, e))
         .replace(
             "def update_weights_from_ipc(self, recv_req):",
-            "def update_weights_from_ipc(*, model_runner_for_checkpoint_engine, recv_req):",
+            "def update_weights_from_ipc(*, model_runner_ref, recv_req):",
         )
         .replace(
             "SGLangCheckpointEngineWorkerExtensionImpl(self)",
-            "SGLangCheckpointEngineWorkerExtensionImpl(model_runner_for_checkpoint_engine)",
+            "SGLangCheckpointEngineWorkerExtensionImpl(model_runner_ref)",
         )
     )
     append_to_file(wu, func_text)
@@ -76,7 +75,7 @@ def transform(wt: Path) -> None:
         old="        success, message = self.model_runner.update_weights_from_ipc(recv_req)\n",
         new=(
             "        success, message = weight_updater.update_weights_from_ipc(\n"
-            "            model_runner_for_checkpoint_engine=self.model_runner,\n"
+            "            model_runner_ref=self.model_runner,\n"
             "            recv_req=recv_req,\n"
             "        )\n"
         ),
