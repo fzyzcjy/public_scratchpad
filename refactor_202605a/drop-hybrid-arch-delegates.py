@@ -38,17 +38,21 @@ BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-hybrid-arch-props
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-# Functions that need only model_config.
-_NO_KWARG = {
+# Functions that take `model_config` (no extra kwarg).
+_MODEL_CONFIG = {
     "qwen3_next_config",
     "hybrid_lightning_config",
     "hybrid_gdn_config",
     "kimi_linear_config",
-    "linear_attn_model_spec",
 }
-# Functions that ALSO need is_draft_worker.
-_WITH_DRAFT = {
+# Functions that take `model_config` plus `is_draft_worker` kwarg.
+_MODEL_CONFIG_WITH_DRAFT = {
     "mamba2_config",
+}
+# Functions that take `model_runner` directly (use the on-instance lazy
+# linear-attn registry cache).
+_MODEL_RUNNER = {
+    "linear_attn_model_spec",
     "mambaish_config",
 }
 
@@ -56,8 +60,11 @@ _WITH_DRAFT = {
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
     """Rewrite `<accessor>.<name>` access into a bare `<name>(...)` call.
 
-    For functions in _NO_KWARG, the call is `<name>(<accessor>.model_config)`.
-    For functions in _WITH_DRAFT, the call additionally passes is_draft_worker.
+    Per category:
+    - `_MODEL_CONFIG`: `<name>(<accessor>.model_config)`.
+    - `_MODEL_CONFIG_WITH_DRAFT`: `<name>(<accessor>.model_config, is_draft_worker=<accessor>.is_draft_worker)`.
+    - `_MODEL_RUNNER`: `<name>(<accessor>)` — these take ModelRunner directly
+      because they read the on-instance lazy cache.
 
     Names are imported via `from sglang.srt.configs.hybrid_arch import ...` —
     bare-call form, NOT module-qualified `hybrid_arch.<name>(...)`. The
@@ -66,13 +73,15 @@ def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) ->
     `hybrid_arch.` prefix is noise at consumer sites.
     """
     for name in function_names:
-        if name in _WITH_DRAFT:
+        if name in _MODEL_CONFIG_WITH_DRAFT:
             replacement = (
                 f"{name}("
                 f"{accessor}.model_config, "
                 f"is_draft_worker={accessor}.is_draft_worker"
                 f")"
             )
+        elif name in _MODEL_RUNNER:
+            replacement = f"{name}({accessor})"
         else:
             replacement = f"{name}({accessor}.model_config)"
         text = text.replace(f"{accessor}.{name}", replacement)
@@ -196,16 +205,28 @@ def transform(wt: Path) -> None:
         )
 
     # Test fake fix: pool_configurator's test mocks `mr.mambaish_config = None`
-    # directly on a MagicMock. After /35, consumers call
-    # hybrid_arch.mambaish_config(mr.model_config, is_draft_worker=...).
-    # The function traverses `model_config.hf_config.get_text_config()`. Stub
-    # `get_text_config` so the traversal succeeds and falls back to None.
+    # directly on a MagicMock. After this commit, consumers call
+    # hybrid_arch.mambaish_config(mr) directly. Two MagicMock issues:
+    #   (1) `mambaish_config(mr)` internally calls
+    #       ``mamba2_config(mr.model_config, ...)`` which traverses
+    #       ``mc.hf_config.get_text_config()`` — stub it to return mc.hf_config.
+    #   (2) `mambaish_config(mr)` also reads ``mr._linear_attn_registry_cache``
+    #       through ``_get_linear_attn_registry_result``. On a MagicMock that
+    #       attr is itself a MagicMock (not _UNSET), so the cache "hit" branch
+    #       returns the MagicMock. Force ``_linear_attn_registry_cache = None``
+    #       so the helper returns ``None`` and ``mambaish_config`` falls back
+    #       to ``None`` cleanly.
     test_pc = wt / "test/registered/unit/model_executor/test_pool_configurator.py"
     text = test_pc.read_text()
     text = text.replace(
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n',
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n'
         '    mc.hf_config.get_text_config = lambda: mc.hf_config\n',
+    )
+    text = text.replace(
+        "    mr.mambaish_config = mambaish_config\n",
+        "    mr.mambaish_config = mambaish_config\n"
+        "    mr._linear_attn_registry_cache = None\n",
     )
     test_pc.write_text(text)
 

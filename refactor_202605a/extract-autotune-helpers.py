@@ -153,7 +153,6 @@ def transform(wt: Path) -> None:
         text,
         anchor=(
             "from sglang.srt.model_executor.cuda_graph_runner import (\n"
-            "    CudaGraphRunner,\n"
             "    DecodeInputBuffers,\n"
             "    set_torch_compile_config,\n"
             ")\n"

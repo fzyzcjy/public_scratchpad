@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
 """Cut 7 hybrid-arch ModelRunner properties to free functions in new file
 `configs/hybrid_arch.py`. Each function takes `model_config: ModelConfig` (and
-`is_draft_worker: bool` kwarg for `mamba2_config` / `mambaish_config`) — per
-component md 3.2 spec.
+`is_draft_worker: bool` kwarg for `mamba2_config`) — per component md 3.2 spec.
+
+`linear_attn_model_spec` / `mambaish_config` need the lazy registry cache,
+so they take `model_runner: ModelRunner` directly (per the new "passing
+ModelRunner is fine" directive that items 3-4 adopted). The
+`_get_linear_attn_registry_result` private helper moves to
+`hybrid_arch.py` as a free function — body is a mechanical copy of the
+original method, ``self`` → ``model_runner``.
+
+The ``_UNSET`` sentinel (introduced in the preflight
+``cache-linear-attn-registry`` commit) also moves to ``hybrid_arch.py``.
+The ``self._linear_attn_registry_cache: Any = _UNSET`` field init in
+``ModelRunner.__init__`` is **preserved** — the cache still lives on the
+ModelRunner instance; only the helper's home and the sentinel definition
+moved.
 
 ModelRunner keeps a 1-line property delegate per name (no Ch1 rename); the
-delegate calls `hybrid_arch.<name>(self.model_config[, is_draft_worker=...])`.
-Delegate deletion + consumer ripple happens in /35.
-
-Also deletes ModelRunner.`_get_linear_attn_registry_result` helper and the
-`_linear_attn_registry_cache` field + `_UNSET` sentinel (per component md
-item 4: "8 个 property 删除（含 `_get_linear_attn_registry_result` 私有
-helper）；`_linear_attn_registry_cache` 字段删除"). The caching is preserved
-at module scope in `hybrid_arch.py`: a `_linear_attn_registry_cache` dict
-keyed by `id(hf_config)` wraps `get_linear_attn_config`, called from both
-`linear_attn_model_spec` and `mambaish_config`. Functionally equivalent to
-the per-instance cache (model_runner instances are process-lifetime; dict
-never grows beyond a handful).
+delegate calls `hybrid_arch.<name>(self.model_config[, is_draft_worker=...])`
+or `hybrid_arch.<name>(self)` for the two cache-using ones. Delegate
+deletion + consumer ripple happens in /35.
 
 Usage:
     uv run --python 3.12 extract-hybrid-arch-props.py run
@@ -50,7 +54,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 _HEADER = '''from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from sglang.srt.configs import (
     BailingHybridConfig,
@@ -71,20 +75,22 @@ from sglang.srt.configs import (
 from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config
 from sglang.srt.configs.model_config import ModelConfig
 
-
-# Per-hf_config cache for the registry lookup. Keyed by `id(hf_config)` since
-# `hf_config` is not reliably hashable (PretrainedConfig subclasses set `dict`
-# attrs etc). The original ModelRunner._linear_attn_registry_cache stored this
-# per-instance; module-level dict here is functionally equivalent (model_runner
-# instances live for the lifetime of the process, so the dict never grows).
-_linear_attn_registry_cache: dict[int, Any] = {}
+if TYPE_CHECKING:
+    from sglang.srt.model_executor.model_runner import ModelRunner
 
 
-def _cached_get_linear_attn_config(hf_config) -> Any:
-    key = id(hf_config)
-    if key not in _linear_attn_registry_cache:
-        _linear_attn_registry_cache[key] = get_linear_attn_config(hf_config)
-    return _linear_attn_registry_cache[key]
+# Sentinel distinct from None so the linear-attn registry cache can store
+# None as a real result (see _get_linear_attn_registry_result).
+# Rust analogue: OnceCell<Option<...>>.
+_UNSET: Any = object()
+
+
+def _get_linear_attn_registry_result(model_runner: "ModelRunner") -> Any:
+    if model_runner._linear_attn_registry_cache is _UNSET:
+        model_runner._linear_attn_registry_cache = get_linear_attn_config(
+            model_runner.model_config.hf_config
+        )
+    return model_runner._linear_attn_registry_cache
 
 
 def qwen3_next_config(model_config: ModelConfig) -> Optional[Qwen3NextConfig]:
@@ -174,51 +180,58 @@ def kimi_linear_config(model_config: ModelConfig) -> Optional[KimiLinearConfig]:
     return None
 
 
-def linear_attn_model_spec(model_config: ModelConfig) -> Optional[Any]:
-    result = _cached_get_linear_attn_config(model_config.hf_config)
+def linear_attn_model_spec(model_runner: "ModelRunner") -> Optional[Any]:
+    result = _get_linear_attn_registry_result(model_runner)
     return result[0] if result else None
 
 
-def mambaish_config(
-    model_config: ModelConfig,
-    *,
-    is_draft_worker: bool,
-) -> Optional[Any]:
+def mambaish_config(model_runner: "ModelRunner") -> Optional[Any]:
     existing = (
-        mamba2_config(model_config, is_draft_worker=is_draft_worker)
-        or hybrid_gdn_config(model_config)
-        or kimi_linear_config(model_config)
-        or hybrid_lightning_config(model_config)
+        mamba2_config(
+            model_runner.model_config, is_draft_worker=model_runner.is_draft_worker
+        )
+        or hybrid_gdn_config(model_runner.model_config)
+        or kimi_linear_config(model_runner.model_config)
+        or hybrid_lightning_config(model_runner.model_config)
     )
     if existing:
         return existing
-    result = _cached_get_linear_attn_config(model_config.hf_config)
+    result = _get_linear_attn_registry_result(model_runner)
     return result[1] if result else None
 '''
 
-# 7 properties; the 2 needing is_draft_worker call with that kwarg.
-_PROPS_NO_KWARG = [
+
+# 7 properties. The 2 cache-using ones (`linear_attn_model_spec`,
+# `mambaish_config`) take `self`; the rest take `self.model_config`. The
+# 1 with an extra kwarg (`mamba2_config`) calls with `is_draft_worker=`.
+_PROPS_MODEL_CONFIG = [
     "qwen3_next_config",
     "hybrid_lightning_config",
     "hybrid_gdn_config",
     "kimi_linear_config",
-    "linear_attn_model_spec",
 ]
-_PROPS_WITH_DRAFT = [
+_PROPS_MODEL_CONFIG_WITH_DRAFT = [
     "mamba2_config",
+]
+_PROPS_MODEL_RUNNER = [
+    "linear_attn_model_spec",
     "mambaish_config",
 ]
 
 
-def _delegate(name: str, with_draft: bool) -> str:
-    if with_draft:
+def _delegate(name: str, *, kind: str) -> str:
+    if kind == "model_config":
+        body = f"        return hybrid_arch.{name}(self.model_config)\n"
+    elif kind == "model_config_with_draft":
         body = (
             f"        return hybrid_arch.{name}(\n"
             "            self.model_config, is_draft_worker=self.is_draft_worker\n"
             "        )\n"
         )
+    elif kind == "model_runner":
+        body = f"        return hybrid_arch.{name}(self)\n"
     else:
-        body = f"        return hybrid_arch.{name}(self.model_config)\n"
+        raise ValueError(f"unknown delegate kind: {kind}")
     return f"    @property\n    def {name}(self):\n{body}\n"
 
 
@@ -232,34 +245,34 @@ def transform(wt: Path) -> None:
 
     # Replace each original @property with a 1-line delegate that forwards to
     # the new free function in hybrid_arch.
-    for name in _PROPS_NO_KWARG + _PROPS_WITH_DRAFT:
+    for name in _PROPS_MODEL_CONFIG:
         s, e = find_method_lines(text, class_name="ModelRunner", method_name=name)
         src = text.splitlines(keepends=True)
-        delegate = _delegate(name, with_draft=(name in _PROPS_WITH_DRAFT))
-        text = "".join(src[:s] + [delegate] + src[e:])
+        text = "".join(src[:s] + [_delegate(name, kind="model_config")] + src[e:])
+    for name in _PROPS_MODEL_CONFIG_WITH_DRAFT:
+        s, e = find_method_lines(text, class_name="ModelRunner", method_name=name)
+        src = text.splitlines(keepends=True)
+        text = "".join(
+            src[:s] + [_delegate(name, kind="model_config_with_draft")] + src[e:]
+        )
+    for name in _PROPS_MODEL_RUNNER:
+        s, e = find_method_lines(text, class_name="ModelRunner", method_name=name)
+        src = text.splitlines(keepends=True)
+        text = "".join(src[:s] + [_delegate(name, kind="model_runner")] + src[e:])
 
-    # Delete _get_linear_attn_registry_result helper (no longer used; cache
-    # logic now inline in hybrid_arch.linear_attn_model_spec / mambaish_config).
+    # Delete `_get_linear_attn_registry_result` helper from ModelRunner — it
+    # moved to hybrid_arch.py.
     s, e = find_method_lines(
         text, class_name="ModelRunner", method_name="_get_linear_attn_registry_result"
     )
     src = text.splitlines(keepends=True)
     text = "".join(src[:s] + src[e:])
 
-    # Delete the `_linear_attn_registry_cache` field init in ModelRunner.__init__
-    # (and its 2-line preceding comment).
-    text = replace_call_site(
-        text,
-        old=(
-            "        # Linear-attn registry result is computed lazily; _UNSET distinguishes\n"
-            '        # "not yet computed" from "computed and got None".\n'
-            "        self._linear_attn_registry_cache: Any = _UNSET\n"
-            "\n"
-        ),
-        new="",
-    )
-
-    # Delete the module-level _UNSET sentinel + its comment.
+    # Delete the module-level _UNSET sentinel + its 3-line comment — moved to
+    # hybrid_arch.py. The `self._linear_attn_registry_cache: Any = _UNSET`
+    # field init in ModelRunner.__init__ stays — the cache still lives on
+    # the ModelRunner instance — but the bare `_UNSET` name now needs to be
+    # imported from hybrid_arch.
     text = replace_call_site(
         text,
         old=(
@@ -305,14 +318,19 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Insert the new module-qualified hybrid_arch import.
+    # Insert the new module-qualified hybrid_arch import + the bare `_UNSET`
+    # from-import (used by ModelRunner.__init__'s field init).
     text = insert_after(
         text,
         anchor="from sglang.srt.configs.device_config import DeviceConfig\n",
-        addition="from sglang.srt.configs import hybrid_arch\n",
+        addition=(
+            "from sglang.srt.configs import hybrid_arch\n"
+            "from sglang.srt.configs.hybrid_arch import _UNSET\n"
+        ),
     )
 
     mr.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(
