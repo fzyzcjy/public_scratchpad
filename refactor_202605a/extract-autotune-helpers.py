@@ -26,8 +26,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/35"
-TARGET = "tom_refactor/36"
+ID = "extract-autotune-helpers"
+SUBJECT = "Extract _should_run_flashinfer_autotune and _flashinfer_autotune_cache_path to free functions"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/drop-hybrid-arch-delegates"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 _HEADER = (
@@ -46,9 +50,6 @@ _HEADER = (
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
 
@@ -166,11 +167,12 @@ def transform(wt: Path) -> None:
 
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract _should_run_flashinfer_autotune and _flashinfer_autotune_cache_path to free functions",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

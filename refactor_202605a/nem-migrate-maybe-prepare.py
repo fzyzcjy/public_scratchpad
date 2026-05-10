@@ -16,8 +16,8 @@
   (method privacy is preserved -- privacy flip is Ch2).
 
 Usage:
-    uv run --python 3.12 tom_refactor_44.py run
-    uv run --python 3.12 tom_refactor_44.py verify
+    uv run --python 3.12 nem-migrate-maybe-prepare.py run
+    uv run --python 3.12 nem-migrate-maybe-prepare.py verify
 """
 
 # /// script
@@ -39,14 +39,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/43"
-TARGET = "tom_refactor/44"
+ID = "nem-migrate-maybe-prepare"
+SUBJECT = "Migrate _maybe_prepare_ngram_embedding to NgramEmbeddingManager (PR 2/3)"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-ngram-embedding-mgr"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     manager = wt / "python/sglang/srt/layers/n_gram_embedding_manager.py"
 
@@ -144,11 +145,12 @@ def transform(wt: Path) -> None:
     )
     test_chunked.write_text(text)
 
-    git_add_and_commit(
-        "Migrate _maybe_prepare_ngram_embedding to NgramEmbeddingManager (PR 2/3)",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

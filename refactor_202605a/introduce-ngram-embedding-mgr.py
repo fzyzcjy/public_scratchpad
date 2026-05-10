@@ -23,8 +23,8 @@
   PRs 2 and 3 land.
 
 Usage:
-    uv run --python 3.12 tom_refactor_43.py run
-    uv run --python 3.12 tom_refactor_43.py verify
+    uv run --python 3.12 introduce-ngram-embedding-mgr.py run
+    uv run --python 3.12 introduce-ngram-embedding-mgr.py verify
 """
 
 # /// script
@@ -44,8 +44,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/42"
-TARGET = "tom_refactor/43"
+ID = "introduce-ngram-embedding-mgr"
+SUBJECT = "Introduce NgramEmbeddingManager (PR 1/3 of ngram embedding migration)"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/rwt-migrate-modelexpress-publish"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 MANAGER_HEADER = '''from __future__ import annotations
@@ -167,9 +171,6 @@ def _transform_init_method(method_text: str) -> str:
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     manager = wt / "python/sglang/srt/layers/n_gram_embedding_manager.py"
 
@@ -228,11 +229,12 @@ def transform(wt: Path) -> None:
 
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Introduce NgramEmbeddingManager (PR 1/3 of ngram embedding migration)",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

@@ -25,14 +25,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/37"
-TARGET = "tom_refactor/38"
+ID = "extract-lora-moe-buffers"
+SUBJECT = "Extract _init_lora_cuda_graph_moe_buffers to free function in lora_manager"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-kernel-warmup"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     lm = wt / "python/sglang/srt/lora/lora_manager.py"
 
@@ -86,11 +87,12 @@ def transform(wt: Path) -> None:
 
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract _init_lora_cuda_graph_moe_buffers to free function in lora_manager",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

@@ -11,8 +11,8 @@ delegate method is NOT kept on ModelRunner -- the sole caller (in
 write back the 3 group fields.
 
 Usage:
-    uv run --python 3.12 tom_refactor_39.py run
-    uv run --python 3.12 tom_refactor_39.py verify
+    uv run --python 3.12 init-dist.py run
+    uv run --python 3.12 init-dist.py verify
 """
 
 # /// script
@@ -34,8 +34,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/38"
-TARGET = "tom_refactor/39"
+ID = "init-dist"
+SUBJECT = "Extract init_torch_distributed to distributed/bootstrap.py"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-lora-moe-buffers"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 # Header for the new bootstrap.py file: imports + module-level constants
 # (the original ones live on model_runner.py and are referenced inside the
@@ -141,9 +145,6 @@ INLINE_CALL = '''        result = init_torch_distributed(
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     bootstrap = wt / "python/sglang/srt/distributed/bootstrap.py"
 
@@ -203,11 +204,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract init_torch_distributed to distributed/bootstrap.py",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

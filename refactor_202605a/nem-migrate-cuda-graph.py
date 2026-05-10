@@ -17,8 +17,8 @@
   since renaming is Ch2.
 
 Usage:
-    uv run --python 3.12 tom_refactor_45.py run
-    uv run --python 3.12 tom_refactor_45.py verify
+    uv run --python 3.12 nem-migrate-cuda-graph.py run
+    uv run --python 3.12 nem-migrate-cuda-graph.py verify
 """
 
 # /// script
@@ -34,14 +34,15 @@ sys.path.insert(0, str(HERE))
 from _helpers import replace_call_site
 from _runner import run_pr
 
-BASE = "tom_refactor/44"
-TARGET = "tom_refactor/45"
+ID = "nem-migrate-cuda-graph"
+SUBJECT = "Migrate CudaGraphRunner ngram-embedding reads to NgramEmbeddingManager (PR 3/3)"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/nem-migrate-maybe-prepare"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     cgr = wt / "python/sglang/srt/model_executor/cuda_graph_runner.py"
 
     text = cgr.read_text()
@@ -93,11 +94,12 @@ def transform(wt: Path) -> None:
 
     cgr.write_text(text)
 
-    git_add_and_commit(
-        "Migrate CudaGraphRunner ngram-embedding reads to NgramEmbeddingManager (PR 3/3)",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

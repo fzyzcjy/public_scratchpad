@@ -11,8 +11,8 @@
   ``self.model_runner.weight_updater.update_weights_from_ipc(recv_req)``.
 
 Usage:
-    uv run --python 3.12 tom_refactor_28.py run
-    uv run --python 3.12 tom_refactor_28.py verify
+    uv run --python 3.12 wu-move-from-ipc.py run
+    uv run --python 3.12 wu-move-from-ipc.py verify
 """
 
 # /// script
@@ -32,14 +32,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/27"
-TARGET = "tom_refactor/28"
+ID = "wu-move-from-ipc"
+SUBJECT = "Move update_weights_from_ipc onto WeightUpdater"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/wu-move-from-tensor"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
@@ -90,11 +91,12 @@ def transform(wt: Path) -> None:
     )
     ew.write_text(text)
 
-    git_add_and_commit(
-        "Move update_weights_from_ipc onto WeightUpdater",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

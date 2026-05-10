@@ -14,8 +14,8 @@ rewires), but Ch1 forbids dead-code deletion -- we move it instead.
 - No caller updates needed (zero existing imports of ``RankZeroFilter``).
 
 Usage:
-    uv run --python 3.12 tom_refactor_46.py run
-    uv run --python 3.12 tom_refactor_46.py verify
+    uv run --python 3.12 move-rank-zero-filter.py run
+    uv run --python 3.12 move-rank-zero-filter.py verify
 """
 
 # /// script
@@ -35,14 +35,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/45"
-TARGET = "tom_refactor/46"
+ID = "move-rank-zero-filter"
+SUBJECT = "Move RankZeroFilter from model_runner.py to utils/log_utils.py"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/nem-migrate-cuda-graph"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     log_utils = wt / "python/sglang/srt/utils/log_utils.py"
 
@@ -54,11 +55,12 @@ def transform(wt: Path) -> None:
     # clean single-blank-line gap before the moved class.
     append_to_file(log_utils, class_text.rstrip() + "\n")
 
-    git_add_and_commit(
-        "Move RankZeroFilter from model_runner.py to utils/log_utils.py",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

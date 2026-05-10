@@ -3,8 +3,8 @@
 function in `pynccl_allocator.py`. Update sole caller.
 
 Usage:
-    uv run --python 3.12 tom_refactor_22.py run
-    uv run --python 3.12 tom_refactor_22.py verify
+    uv run --python 3.12 extract-prealloc-symm-pool.py run
+    uv run --python 3.12 extract-prealloc-symm-pool.py verify
 """
 
 # /// script
@@ -27,14 +27,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/21"
-TARGET = "tom_refactor/22"
+ID = "extract-prealloc-symm-pool"
+SUBJECT = "Extract prealloc_symmetric_memory_pool to free function"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/inline-max-pool-size"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     allocator = wt / "python/sglang/srt/distributed/device_communicators/pynccl_allocator.py"
 
@@ -100,11 +101,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract prealloc_symmetric_memory_pool to free function",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

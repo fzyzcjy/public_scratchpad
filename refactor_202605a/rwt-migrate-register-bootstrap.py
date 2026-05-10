@@ -10,8 +10,8 @@ into the transport class, those become bare ``self.X`` -- a single substring
 substitution.
 
 Usage:
-    uv run --python 3.12 tom_refactor_41.py run
-    uv run --python 3.12 tom_refactor_41.py verify
+    uv run --python 3.12 rwt-migrate-register-bootstrap.py run
+    uv run --python 3.12 rwt-migrate-register-bootstrap.py verify
 """
 
 # /// script
@@ -27,14 +27,15 @@ sys.path.insert(0, str(HERE))
 from _helpers import append_to_file, cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
-BASE = "tom_refactor/40"
-TARGET = "tom_refactor/41"
+ID = "rwt-migrate-register-bootstrap"
+SUBJECT = "Migrate _register_to_engine_info_bootstrap to RemoteInstanceWeightTransport"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-rwt-skeleton"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
 
@@ -57,11 +58,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Migrate _register_to_engine_info_bootstrap to RemoteInstanceWeightTransport",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

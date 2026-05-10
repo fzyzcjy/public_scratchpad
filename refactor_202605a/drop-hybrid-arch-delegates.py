@@ -10,8 +10,8 @@ Per Ch1 rule "**不留 1 行 delegate**", drop the delegates as soon as consumer
 are updated.
 
 Usage:
-    uv run --python 3.12 tom_refactor_35.py run
-    uv run --python 3.12 tom_refactor_35.py verify
+    uv run --python 3.12 drop-hybrid-arch-delegates.py run
+    uv run --python 3.12 drop-hybrid-arch-delegates.py verify
 """
 
 # /// script
@@ -30,8 +30,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/34"
-TARGET = "tom_refactor/35"
+ID = "drop-hybrid-arch-delegates"
+SUBJECT = "Drop hybrid-arch property delegates from ModelRunner; update consumers"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-hybrid-arch-props"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 _HYBRID_ARCH_IMPORT = "from sglang.srt.configs import hybrid_arch\n"
@@ -86,9 +90,6 @@ def _patch_file(
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
 
     # Delete each delegate method on ModelRunner.
@@ -194,11 +195,12 @@ def transform(wt: Path) -> None:
     )
     test_pc.write_text(text)
 
-    git_add_and_commit(
-        "Drop hybrid-arch property delegates from ModelRunner; update consumers",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

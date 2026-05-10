@@ -3,9 +3,9 @@
 `utils/common.py`. Update the sole caller and add an import.
 
 Usage:
-    uv run --python 3.12 tom_refactor_18.py run     # build + push to upstream
-    uv run --python 3.12 tom_refactor_18.py verify  # diff against upstream
-    uv run --python 3.12 tom_refactor_18.py apply <wt>  # apply on existing worktree
+    uv run --python 3.12 extract-init-cublas.py run     # build + push to upstream
+    uv run --python 3.12 extract-init-cublas.py verify  # diff against upstream
+    uv run --python 3.12 extract-init-cublas.py apply <wt>  # apply on existing worktree
 """
 
 # /// script
@@ -28,14 +28,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/17"
-TARGET = "tom_refactor/18"
+ID = "extract-init-cublas"
+SUBJECT = "Extract init_cublas to free function in utils.common"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_preflight"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, "/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a/.claude/skills/mechanical-refactor-verify")
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     common = wt / "python/sglang/srt/utils/common.py"
 
@@ -55,8 +56,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit("Extract init_cublas to free function in utils.common", cwd=str(wt))
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

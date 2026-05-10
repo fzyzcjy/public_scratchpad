@@ -19,8 +19,8 @@ new module it is the public API.
   rewrite the sole call site (inside ``forward_with_profile``) to use it.
 
 Usage:
-    uv run --python 3.12 tom_refactor_48.py run
-    uv run --python 3.12 tom_refactor_48.py verify
+    uv run --python 3.12 move-step-span-name.py run
+    uv run --python 3.12 move-step-span-name.py verify
 """
 
 # /// script
@@ -42,14 +42,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/47"
-TARGET = "tom_refactor/48"
+ID = "move-step-span-name"
+SUBJECT = "Move _build_step_span_name from model_runner.py to utils/profile_utils.py"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/move-resolve-language-model"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     profile_utils = wt / "python/sglang/srt/utils/profile_utils.py"
 
@@ -103,11 +104,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Move _build_step_span_name from model_runner.py to utils/profile_utils.py",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

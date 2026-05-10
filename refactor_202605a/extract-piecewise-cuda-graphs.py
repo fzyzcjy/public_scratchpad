@@ -30,14 +30,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/32"
-TARGET = "tom_refactor/33"
+ID = "extract-piecewise-cuda-graphs"
+SUBJECT = "Extract init_piecewise_cuda_graphs to free function in model_executor.device_graphs"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-init-device-graphs"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     dg = wt / "python/sglang/srt/model_executor/device_graphs.py"
 
@@ -97,11 +98,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract init_piecewise_cuda_graphs to free function in model_executor.device_graphs",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

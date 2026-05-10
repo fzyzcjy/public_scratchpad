@@ -10,8 +10,8 @@ This is PR 1/3 of the RemoteInstanceWeightTransport extraction; PRs 2 and 3
 migrate the remaining 4 methods.
 
 Usage:
-    uv run --python 3.12 tom_refactor_40.py run
-    uv run --python 3.12 tom_refactor_40.py verify
+    uv run --python 3.12 introduce-rwt-skeleton.py run
+    uv run --python 3.12 introduce-rwt-skeleton.py verify
 """
 
 # /// script
@@ -32,8 +32,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/39"
-TARGET = "tom_refactor/40"
+ID = "introduce-rwt-skeleton"
+SUBJECT = "Extract RemoteInstanceWeightTransport skeleton with remote_instance_init_transfer_engine"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/init-dist"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 # New file holding the transport class. Field names mirror the original
 # ModelRunner field names; ``model`` is bound late (after load_model in
@@ -74,9 +78,6 @@ class RemoteInstanceWeightTransport:
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
 
@@ -169,11 +170,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract RemoteInstanceWeightTransport skeleton with remote_instance_init_transfer_engine",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

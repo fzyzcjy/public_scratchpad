@@ -9,8 +9,8 @@ which originally bound `self` as `model_runner_ref`, is parameterised as a
 `model_runner_ref=self._model_runner` via ``functools.partial``.
 
 Usage:
-    uv run --python 3.12 tom_refactor_31.py run
-    uv run --python 3.12 tom_refactor_31.py verify
+    uv run --python 3.12 extract-update-expert-location.py run
+    uv run --python 3.12 extract-update-expert-location.py verify
 """
 
 # /// script
@@ -33,14 +33,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/30"
-TARGET = "tom_refactor/31"
+ID = "extract-update-expert-location"
+SUBJECT = "Extract ModelRunner.update_expert_location to free function in expert_location_updater"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/we-move-save-get"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     elu = wt / "python/sglang/srt/eplb/expert_location_updater.py"
     eplb = wt / "python/sglang/srt/eplb/eplb_manager.py"
@@ -152,11 +153,12 @@ def transform(wt: Path) -> None:
     )
     eplb.write_text(text)
 
-    git_add_and_commit(
-        "Extract ModelRunner.update_expert_location to free function in expert_location_updater",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

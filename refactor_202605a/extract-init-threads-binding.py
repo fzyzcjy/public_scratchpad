@@ -25,14 +25,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/19"
-TARGET = "tom_refactor/20"
+ID = "extract-init-threads-binding"
+SUBJECT = "Extract init_threads_binding to free function in utils.numa_utils"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-apply-torch-tp"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     nu = wt / "python/sglang/srt/utils/numa_utils.py"
 
@@ -79,11 +80,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract init_threads_binding to free function in utils.numa_utils",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

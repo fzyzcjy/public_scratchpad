@@ -6,8 +6,8 @@ rewritten to `self.model_runner.X` (cross-class self replacement allowed for
 inline per EXECUTION_GUIDE).
 
 Usage:
-    uv run --python 3.12 tom_refactor_21.py run
-    uv run --python 3.12 tom_refactor_21.py verify
+    uv run --python 3.12 inline-max-pool-size.py run
+    uv run --python 3.12 inline-max-pool-size.py verify
 """
 
 # /// script
@@ -23,14 +23,15 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
-BASE = "tom_refactor/20"
-TARGET = "tom_refactor/21"
+ID = "inline-max-pool-size"
+SUBJECT = "Inline max_token_pool_size property at sole consumer"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-init-threads-binding"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     tp = wt / "python/sglang/srt/managers/tp_worker.py"
 
@@ -62,11 +63,12 @@ def transform(wt: Path) -> None:
     )
     tp.write_text(text)
 
-    git_add_and_commit(
-        "Inline max_token_pool_size property at sole consumer",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

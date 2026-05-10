@@ -12,8 +12,8 @@
   to go through ``...weight_exporter.<method>(...)``.
 
 Usage:
-    uv run --python 3.12 tom_refactor_30.py run
-    uv run --python 3.12 tom_refactor_30.py verify
+    uv run --python 3.12 we-move-save-get.py run
+    uv run --python 3.12 we-move-save-get.py verify
 """
 
 # /// script
@@ -35,14 +35,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/29"
-TARGET = "tom_refactor/30"
+ID = "we-move-save-get"
+SUBJECT = "Move weight save and get_weights_by_name methods onto WeightExporter"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-weight-exporter"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     we = wt / "python/sglang/srt/model_executor/weight_exporter.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
@@ -112,11 +113,12 @@ def transform(wt: Path) -> None:
     )
     sm.write_text(text)
 
-    git_add_and_commit(
-        "Move weight save and get_weights_by_name methods onto WeightExporter",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

@@ -16,8 +16,8 @@ inlined into the relevant hybrid_arch functions as a direct registry call
 (no caching, per md note "零 caching").
 
 Usage:
-    uv run --python 3.12 tom_refactor_34.py run
-    uv run --python 3.12 tom_refactor_34.py verify
+    uv run --python 3.12 extract-hybrid-arch-props.py run
+    uv run --python 3.12 extract-hybrid-arch-props.py verify
 """
 
 # /// script
@@ -37,8 +37,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/33"
-TARGET = "tom_refactor/34"
+ID = "extract-hybrid-arch-props"
+SUBJECT = "Extract 7 hybrid-arch properties to free functions in configs.hybrid_arch"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-piecewise-cuda-graphs"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 _HEADER = '''from __future__ import annotations
@@ -201,9 +205,6 @@ def _delegate(name: str, with_draft: bool) -> str:
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     ha = wt / "python/sglang/srt/configs/hybrid_arch.py"
 
@@ -295,11 +296,12 @@ def transform(wt: Path) -> None:
 
     mr.write_text(text)
 
-    git_add_and_commit(
-        "Extract 7 hybrid-arch properties to free functions in configs.hybrid_arch",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

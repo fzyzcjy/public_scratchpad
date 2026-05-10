@@ -16,8 +16,8 @@
   ``self._draft_worker.draft_runner.weight_updater.update_weights_from_disk(...)``.
 
 Usage:
-    uv run --python 3.12 tom_refactor_25.py run
-    uv run --python 3.12 tom_refactor_25.py verify
+    uv run --python 3.12 wu-move-from-disk.py run
+    uv run --python 3.12 wu-move-from-disk.py verify
 """
 
 # /// script
@@ -39,14 +39,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/24"
-TARGET = "tom_refactor/25"
+ID = "wu-move-from-disk"
+SUBJECT = "Move update_weights_from_disk onto WeightUpdater"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-weight-updater"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
@@ -153,11 +154,12 @@ def transform(wt: Path) -> None:
     )
     ew.write_text(text)
 
-    git_add_and_commit(
-        "Move update_weights_from_disk onto WeightUpdater",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

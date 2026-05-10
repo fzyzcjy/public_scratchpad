@@ -4,8 +4,8 @@ ModelRunner to a new file `mem_cache/kv_cache_dtype.py`. The free function
 returns a 2-tuple; caller unpacks directly.
 
 Usage:
-    uv run --python 3.12 tom_refactor_23.py run
-    uv run --python 3.12 tom_refactor_23.py verify
+    uv run --python 3.12 extract-kv-cache-dtype.py run
+    uv run --python 3.12 extract-kv-cache-dtype.py verify
 """
 
 # /// script
@@ -28,8 +28,12 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/22"
-TARGET = "tom_refactor/23"
+ID = "extract-kv-cache-dtype"
+SUBJECT = "Extract configure_kv_cache_dtype to mem_cache.kv_cache_dtype"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-prealloc-symm-pool"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 NEW_HEADER = (
@@ -52,9 +56,6 @@ OLD_CONST = (
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     new_file = wt / "python/sglang/srt/mem_cache/kv_cache_dtype.py"
 
@@ -119,11 +120,12 @@ def transform(wt: Path) -> None:
     new_file.write_text(header_with_imports + "\n\n" + OLD_CONST.rstrip() + "\n")
     append_to_file(new_file, fn)
 
-    git_add_and_commit(
-        "Extract configure_kv_cache_dtype to mem_cache.kv_cache_dtype",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )

@@ -18,8 +18,8 @@ which already hosts model-loading helpers and imports ``torch`` + ``nn``.
   to the new module path.
 
 Usage:
-    uv run --python 3.12 tom_refactor_47.py run
-    uv run --python 3.12 tom_refactor_47.py verify
+    uv run --python 3.12 move-resolve-language-model.py run
+    uv run --python 3.12 move-resolve-language-model.py verify
 """
 
 # /// script
@@ -41,14 +41,15 @@ from _helpers import (
 )
 from _runner import run_pr
 
-BASE = "tom_refactor/46"
-TARGET = "tom_refactor/47"
+ID = "move-resolve-language-model"
+SUBJECT = "Move resolve_language_model from model_runner.py to model_loader/utils.py"
+BODY = ""
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/raw/mech_model_runner/move-rank-zero-filter"
+TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
 
 
 def transform(wt: Path) -> None:
-    sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
-    from mechanical_refactor_verify_utils import git_add_and_commit
-
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     ml_utils = wt / "python/sglang/srt/model_loader/utils.py"
     fp4 = wt / "python/sglang/srt/layers/quantization/fp4_kv_cache_quant_method.py"
@@ -83,11 +84,12 @@ def transform(wt: Path) -> None:
     )
     fp4.write_text(text)
 
-    git_add_and_commit(
-        "Move resolve_language_model from model_runner.py to model_loader/utils.py",
-        cwd=str(wt),
-    )
-
-
 if __name__ == "__main__":
-    run_pr(transform=transform, base=BASE, target=TARGET)
+    run_pr(
+        transform=transform,
+        base=BASE,
+        target=TARGET,
+        id=ID,
+        subject=SUBJECT,
+        body=BODY,
+    )
