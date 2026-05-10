@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Delete `update_expert_location` from ModelRunner; the body was already a
-1-call delegate to the imported `update_expert_location` in
-`expert_location_updater.py`. Update the sole external caller (eplb_manager.py)
-to call the imported free function directly with explicit kwargs (assembled
-from `self._model_runner.X`).
+"""Cut `update_expert_location` from ModelRunner; paste as a free function in
+`eplb/expert_location_updater.py`. The body has 6 self.X reads + 1 call to
+`weight_updater.update_weights_from_disk(model_runner_ref=self, ...)`.
 
-The `update_weights_from_disk_callable` kwarg is rebuilt at the caller site
-using `functools.partial(weight_updater.update_weights_from_disk, model_runner_ref=...)`.
+The 6 self.X reads become explicit kwargs (R1). The `weight_updater` call,
+which originally bound `self` as `model_runner_ref`, is parameterised as a
+`update_weights_from_disk_callable` kwarg; the eplb_manager caller bakes
+`model_runner_ref=self._model_runner` via ``functools.partial``.
 
 Usage:
     uv run --python 3.12 tom_refactor_31.py run
@@ -24,7 +24,9 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
+    append_to_file,
     cut_lines,
+    dedent_method_to_function,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -40,15 +42,65 @@ def transform(wt: Path) -> None:
     from mechanical_refactor_verify_utils import git_add_and_commit
 
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    elu = wt / "python/sglang/srt/eplb/expert_location_updater.py"
     eplb = wt / "python/sglang/srt/eplb/eplb_manager.py"
 
+    # ---- Cut method body from ModelRunner. ----
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="update_expert_location"
     )
-    cut_lines(mr, s, e)
+    method_text = cut_lines(mr, s, e)
 
-    # eplb_manager.py: import update_expert_location + functools + the
-    # weight_updater module; rewrite the caller.
+    # ---- Convert to free function (signature swap + self.X -> kwargs). ----
+    # Original signature:
+    #     def update_expert_location(
+    #         self,
+    #         new_expert_location_metadata: ExpertLocationMetadata,
+    #         update_layer_ids: List[int],
+    #     ):
+    func_text = (
+        dedent_method_to_function(method_text)
+        .replace(
+            "def update_expert_location(\n"
+            "    self,\n"
+            "    new_expert_location_metadata: ExpertLocationMetadata,\n"
+            "    update_layer_ids: List[int],\n"
+            "):\n",
+            "def update_expert_location(\n"
+            "    *,\n"
+            "    expert_location_updater,\n"
+            "    model,\n"
+            "    new_expert_location_metadata,\n"
+            "    update_layer_ids,\n"
+            "    nnodes,\n"
+            "    tp_rank,\n"
+            "    expert_backup_client,\n"
+            "    update_weights_from_disk_callable,\n"
+            "):\n",
+        )
+        .replace("self.expert_location_updater", "expert_location_updater")
+        .replace("self.server_args.nnodes", "nnodes")
+        .replace("self.tp_rank", "tp_rank")
+        .replace("self.expert_backup_client", "expert_backup_client")
+        .replace("self.model", "model")
+        .replace(
+            "weight_updater.update_weights_from_disk(\n"
+            "                    model_runner_ref=self,\n"
+            "                    model_path=get_global_server_args().model_path,\n"
+            "                    load_format=get_global_server_args().load_format,\n"
+            "                    weight_name_filter=weight_name_filter,\n"
+            "                )",
+            "update_weights_from_disk_callable(\n"
+            "                    model_path=get_global_server_args().model_path,\n"
+            "                    load_format=get_global_server_args().load_format,\n"
+            "                    weight_name_filter=weight_name_filter,\n"
+            "                )",
+        )
+    )
+
+    append_to_file(elu, func_text)
+
+    # ---- eplb_manager.py: import + rewrite the sole caller. ----
     text = eplb.read_text()
     text = insert_after(
         text,
@@ -90,7 +142,7 @@ def transform(wt: Path) -> None:
     eplb.write_text(text)
 
     git_add_and_commit(
-        "Inline ModelRunner.update_expert_location into the eplb_manager caller",
+        "Extract ModelRunner.update_expert_location to free function in expert_location_updater",
         cwd=str(wt),
     )
 
