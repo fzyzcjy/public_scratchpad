@@ -66,7 +66,8 @@ ORDER: list[str] = [
     "introduce-ngram-embedding-mgr",
     "nem-migrate-maybe-prepare",
     "nem-migrate-cuda-graph",
-    "move-rank-zero-filter",
+    "nem-drop-legacy-fields",
+    "drop-rank-zero-filter",
     "move-resolve-language-model",
     "move-step-span-name",
 ]
@@ -151,6 +152,23 @@ def backup_old_chain_head() -> None:
     run(["git", "push", "origin", f"refs/tags/{tag_name}"], cwd=REPO)
 
 
+def tag_new_chain_head(head_sha: str) -> None:
+    """Tag the freshly-built chain HEAD as `chain/<UTC-timestamp>/<area>`.
+
+    Symmetric to ``backup_old_chain_head`` — same namespace style, also pushed
+    to origin so each rebuild leaves a durable, dated reference to the new
+    chain even if a later rebuild force-overwrites the branch.
+
+    Created locally in REPO (not WT) so the tag survives worktree teardown.
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    area = CHAIN_BRANCH.split("/")[-1]
+    tag_name = f"chain/{timestamp}/{area}"
+    print(f"\n=== tagging new chain HEAD ({head_sha[:12]}) as {tag_name} on origin ===", flush=True)
+    run(["git", "tag", tag_name, head_sha], cwd=REPO)
+    run(["git", "push", "origin", f"refs/tags/{tag_name}"], cwd=REPO)
+
+
 def main() -> None:
     # Make sure scripts can `from _helpers import ...` and `from _runner import run_pr`.
     if str(HERE) not in sys.path:
@@ -176,6 +194,7 @@ def main() -> None:
     run(["git", "log", "--oneline", "-32"], cwd=WT)
     head = run(["git", "rev-parse", "HEAD"], cwd=WT).strip()
     backup_old_chain_head()
+    tag_new_chain_head(head)
     print(
         f"\nTo publish, force-push the chain head:\n"
         f"  git -C {WT} push -f upstream HEAD:refs/heads/{CHAIN_BRANCH}\n"

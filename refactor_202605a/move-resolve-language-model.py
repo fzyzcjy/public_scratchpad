@@ -45,7 +45,7 @@ ID = "move-resolve-language-model"
 SUBJECT = "Move resolve_language_model from model_runner.py to model_loader/utils.py"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/primary/mech_model_runner/move-rank-zero-filter"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/drop-rank-zero-filter"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 

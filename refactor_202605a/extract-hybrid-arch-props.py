@@ -11,9 +11,12 @@ Delegate deletion + consumer ripple happens in /35.
 Also deletes ModelRunner.`_get_linear_attn_registry_result` helper and the
 `_linear_attn_registry_cache` field + `_UNSET` sentinel (per component md
 item 4: "8 个 property 删除（含 `_get_linear_attn_registry_result` 私有
-helper）；`_linear_attn_registry_cache` 字段删除"). The cache logic is
-inlined into the relevant hybrid_arch functions as a direct registry call
-(no caching, per md note "零 caching").
+helper）；`_linear_attn_registry_cache` 字段删除"). The caching is preserved
+at module scope in `hybrid_arch.py`: a `_linear_attn_registry_cache` dict
+keyed by `id(hf_config)` wraps `get_linear_attn_config`, called from both
+`linear_attn_model_spec` and `mambaish_config`. Functionally equivalent to
+the per-instance cache (model_runner instances are process-lifetime; dict
+never grows beyond a handful).
 
 Usage:
     uv run --python 3.12 extract-hybrid-arch-props.py run
@@ -67,6 +70,21 @@ from sglang.srt.configs import (
 )
 from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config
 from sglang.srt.configs.model_config import ModelConfig
+
+
+# Per-hf_config cache for the registry lookup. Keyed by `id(hf_config)` since
+# `hf_config` is not reliably hashable (PretrainedConfig subclasses set `dict`
+# attrs etc). The original ModelRunner._linear_attn_registry_cache stored this
+# per-instance; module-level dict here is functionally equivalent (model_runner
+# instances live for the lifetime of the process, so the dict never grows).
+_linear_attn_registry_cache: dict[int, Any] = {}
+
+
+def _cached_get_linear_attn_config(hf_config) -> Any:
+    key = id(hf_config)
+    if key not in _linear_attn_registry_cache:
+        _linear_attn_registry_cache[key] = get_linear_attn_config(hf_config)
+    return _linear_attn_registry_cache[key]
 
 
 def qwen3_next_config(model_config: ModelConfig) -> Optional[Qwen3NextConfig]:
@@ -157,7 +175,7 @@ def kimi_linear_config(model_config: ModelConfig) -> Optional[KimiLinearConfig]:
 
 
 def linear_attn_model_spec(model_config: ModelConfig) -> Optional[Any]:
-    result = get_linear_attn_config(model_config.hf_config)
+    result = _cached_get_linear_attn_config(model_config.hf_config)
     return result[0] if result else None
 
 
@@ -174,7 +192,7 @@ def mambaish_config(
     )
     if existing:
         return existing
-    result = get_linear_attn_config(model_config.hf_config)
+    result = _cached_get_linear_attn_config(model_config.hf_config)
     return result[1] if result else None
 '''
 

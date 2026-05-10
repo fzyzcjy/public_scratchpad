@@ -38,8 +38,6 @@ BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-hybrid-arch-props
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-_HYBRID_ARCH_IMPORT = "from sglang.srt.configs import hybrid_arch\n"
-
 # Functions that need only model_config.
 _NO_KWARG = {
     "qwen3_next_config",
@@ -56,23 +54,38 @@ _WITH_DRAFT = {
 
 
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
-    """Rewrite `<accessor>.<name>` access into a hybrid_arch.<name>(...) call.
+    """Rewrite `<accessor>.<name>` access into a bare `<name>(...)` call.
 
-    For functions in _NO_KWARG, the call is hybrid_arch.<name>(<accessor>.model_config).
+    For functions in _NO_KWARG, the call is `<name>(<accessor>.model_config)`.
     For functions in _WITH_DRAFT, the call additionally passes is_draft_worker.
+
+    Names are imported via `from sglang.srt.configs.hybrid_arch import ...` —
+    bare-call form, NOT module-qualified `hybrid_arch.<name>(...)`. The
+    function names already carry their semantic ("qwen3_next_config",
+    "mambaish_config" etc) and are domain-specific enough that the
+    `hybrid_arch.` prefix is noise at consumer sites.
     """
     for name in function_names:
         if name in _WITH_DRAFT:
             replacement = (
-                f"hybrid_arch.{name}("
+                f"{name}("
                 f"{accessor}.model_config, "
                 f"is_draft_worker={accessor}.is_draft_worker"
                 f")"
             )
         else:
-            replacement = f"hybrid_arch.{name}({accessor}.model_config)"
+            replacement = f"{name}({accessor}.model_config)"
         text = text.replace(f"{accessor}.{name}", replacement)
     return text
+
+
+def _import_block(function_names: list[str]) -> str:
+    """`from sglang.srt.configs.hybrid_arch import a, b, c\n` for the given names."""
+    sorted_names = sorted(set(function_names))
+    if len(sorted_names) == 1:
+        return f"from sglang.srt.configs.hybrid_arch import {sorted_names[0]}\n"
+    body = ",\n".join(f"    {n}" for n in sorted_names)
+    return f"from sglang.srt.configs.hybrid_arch import (\n{body},\n)\n"
 
 
 def _patch_file(
@@ -84,8 +97,9 @@ def _patch_file(
 ) -> None:
     text = path.read_text()
     text = _rewrite_accesses(text, accessor=accessor, function_names=function_names)
-    if _HYBRID_ARCH_IMPORT not in text:
-        text = text.replace(import_anchor, _HYBRID_ARCH_IMPORT + import_anchor)
+    import_line = _import_block(function_names)
+    if import_line not in text:
+        text = text.replace(import_anchor, import_line + import_anchor)
     path.write_text(text)
 
 
@@ -109,8 +123,7 @@ def transform(wt: Path) -> None:
     # Drop the hybrid_arch module import from ModelRunner — after delegates are
     # gone, ModelRunner has no remaining hybrid_arch.* call.
     text = mr.read_text()
-    if _HYBRID_ARCH_IMPORT in text:
-        text = text.replace(_HYBRID_ARCH_IMPORT, "")
+    text = text.replace("from sglang.srt.configs import hybrid_arch\n", "")
     mr.write_text(text)
 
     # ---- Ripple consumers ----
@@ -135,8 +148,9 @@ def transform(wt: Path) -> None:
     hla_text = _rewrite_accesses(
         hla_text, accessor="model_runner", function_names=["mamba2_config"]
     )
-    if _HYBRID_ARCH_IMPORT not in hla_text:
-        hla_text = hla_text.replace(attn_anchor, _HYBRID_ARCH_IMPORT + attn_anchor)
+    hla_import = _import_block(["mamba2_config"])
+    if hla_import not in hla_text:
+        hla_text = hla_text.replace(attn_anchor, hla_import + attn_anchor)
     hla.write_text(hla_text)
 
     _patch_file(

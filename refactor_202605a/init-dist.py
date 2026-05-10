@@ -90,7 +90,7 @@ _is_cpu_amx_available = cpu_has_amx_support()
 _is_cpu_arm64 = is_host_cpu_arm64()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TorchDistributedResult:
     tp_group: object
     pp_group: object
