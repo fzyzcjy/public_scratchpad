@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build tom_refactor_202605a/raw/mech_model_runner from /18-/48 onto mech_preflight.
+"""Build tom_refactor_202605a/primary/mech_model_runner from /18-/48 onto mech_preflight.
 
 For each /N (N=18..48):
   1. cherry-pick upstream/tom_refactor/N onto a worktree starting at mech_preflight head
@@ -7,7 +7,7 @@ For each /N (N=18..48):
 
 The script only builds the chain locally; push to upstream is a separate
 manual step (see PR_CHAIN.md). Only the chain head ref
-`tom_refactor_202605a/raw/mech_model_runner` is pushed — no per-commit
+`tom_refactor_202605a/primary/mech_model_runner` is pushed — no per-commit
 leaf branches.
 """
 
@@ -19,8 +19,8 @@ from pathlib import Path
 
 REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
 WT = Path("/tmp/refactor-wt-mech-model-runner")
-BASE = "tom_refactor_202605a/raw/mech_preflight"
-CHAIN_BRANCH = "tom_refactor_202605a/raw/mech_model_runner"
+BASE = "tom_refactor_202605a/primary/mech_preflight"
+CHAIN_BRANCH = "tom_refactor_202605a/primary/mech_model_runner"
 
 
 # /18..48 → identifier (chronological order; each /N is exactly 1 commit on /N-1).

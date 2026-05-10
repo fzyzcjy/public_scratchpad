@@ -30,8 +30,8 @@ ID = "extract-autotune-helpers"
 SUBJECT = "Extract _should_run_flashinfer_autotune and _flashinfer_autotune_cache_path to free functions"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/drop-hybrid-arch-delegates"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/drop-hybrid-arch-delegates"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 _HEADER = (

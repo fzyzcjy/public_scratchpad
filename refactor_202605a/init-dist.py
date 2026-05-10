@@ -38,8 +38,8 @@ ID = "init-dist"
 SUBJECT = "Extract init_torch_distributed to distributed/bootstrap.py"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-lora-moe-buffers"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-lora-moe-buffers"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 # Header for the new bootstrap.py file: imports + module-level constants
 # (the original ones live on model_runner.py and are referenced inside the

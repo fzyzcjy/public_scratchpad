@@ -30,8 +30,8 @@ ID = "extract-kernel-warmup"
 SUBJECT = "Extract kernel_warmup and _flashinfer_autotune to free functions"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-autotune-helpers"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-autotune-helpers"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

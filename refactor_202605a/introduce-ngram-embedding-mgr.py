@@ -48,8 +48,8 @@ ID = "introduce-ngram-embedding-mgr"
 SUBJECT = "Introduce NgramEmbeddingManager (PR 1/3 of ngram embedding migration)"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/rwt-migrate-modelexpress-publish"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/rwt-migrate-modelexpress-publish"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 MANAGER_HEADER = '''from __future__ import annotations

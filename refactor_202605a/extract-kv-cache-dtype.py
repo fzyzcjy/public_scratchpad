@@ -32,8 +32,8 @@ ID = "extract-kv-cache-dtype"
 SUBJECT = "Extract configure_kv_cache_dtype to mem_cache.kv_cache_dtype"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-prealloc-symm-pool"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-prealloc-symm-pool"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 NEW_HEADER = (

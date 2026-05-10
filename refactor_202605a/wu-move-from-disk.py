@@ -43,8 +43,8 @@ ID = "wu-move-from-disk"
 SUBJECT = "Move update_weights_from_disk onto WeightUpdater"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-weight-updater"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/introduce-weight-updater"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

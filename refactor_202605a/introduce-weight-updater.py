@@ -49,8 +49,8 @@ ID = "introduce-weight-updater"
 SUBJECT = "Introduce WeightUpdater and move weights update group lifecycle methods"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-kv-cache-dtype"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-kv-cache-dtype"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 HEADER = '''from __future__ import annotations

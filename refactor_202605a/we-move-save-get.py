@@ -39,8 +39,8 @@ ID = "we-move-save-get"
 SUBJECT = "Move weight save and get_weights_by_name methods onto WeightExporter"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-weight-exporter"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/introduce-weight-exporter"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

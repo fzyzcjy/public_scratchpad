@@ -31,8 +31,8 @@ ID = "rwt-migrate-register-bootstrap"
 SUBJECT = "Migrate _register_to_engine_info_bootstrap to RemoteInstanceWeightTransport"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-rwt-skeleton"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/introduce-rwt-skeleton"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

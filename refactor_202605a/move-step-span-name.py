@@ -46,8 +46,8 @@ ID = "move-step-span-name"
 SUBJECT = "Move _build_step_span_name from model_runner.py to utils/profile_utils.py"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/move-resolve-language-model"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/move-resolve-language-model"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

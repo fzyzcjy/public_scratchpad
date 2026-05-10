@@ -46,8 +46,8 @@ ID = "introduce-weight-exporter"
 SUBJECT = "Introduce WeightExporter and move weights send group methods"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/wu-move-from-ipc"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/wu-move-from-ipc"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 HEADER = '''from __future__ import annotations

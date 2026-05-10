@@ -38,8 +38,8 @@ ID = "nem-migrate-cuda-graph"
 SUBJECT = "Migrate CudaGraphRunner ngram-embedding reads to NgramEmbeddingManager (PR 3/3)"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/nem-migrate-maybe-prepare"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/nem-migrate-maybe-prepare"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

@@ -36,8 +36,8 @@ ID = "introduce-rwt-skeleton"
 SUBJECT = "Extract RemoteInstanceWeightTransport skeleton with remote_instance_init_transfer_engine"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/init-dist"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/init-dist"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 # New file holding the transport class. Field names mirror the original
 # ModelRunner field names; ``model`` is bound late (after load_model in

@@ -29,8 +29,8 @@ ID = "extract-init-threads-binding"
 SUBJECT = "Extract init_threads_binding to free function in utils.numa_utils"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-apply-torch-tp"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-apply-torch-tp"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

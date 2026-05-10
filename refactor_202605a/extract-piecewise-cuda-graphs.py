@@ -34,8 +34,8 @@ ID = "extract-piecewise-cuda-graphs"
 SUBJECT = "Extract init_piecewise_cuda_graphs to free function in model_executor.device_graphs"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-init-device-graphs"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-init-device-graphs"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

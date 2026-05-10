@@ -36,8 +36,8 @@ ID = "wu-move-from-ipc"
 SUBJECT = "Move update_weights_from_ipc onto WeightUpdater"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/wu-move-from-tensor"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/wu-move-from-tensor"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

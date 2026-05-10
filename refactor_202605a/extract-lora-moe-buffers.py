@@ -29,8 +29,8 @@ ID = "extract-lora-moe-buffers"
 SUBJECT = "Extract _init_lora_cuda_graph_moe_buffers to free function in lora_manager"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-kernel-warmup"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-kernel-warmup"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

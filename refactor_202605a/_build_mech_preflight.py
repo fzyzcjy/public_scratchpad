@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build tom_refactor_202605a/raw/mech_preflight by cherry-picking /0-/17.
+"""Build tom_refactor_202605a/primary/mech_preflight by cherry-picking /0-/17.
 
 Steps:
   1. Create a fresh worktree at upstream/main.
   2. For each entry in COMMITS, cherry-pick all source commits with
      --no-commit, then make a single commit with the formatted message
      `<id>: <subject>\\n\\n\\nRefactor chain ID: <id>\\n`.
-  3. Force-push the worktree HEAD to upstream/tom_refactor_202605a/raw/mech_preflight.
+  3. Force-push the worktree HEAD to upstream/tom_refactor_202605a/primary/mech_preflight.
 
 Run locally; reads upstream branches from REPO.
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
 WT = Path("/tmp/refactor-wt-mech-preflight")
-TARGET = "tom_refactor_202605a/raw/mech_preflight"
+TARGET = "tom_refactor_202605a/primary/mech_preflight"
 
 
 COMMITS: list[tuple[str, list[str], str]] = [

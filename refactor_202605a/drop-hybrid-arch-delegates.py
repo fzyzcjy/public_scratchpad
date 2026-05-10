@@ -34,8 +34,8 @@ ID = "drop-hybrid-arch-delegates"
 SUBJECT = "Drop hybrid-arch property delegates from ModelRunner; update consumers"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-hybrid-arch-props"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-hybrid-arch-props"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 _HYBRID_ARCH_IMPORT = "from sglang.srt.configs import hybrid_arch\n"

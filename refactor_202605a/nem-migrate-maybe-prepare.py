@@ -43,8 +43,8 @@ ID = "nem-migrate-maybe-prepare"
 SUBJECT = "Migrate _maybe_prepare_ngram_embedding to NgramEmbeddingManager (PR 2/3)"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/introduce-ngram-embedding-mgr"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/introduce-ngram-embedding-mgr"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

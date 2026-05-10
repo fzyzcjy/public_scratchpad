@@ -38,8 +38,8 @@ ID = "rwt-migrate-modelexpress-publish"
 SUBJECT = "Migrate ModelExpress metadata publishing to RemoteInstanceWeightTransport"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/rwt-migrate-register-bootstrap"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/rwt-migrate-register-bootstrap"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

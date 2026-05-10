@@ -47,8 +47,8 @@ ID = "wu-move-from-tensor"
 SUBJECT = "Move update_weights_from_tensor and helpers onto WeightUpdater"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/wu-move-from-distributed"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/wu-move-from-distributed"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def _rewrite_self(method_text: str) -> str:

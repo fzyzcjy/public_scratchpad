@@ -41,8 +41,8 @@ ID = "extract-hybrid-arch-props"
 SUBJECT = "Extract 7 hybrid-arch properties to free functions in configs.hybrid_arch"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-piecewise-cuda-graphs"
-AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-piecewise-cuda-graphs"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 _HEADER = '''from __future__ import annotations
