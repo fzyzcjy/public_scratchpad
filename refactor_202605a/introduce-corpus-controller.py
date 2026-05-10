@@ -150,9 +150,9 @@ def transform(wt: Path) -> None:
         new=(
             "        # Corpus controller\n"
             "        self.corpus_controller = CorpusController(\n"
-            "            add_external_corpus_communicator=getattr(self, '_add_external_corpus_communicator', None),\n"
-            "            remove_external_corpus_communicator=getattr(self, '_remove_external_corpus_communicator', None),\n"
-            "            list_external_corpora_communicator=getattr(self, '_list_external_corpora_communicator', None),\n"
+            "            add_external_corpus_communicator=self.add_external_corpus_communicator,\n"
+            "            remove_external_corpus_communicator=self.remove_external_corpus_communicator,\n"
+            "            list_external_corpora_communicator=self.list_external_corpora_communicator,\n"
             "            tokenizer=self.raw_tokenizer_wrapper.tokenizer,\n"
             "            config=CorpusControllerConfig(\n"
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"

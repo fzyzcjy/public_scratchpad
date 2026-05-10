@@ -153,12 +153,13 @@ KVCACHE_HEADER_INSERT = """\
 from dataclasses import dataclass
 from typing import Optional
 
-from sglang import envs
-from sglang.srt.configs.model_config import ModelImpl, get_resolved_model_impl
+from sglang.srt.configs.model_config import ModelImpl
+from sglang.srt.environ import envs
+from sglang.srt.model_loader.utils import get_resolved_model_impl
+from sglang.srt.managers.mm_utils import init_mm_embedding_cache
 from sglang.srt.mem_cache.cache_init_params import CacheInitParams
 from sglang.srt.mem_cache.radix_cache import RadixCache
-from sglang.srt.mem_cache.streaming_session import StreamingSession
-from sglang.srt.multimodal.mm_utils import init_mm_embedding_cache
+from sglang.srt.session.streaming_session import StreamingSession
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

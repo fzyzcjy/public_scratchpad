@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #2 of ``SchedulerOutputProcessorMixin``: 6 stream methods move
 to ``SchedulerOutputStreamer`` at
-``scheduler_components/outputs/output_streamer.py``.
+``scheduler_components/output/output_streamer.py``.
 
 Ctor narrow kwargs: 2 collaborators (send_to_detokenizer, tree_cache) + 6
 configs (ps, server_args, is_generation, stream_interval, spec_algorithm,
@@ -43,7 +43,7 @@ SUBJECT = "Introduce SchedulerOutputStreamer (split #2 of output_processor mixin
 BODY = """\
 Pull 6 stream methods out of ``SchedulerOutputProcessorMixin`` into
 ``SchedulerOutputStreamer`` at
-``scheduler_components/outputs/output_streamer.py``. Scheduler holds it as
+``scheduler_components/output/output_streamer.py``. Scheduler holds it as
 ``self.output_streamer``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): 2 collaborators + 6 configs + 2
@@ -80,18 +80,25 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+import torch
 import zmq
 
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.environ import envs
 from sglang.srt.managers.io_struct import (
     BatchEmbeddingOutput,
     BatchTokenIDOutput,
     GetLoadsReqInput,
     GetLoadsReqOutput,
 )
-from sglang.srt.managers.schedule_batch import Req
+from sglang.srt.managers.schedule_batch import BaseFinishReason, Req
 
 
 logger = logging.getLogger(__name__)
+
+
+# Module-level constant copied from the original output_processor mixin.
+DEFAULT_FORCE_STREAM_INTERVAL = envs.SGLANG_FORCE_STREAM_INTERVAL.get()
 
 
 '''
@@ -149,8 +156,8 @@ SCHEDULER_INIT_INSERT = """\
                 running_batch=self.running_batch,
                 waiting_queue=self.waiting_queue,
                 stats=self.metrics_reporter.stats,
-                spec_total_num_accepted_tokens=self.spec_total_num_accepted_tokens,
-                spec_total_num_forward_ct=self.spec_total_num_forward_ct,
+                spec_total_num_accepted_tokens=self.metrics_reporter.spec_total_num_accepted_tokens,
+                spec_total_num_forward_ct=self.metrics_reporter.spec_total_num_forward_ct,
                 disagg_prefill_bootstrap_queue=getattr(self, "disagg_prefill_bootstrap_queue", None),
                 disagg_prefill_inflight_queue=getattr(self, "disagg_prefill_inflight_queue", None),
                 disagg_decode_prealloc_queue=getattr(self, "disagg_decode_prealloc_queue", None),
@@ -164,7 +171,7 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/outputs/output_streamer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/output/output_streamer.py"
 
     src_text = src.read_text()
 
@@ -202,9 +209,22 @@ def transform(wt: Path) -> None:
     methods_text = methods_text.replace(
         "self.enable_hicache_storage", "self.enable_hicache_storage()"
     )
-    # - ``self.get_loads(...)`` → ``self.load_inquirer_get_loads(...)``
-    methods_text = methods_text.replace(
-        "self.get_loads(", "self.load_inquirer_get_loads("
+    # C13 rewrote the body's ``self.get_loads(...)`` to a multi-kwarg form
+    # ``self.load_inquirer.get_loads(GetLoadsReqInput(...), running_batch=...,
+    # ...)``. The explicit kwargs reference Scheduler-only fields that the
+    # streamer doesn't carry. Replace the whole call with a single-arg form;
+    # the streamer's Callable wraps the kwargs internally (via the lambda
+    # passed in ``SCHEDULER_INIT_INSERT``).
+    #
+    # The regex must match the outer ``)`` of the call — not any nested
+    # ``)`` from the inner ``getattr(...)`` lines that black wraps onto two
+    # lines. Anchor on exactly 8-space indent for the closing paren.
+    import re as _re_body
+    methods_text = _re_body.sub(
+        r'        load = self\.load_inquirer\.get_loads\(\n.*?\n        \)',
+        '        load = self.load_inquirer_get_loads(GetLoadsReqInput(include=["core"]))',
+        methods_text,
+        flags=_re_body.DOTALL,
     )
     # - ``self.ps`` references stay (ctor field).
     # - ``self.server_args`` / ``self.tree_cache`` etc. stay (ctor fields).
@@ -243,28 +263,55 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.outputs.logprob_computer import (\n    SchedulerLogprobComputer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.output.logprob_computer import (\n    SchedulerLogprobComputer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.outputs.output_streamer import (\n"
+            "from sglang.srt.managers.scheduler_components.output.output_streamer import (\n"
             "    SchedulerOutputStreamer,\n"
             ")\n"
         ),
     )
-    # Insert streamer ctor BEFORE the receiver ctor so the dep resolves at the
-    # receiver instantiation time.
-    text = replace_call_site(
+    # Insert streamer ctor AFTER the logprob_computer ctor (so that the next
+    # commit's ``batch_result_processor`` sister kwargs resolve in correct
+    # order). The receiver ctor (C4) is still earlier in the block; its
+    # ``stream_output`` Callable kwarg is lazy (lambda) so order doesn't
+    # matter for the receiver.
+    text = insert_after(
         text,
-        old="        self.request_receiver = SchedulerRequestReceiver(\n",
-        new=SCHEDULER_INIT_INSERT
-        + "        self.request_receiver = SchedulerRequestReceiver(\n",
+        anchor=(
+            "        self.logprob_computer = SchedulerLogprobComputer(\n"
+            "            server_args=self.server_args,\n"
+            "            model_config=self.model_config,\n"
+            "        )\n\n"
+        ),
+        addition=SCHEDULER_INIT_INSERT,
     )
     # Cross-commit fix: receiver shim ``stream_output=self.stream_output`` →
-    # ``self.output_streamer.stream_output``.
+    # lazy-bound to ``self.output_streamer.stream_output``. Lambda so the
+    # receiver ctor (which runs earlier in __init__) doesn't read the
+    # not-yet-constructed ``self.output_streamer``.
     text = text.replace(
         "            stream_output=self.stream_output,\n",
-        "            stream_output=self.output_streamer.stream_output,\n",
+        "            stream_output=lambda *a, **kw: self.output_streamer.stream_output(*a, **kw),\n",
+    )
+    # Direct callsite in Scheduler hot-path (event_loop_overlap_disagg_*) —
+    # ``self.stream_output(...)`` left over from the mixin era.
+    text = text.replace(
+        "self.stream_output(", "self.output_streamer.stream_output("
     )
     sched.write_text(text)
+
+    # External callers that bypassed the mixin: disaggregation/prefill.py and
+    # dllm/mixin/scheduler.py both invoke ``self.stream_output(...)`` on
+    # Scheduler. Route them to the streamer.
+    for f in [
+        wt / "python/sglang/srt/disaggregation/prefill.py",
+        wt / "python/sglang/srt/dllm/mixin/scheduler.py",
+    ]:
+        ftext = f.read_text()
+        ftext = ftext.replace(
+            "self.stream_output(", "self.output_streamer.stream_output("
+        )
+        f.write_text(ftext)
 
     # Update output_processor_mixin: 4 callsites (still mixin until C17).
     text = src.read_text()
@@ -274,6 +321,17 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "self._get_cached_tokens_details(",
         "self.output_streamer.get_cached_tokens_details(",
+    )
+    # ``self.stream_output_generation`` is renamed to ``_stream_output_generation``
+    # on the streamer. The remaining mixin body (still in place until C17 cuts
+    # it into batch_result_processor) calls it directly — re-route via streamer.
+    text = text.replace(
+        "self.stream_output_generation(",
+        "self.output_streamer._stream_output_generation(",
+    )
+    text = text.replace(
+        "self.stream_output_embedding(",
+        "self.output_streamer._stream_output_embedding(",
     )
     src.write_text(text)
 

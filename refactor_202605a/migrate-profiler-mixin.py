@@ -339,6 +339,23 @@ def transform(wt: Path) -> None:
     )
     sched.write_text(text)
 
+    # Test fixture: ``test_profile_merger.py`` imports the mixin by its old
+    # name to inspect ``init_profile``'s signature; rewrite the import +
+    # symbol to use the new ``SchedulerProfilerManager._init_profile``.
+    test_profile = wt / "test/registered/unit/utils/test_profile_merger.py"
+    test_text = test_profile.read_text()
+    test_text = test_text.replace(
+        "from sglang.srt.managers.scheduler_profiler_mixin import SchedulerProfilerMixin\n"
+        "\n"
+        "        sig = inspect.signature(SchedulerProfilerMixin.init_profile)\n",
+        "from sglang.srt.managers.scheduler_components.observability.profiler_manager import (\n"
+        "            SchedulerProfilerManager,\n"
+        "        )\n"
+        "\n"
+        "        sig = inspect.signature(SchedulerProfilerManager._init_profile)\n",
+    )
+    test_profile.write_text(test_text)
+
 
 if __name__ == "__main__":
     run_pr(

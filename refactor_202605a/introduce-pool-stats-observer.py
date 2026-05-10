@@ -472,6 +472,16 @@ def transform(wt: Path) -> None:
     )
     src.write_text(text)
 
+    # Test file callsite — pool_stats_observer.PoolStats now lives in the new module.
+    test_pause = wt / "test/registered/unit/managers/test_scheduler_pause_generation.py"
+    if test_pause.exists():
+        ttext = test_pause.read_text()
+        ttext = ttext.replace(
+            "from sglang.srt.managers.scheduler_runtime_checker_mixin import PoolStats\n",
+            "from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import PoolStats\n",
+        )
+        test_pause.write_text(ttext)
+
     # Metrics mixin callsites (5).
     text = metrics_mixin.read_text()
     # 2x ``pool_stats = self.get_pool_stats()`` in report_prefill_stats /

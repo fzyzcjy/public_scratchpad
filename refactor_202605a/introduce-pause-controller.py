@@ -105,7 +105,8 @@ class PauseController:
     is_pause_cond: asyncio.Condition = field(default_factory=asyncio.Condition)
 
     def __post_init__(self) -> None:
-        self.dispatcher.register(AbortReq, self._handle_abort_req)
+        # TypeBasedDispatcher has no public register(); poke private _mapping.
+        self.dispatcher._mapping[AbortReq] = self._handle_abort_req
 
 '''
 

@@ -89,9 +89,14 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 SCHEDULER_INIT_INSERT = """\
         self.metrics_reporter = SchedulerMetricsReporter(
+            ps=self.ps,
             server_args=self.server_args,
-            disaggregation_mode=self.disaggregation_mode,
+            disaggregation_mode=DisaggregationMode(self.server_args.disaggregation_mode),
             spec_algorithm=self.spec_algorithm,
+            metrics_collector=self.metrics_collector,
+            enable_priority_scheduling=self.enable_priority_scheduling,
+            enable_lora=self.enable_lora,
+            enable_hierarchical_cache=self.enable_hierarchical_cache,
             max_running_requests=self.max_running_requests,
             max_total_num_tokens=self.max_total_num_tokens,
             tp_rank=self.ps.tp_rank,
@@ -127,6 +132,7 @@ SCHEDULER_INIT_INSERT = """\
             get_running_batch=lambda: self.running_batch,
             get_forward_ct=lambda: self.forward_ct,
             get_running_mbs=lambda: getattr(self, "running_mbs", []),
+            get_last_batch=lambda: self.last_batch,
         )
 
 """
@@ -143,9 +149,14 @@ class SchedulerMetricsReporter:
     def __init__(
         self,
         *,
+        ps,
         server_args,
         disaggregation_mode,
         spec_algorithm,
+        metrics_collector,
+        enable_priority_scheduling: bool,
+        enable_lora,
+        enable_hierarchical_cache: bool,
         max_running_requests: int,
         max_total_num_tokens: int,
         tp_rank: int,
@@ -171,14 +182,20 @@ class SchedulerMetricsReporter:
         get_running_batch,
         get_forward_ct,
         get_running_mbs,
+        get_last_batch,
     ) -> None:
         # Owned counters (ownership migration from Scheduler).
         self.num_retracted_reqs: int = 0
         self.num_paused_reqs: int = 0
         # Stash deps + sisters + Callable getters.
+        self.ps = ps
         self.server_args = server_args
         self.disaggregation_mode = disaggregation_mode
         self.spec_algorithm = spec_algorithm
+        self.metrics_collector = metrics_collector
+        self.enable_priority_scheduling = enable_priority_scheduling
+        self.enable_lora = enable_lora
+        self.enable_hierarchical_cache = enable_hierarchical_cache
         self.max_running_requests = max_running_requests
         self.max_total_num_tokens = max_total_num_tokens
         self.device = device
@@ -199,6 +216,7 @@ class SchedulerMetricsReporter:
         self.get_running_batch = get_running_batch
         self.get_forward_ct = get_forward_ct
         self.get_running_mbs = get_running_mbs
+        self.get_last_batch = get_last_batch
         # Run the original init_metrics body inline.
         self.init_metrics(tp_rank, pp_rank, dp_rank)
 
@@ -219,11 +237,17 @@ def transform(wt: Path) -> None:
     text = text.replace("self: Scheduler", "self")
 
     # The ``if TYPE_CHECKING:`` block has multiple imports (Scheduler, Req,
-    # PrefillAdder, etc.). Drop only the Scheduler import line — keep the
-    # block + the ``TYPE_CHECKING`` typing import intact for the others.
+    # PrefillAdder, etc.). Drop only the Scheduler reference (keep the rest).
     text = text.replace(
-        "    from sglang.srt.managers.scheduler import Scheduler\n",
-        "",
+        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult, Scheduler\n",
+        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult\n",
+    )
+    # Avoid circular import: scheduler.py imports metrics_reporter.py, so we
+    # cannot import ScheduleBatch from sglang.srt.managers.scheduler at module
+    # level. Use the canonical schedule_batch module instead.
+    text = text.replace(
+        "from sglang.srt.managers.scheduler import ScheduleBatch\n",
+        "from sglang.srt.managers.schedule_batch import ScheduleBatch\n",
     )
 
     # Replace the class header. The original file's class line is the only
@@ -247,6 +271,7 @@ def transform(wt: Path) -> None:
     text = text.replace("self.running_batch", "self.get_running_batch()")
     text = text.replace("self.forward_ct", "self.get_forward_ct()")
     text = text.replace("self.running_mbs", "self.get_running_mbs()")
+    text = text.replace("self.last_batch", "self.get_last_batch()")
 
     # The original init_metrics body has ``self.forward_ct_decode = 0`` —
     # the previous text.replace turned this into
@@ -257,16 +282,52 @@ def transform(wt: Path) -> None:
     # Same for ``self.get_forward_ct()_decode % self.server_args.decode_log_interval``
     # and any other ``self.forward_ct_*`` field — restore the field-access form.
 
+    # The metrics_collector is now created on the Scheduler side (see
+    # INLINE_CURRENT_METRICS_ENABLED in this transform) and passed in via the
+    # ctor kwarg. Strip the engine_type / labels dict / SchedulerMetricsCollector
+    # creation from the init_metrics body — those reference Scheduler-only
+    # fields (``enable_priority_scheduling``) that the manager does not carry.
+    # Keep the ``enable_mfu_metrics`` setup (it still belongs on the manager).
+    import re as _re_metrics
+    text = _re_metrics.sub(
+        r"            engine_type = DisaggregationMode\.to_engine_type\(\n"
+        r"(?:[^\n]*\n)+?"
+        r"            self\.metrics_collector = SchedulerMetricsCollector\(\n"
+        r"(?:[^\n]*\n)+?"
+        r"            \)\n",
+        "",
+        text,
+    )
+
     target.write_text(text)
     src.unlink()
 
     # Update Scheduler.
     text = sched.read_text()
-    text = text.replace(
-        "from sglang.srt.observability.scheduler_metrics_mixin import (\n"
-        "    SchedulerMetricsMixin,\n"
-        ")\n",
+    # Drop any stale ``from sglang.srt.observability.scheduler_metrics_mixin``
+    # import block (whatever shape isort settled on after previous trims).
+    import re as _re
+    text = _re.sub(
+        r"from sglang\.srt\.observability\.scheduler_metrics_mixin import \([^)]*\)\n",
         "",
+        text,
+    )
+    text = _re.sub(
+        r"from sglang\.srt\.observability\.scheduler_metrics_mixin import [^\n]+\n",
+        "",
+        text,
+    )
+    # Re-export ``RECORD_STEP_TIME`` and ``PrefillStats`` from the new
+    # metrics_reporter module (scheduler.py uses both as module-level refs).
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.managers.scheduler_components.observability.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
+        addition=(
+            "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import (\n"
+            "    RECORD_STEP_TIME,\n"
+            "    PrefillStats,\n"
+            ")\n"
+        ),
     )
     text = insert_after(
         text,
@@ -275,27 +336,119 @@ def transform(wt: Path) -> None:
             "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import (\n"
             "    SchedulerMetricsReporter,\n"
             ")\n"
+            "from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector\n"
         ),
     )
     text = replace_call_site(text, old="    SchedulerMetricsMixin,\n", new="")
-    text = replace_call_site(
+    # The manager ctor needs many Scheduler fields that are set late
+    # (``max_running_requests`` from init_model_worker; ``disaggregation_mode``
+    # plus disagg queues from init_disaggregation; ``tree_cache``,
+    # ``waiting_queue`` from init_cache / init_running_status; etc.). So we
+    # insert the ctor AT THE END of ``__init__`` (just before
+    # ``self.is_initializing = False``) — by which time everything is set.
+    #
+    # The original ``init_metrics`` call site additionally set
+    # ``self.current_scheduler_metrics_enabled``, which ``init_ipc_channels``
+    # reads early. Replace the call site with an inline compute of just that
+    # one field; the rest moves to the late ctor.
+    INLINE_CURRENT_METRICS_ENABLED = (
+        "        # Computed early because init_ipc_channels reads it; the rest of\n"
+        "        # init_metrics now runs inside the metrics_reporter ctor below.\n"
+        "        self.enable_metrics = self.server_args.enable_metrics\n"
+        "        self.is_stats_logging_rank = self.ps.attn_tp_rank == 0\n"
+        "        self.current_scheduler_metrics_enabled = self.enable_metrics and (\n"
+        "            self.is_stats_logging_rank\n"
+        "            or self.server_args.enable_metrics_for_all_schedulers\n"
+        "        )\n"
+        "        # init_cache_with_memory_pool reads this before the\n"
+        "        # kv_events_publisher is constructed.\n"
+        "        self.enable_kv_cache_events = bool(\n"
+        "            self.server_args.kv_events_config\n"
+        "            and self.ps.attn_tp_rank == 0\n"
+        "            and self.ps.attn_cp_rank == 0\n"
+        "        )\n"
+        "        # init_model_worker calls ``self.metrics_collector.emit_constants(...)``\n"
+        "        # early; create the collector here (mirrors original ``init_metrics``\n"
+        "        # placement). metrics_reporter then receives the same instance.\n"
+        "        self.metrics_collector = None\n"
+        "        if self.enable_metrics:\n"
+        "            _engine_type = DisaggregationMode.to_engine_type(\n"
+        "                self.server_args.disaggregation_mode\n"
+        "            )\n"
+        "            _labels = {\n"
+        "                'model_name': self.server_args.served_model_name,\n"
+        "                'engine_type': _engine_type,\n"
+        "                'tp_rank': tp_rank,\n"
+        "                'pp_rank': pp_rank,\n"
+        "                'moe_ep_rank': self.ps.moe_ep_rank,\n"
+        "            }\n"
+        "            if self.enable_priority_scheduling:\n"
+        "                _labels['priority'] = ''\n"
+        "            if dp_rank is not None:\n"
+        "                _labels['dp_rank'] = dp_rank\n"
+        "            if self.server_args.extra_metric_labels:\n"
+        "                _labels.update(self.server_args.extra_metric_labels)\n"
+        "            self.metrics_collector = SchedulerMetricsCollector(\n"
+        "                labels=_labels,\n"
+        "                enable_lora=self.enable_lora,\n"
+        "                enable_hierarchical_cache=self.enable_hierarchical_cache,\n"
+        "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
+        "                server_args=self.server_args,\n"
+        "            )\n"
+    )
+    text = text.replace(
+        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
+        INLINE_CURRENT_METRICS_ENABLED,
+    )
+    METRICS_ALIAS_SETUP = (
+        SCHEDULER_INIT_INSERT
+        + "        # Aliases so call sites that historically read self.X (when init_metrics\n"
+        + "        # set those fields directly on Scheduler) still resolve.\n"
+        + "        # ``self.metrics_collector`` is already set in the early inline block\n"
+        + "        # above (passed as a kwarg to the metrics_reporter ctor), so no alias.\n"
+        + "        self.stats = self.metrics_reporter.stats\n"
+    )
+    # Insert AFTER the kv_events_publisher ctor (sister) so dep resolves.
+    text = insert_after(
         text,
-        old="        self.is_initializing = False\n",
-        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+        anchor=(
+            "        self.kv_events_publisher = SchedulerKvEventsPublisher(\n"
+            "            kv_events_config=self.server_args.kv_events_config,\n"
+            "            attn_tp_rank=self.ps.attn_tp_rank,\n"
+            "            attn_cp_rank=self.ps.attn_cp_rank,\n"
+            "            attn_dp_rank=self.ps.attn_dp_rank,\n"
+            "            dp_rank=self.ps.dp_rank,\n"
+            "            tree_cache=self.tree_cache,\n"
+            "            send_metrics_from_scheduler=self.send_metrics_from_scheduler,\n"
+            "        )\n\n"
+        ),
+        addition=METRICS_ALIAS_SETUP,
     )
     # Drop the 2 owned counter init lines (now manager-owned).
     text = text.replace("        self.num_retracted_reqs: int = 0\n", "")
     text = text.replace("        self.num_paused_reqs: int = 0\n", "")
-    # Drop ``self.init_metrics(tp_rank, pp_rank, dp_rank)`` (now in manager ctor).
-    text = text.replace(
-        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
-        "",
-    )
-    # ``install_device_timer_on_runners`` callsite.
+    # ``install_device_timer_on_runners`` callsite — drop entirely.
+    # The manager ctor (inserted later in __init__) calls it internally as
+    # part of its post-``init_metrics`` setup; calling it from __init__
+    # before the ctor exists would AttributeError.
     text = text.replace(
         "        self.install_device_timer_on_runners()\n",
-        "        self.metrics_reporter.install_device_timer_on_runners()\n",
+        "",
     )
+    # Patch the manager ctor body to call install_device_timer_on_runners()
+    # after init_metrics().
+    target_text = target.read_text()
+    target_text = target_text.replace(
+        "        # Run the original init_metrics body inline.\n"
+        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
+        "        # Run the original init_metrics body inline.\n"
+        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n"
+        "        # ``install_device_timer_on_runners`` was originally called\n"
+        "        # from Scheduler.__init__ right after init_model_worker; we\n"
+        "        # invoke it here so callers don't need a separate hook.\n"
+        "        self.install_device_timer_on_runners()\n",
+    )
+    target.write_text(target_text)
     # Hot-path callsites.
     text = text.replace(
         "        self.log_batch_result_stats(batch, result)\n",
@@ -308,6 +461,32 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "            self.reset_metrics()\n",
         "            self.metrics_reporter.reset_metrics()\n",
+    )
+    text = text.replace(
+        "        self.reset_device_timer_window()\n",
+        "        self.metrics_reporter.reset_device_timer_window()\n",
+    )
+    # ``spec_total_num_*`` lifetime counters now live on metrics_reporter.
+    # Rewrite every read/write in scheduler.py — covers the lambda kwargs in
+    # the C13 RPC dispatch + the C16 streamer init insert + the local reads
+    # in get_internal_state / set_internal_state.
+    text = text.replace(
+        "self.spec_total_num_accepted_tokens",
+        "self.metrics_reporter.spec_total_num_accepted_tokens",
+    )
+    text = text.replace(
+        "self.spec_total_num_forward_ct",
+        "self.metrics_reporter.spec_total_num_forward_ct",
+    )
+    # ``last_gen_throughput`` and ``step_time_dict`` are read by
+    # ``get_internal_state`` in scheduler.py; both moved to metrics_reporter.
+    text = text.replace(
+        'ret["last_gen_throughput"] = self.last_gen_throughput',
+        'ret["last_gen_throughput"] = self.metrics_reporter.last_gen_throughput',
+    )
+    text = text.replace(
+        'ret["step_time_dict"] = self.step_time_dict',
+        'ret["step_time_dict"] = self.metrics_reporter.step_time_dict',
     )
     # Ownership migration: ``self.num_retracted_reqs = len(retracted_reqs)``.
     text = text.replace(

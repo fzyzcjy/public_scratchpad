@@ -62,9 +62,11 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 HEADER = '''from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, List, Optional, Tuple, Union
 
 from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.environ import envs
@@ -77,25 +79,56 @@ from sglang.srt.utils.hf_transformers_utils import (
     get_tokenizer_from_processor,
 )
 
+logger = logging.getLogger(__name__)
+
+
+class InputFormat(Enum):
+    """Input format types for tokenization handling."""
+
+    SINGLE_STRING = 1  # Regular single text like "Hello world"
+    BATCH_STRINGS = 2  # Regular batch like ["Hello", "World"]
+    CROSS_ENCODER_PAIRS = 3  # Cross-encoder pairs like [["query", "document"]]
+
 
 def _get_processor_wrapper(server_args: ServerArgs):
     """Mirror of TokenizerManager-side _get_processor_wrapper helper."""
-    return get_processor(
-        server_args.tokenizer_path,
-        tokenizer_mode=server_args.tokenizer_mode,
-        trust_remote_code=server_args.trust_remote_code,
-        revision=server_args.revision,
-        use_fast=not server_args.disable_fast_image_processor,
-    )
+    try:
+        processor = get_processor(
+            server_args.tokenizer_path,
+            tokenizer_mode=server_args.tokenizer_mode,
+            trust_remote_code=server_args.trust_remote_code,
+            revision=server_args.revision,
+            use_fast=not server_args.disable_fast_image_processor,
+            tokenizer_backend=server_args.tokenizer_backend,
+        )
+    except ValueError as e:
+        error_message = str(e)
+        if "does not have a slow version" in error_message:
+            logger.info(
+                f"Processor {server_args.tokenizer_path} does not have a slow version. Automatically use fast version"
+            )
+            processor = get_processor(
+                server_args.tokenizer_path,
+                tokenizer_mode=server_args.tokenizer_mode,
+                trust_remote_code=server_args.trust_remote_code,
+                revision=server_args.revision,
+                use_fast=True,
+                tokenizer_backend=server_args.tokenizer_backend,
+            )
+        else:
+            raise e
+    return processor
 
 
 def _determine_tensor_transport_mode(server_args: ServerArgs):
     """Mirror of TokenizerManager-side _determine_tensor_transport_mode."""
-    from sglang.srt.managers.mm_utils import TensorTransportMode
+    is_cross_node = server_args.dist_init_addr
 
-    if server_args.disaggregation_mode == "decode":
-        return TensorTransportMode.DEFAULT
-    return TensorTransportMode.DEFAULT
+    if is_cross_node:
+        # Fallback to default CPU transport for multi-node
+        return "default"
+    else:
+        return "cuda_ipc"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -214,6 +247,15 @@ def transform(wt: Path) -> None:
     )
     cut_lines(tm, s, e)  # discard
 
+    # Cut module-level ``class InputFormat(Enum)`` from tokenizer_manager.py
+    # (relocated to raw_tokenizer_wrapper.py via HEADER above).
+    text = tm.read_text()
+    inp_marker_start = "class InputFormat(Enum):\n"
+    if inp_marker_start in text:
+        from _helpers import find_class_lines
+        s, e = find_class_lines(text, class_name="InputFormat")
+        cut_lines(tm, s, e)
+
     # ===== Rewrite all self.<rtw-field> references in tokenizer_manager.py =====
     text = tm.read_text()
     text = rewrite_self_field_refs(text)
@@ -262,6 +304,17 @@ def transform(wt: Path) -> None:
         str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True
     )]
     external_files.append(wt / "python/sglang/srt/managers/template_manager.py")
+    # Test files that mock TokenizerManager and access tokenizer/processor.
+    external_files += [Path(p) for p in glob.glob(
+        str(wt / "test/registered/**/*.py"), recursive=True
+    )]
+    # Documentation notebooks (access tokenizer_manager.tokenizer directly).
+    external_files += [Path(p) for p in glob.glob(
+        str(wt / "docs/**/*.ipynb"), recursive=True
+    )]
+    external_files += [Path(p) for p in glob.glob(
+        str(wt / "docs_new/**/*.ipynb"), recursive=True
+    )]
     for f in external_files:
         if not f.exists():
             continue
@@ -276,6 +329,48 @@ def transform(wt: Path) -> None:
             "tokenizer_manager.raw_tokenizer_wrapper.processor",
             t,
         )
+        # Test files: ``self.tm.tokenizer.X`` / ``tm.tokenizer.X`` patterns and
+        # bare ``self.tokenizer = Mock()`` inside _MockTokenizerManager classes.
+        # Strategy: rewrite all ``<x>.tokenizer.<rest>`` access patterns where
+        # <x> is a TokenizerManager-shaped object (tm / self.tm / self in the
+        # mock class) to go through .raw_tokenizer_wrapper.tokenizer.<rest>.
+        if "test/" in str(f) or "_test.py" in str(f) or "test_" in f.name:
+            t = re.sub(
+                r"\bself\.tm\.tokenizer\b",
+                "self.tm.raw_tokenizer_wrapper.tokenizer",
+                t,
+            )
+            t = re.sub(
+                r"(?<![\w.])tm\.tokenizer\b",
+                "tm.raw_tokenizer_wrapper.tokenizer",
+                t,
+            )
+            # In _MockTokenizerManager.__init__, after ``self.tokenizer = Mock()``
+            # synthesize a raw_tokenizer_wrapper that exposes the same Mock so
+            # production code reaching for tm.raw_tokenizer_wrapper.tokenizer
+            # gets the test-configured Mock.
+            # In _MockTokenizerManager.__init__, after ``self.tokenizer = Mock()``
+            # synthesize a raw_tokenizer_wrapper that exposes the same Mock so
+            # production code reaching for tm.raw_tokenizer_wrapper.tokenizer
+            # gets the test-configured Mock. Match line regardless of preceding
+            # comment (test_serving_chat uses # tokenizer stub, embedding uses
+            # # Mock tokenizer).
+            t = re.sub(
+                r"^(        self\.tokenizer = Mock\(\)\n)",
+                r"\1"
+                r"        # raw_tokenizer_wrapper exposes the same Mock for the new owner-class accessor.\n"
+                r"        self.raw_tokenizer_wrapper = Mock()\n"
+                r"        self.raw_tokenizer_wrapper.tokenizer = self.tokenizer\n",
+                t,
+                flags=re.MULTILINE,
+            )
+            # ``Mock(spec=TokenizerManager)`` pattern: ensure raw_tokenizer_wrapper
+            # is a Mock too, so production code reaching for it doesn't fail.
+            t = re.sub(
+                r"(\s+)(\w+) = Mock\(spec=TokenizerManager\)\n",
+                lambda m: m.group(0) + f"{m.group(1)}{m.group(2)}.raw_tokenizer_wrapper = Mock()\n",
+                t,
+            )
         f.write_text(t)
 
 

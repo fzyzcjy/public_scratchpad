@@ -145,6 +145,14 @@ class SchedulerInvariantChecker:
                 last_batch=last_batch, running_batch=running_batch
             )
             total = self.full_tokens_per_layer
+        elif self.is_hybrid_ssm and self.tree_cache.supports_mamba():
+            available = ps.full_available_size
+            evictable = ps.full_evictable_size
+            protected = self.tree_cache.full_protected_size()
+            session_held = self.pool_stats_observer.session_held_tokens(
+                last_batch=last_batch, running_batch=running_batch
+            )
+            total = self.token_to_kv_pool_allocator.size
         else:
             available = ps.full_available_size
             evictable = ps.full_evictable_size
@@ -215,34 +223,52 @@ class SchedulerInvariantChecker:
     def _get_total_uncached_sizes(
         self, *, last_batch, running_batch
     ) -> Tuple[int, int]:
-        """Sum of (uncached) tokens across last_batch + running_batch reqs.
+        """Sum uncached tokens for full and SWA pools across all active batches.
 
-        Returns (full_uncached, swa_uncached) — for non-hybrid_swa configs the
-        swa_uncached is 0.
+        Returns (full_uncached, swa_uncached). For non-SWA models, swa_uncached is 0.
+
+        For full pool: uncached = allocated - cache_protected_len
+        For SWA pool:  uncached = allocated - max(cache_protected_len, swa_evicted_seqlen)
         """
+        # After decode: running_batch IS last_batch (same object), count once.
+        # After prefill: they differ, both hold uncached tokens.
+        batches = [last_batch]
+        if (
+            running_batch not in (None, last_batch)
+            and not running_batch.is_empty()
+        ):
+            batches.append(running_batch)
+
         full_uncached = 0
         swa_uncached = 0
-        for batch in [last_batch, running_batch]:
-            if batch is None or batch.is_empty():
-                continue
+        for batch in batches:
             for req in batch.reqs:
-                cached = req.prefix_indices.shape[0] if req.prefix_indices is not None else 0
-                req_full = req.seqlen - cached
-                full_uncached += req_full
+                assert req.kv_committed_freed == req.kv_overallocated_freed
+                if req.kv_committed_freed or req.req_pool_idx is None:
+                    continue
+
+                allocated_len = req.kv_allocated_len
+                if self.page_size > 1:
+                    allocated_len = ceil_align(allocated_len, self.page_size)
+                    assert req.cache_protected_len % self.page_size == 0
+
+                full_uncached += allocated_len - req.cache_protected_len
                 if self.is_hybrid_swa:
-                    swa_window = min(self.swa_tokens_per_layer, req_full)
-                    swa_uncached += swa_window
+                    swa_uncached += allocated_len - max(
+                        req.cache_protected_len, req.swa_evicted_seqlen
+                    )
+
         return full_uncached, swa_uncached
 
     def self_check_during_busy(self, *, last_batch, running_batch) -> None:
         """Check memory invariants during busy state (hot-path adjacent)."""
-        if self.server_args.disable_radix_cache:
+        if last_batch is None:
             return
-        if self.server_args.speculative_num_steps is not None and self.server_args.speculative_num_steps > 0 and self.server_args.speculative_eagle_topk is not None and self.server_args.speculative_eagle_topk > 1:
+
+        spec_topk = self.server_args.speculative_eagle_topk or 1
+        if spec_topk > 1:
             warnings.warn(
-                "Pool invariant check is currently broken with eagle topk > 1.",
-                UserWarning,
-                stacklevel=2,
+                "Runtime memory check (busy) is not supported when speculation topk > 1."
             )
             return
         ps = self.pool_stats_observer.get_pool_stats(
@@ -343,7 +369,7 @@ from sglang.srt.environ import envs
 from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (
     PoolStats,
 )
-from sglang.srt.utils.common import raise_error_or_warn
+from sglang.srt.utils.common import ceil_align, raise_error_or_warn
 
 
 '''
@@ -419,13 +445,20 @@ def transform(wt: Path) -> None:
     #   self_check_during_busy in run_batch
     text = sched.read_text()
 
-    # Remove the 3-line import block (multi-line ``from sglang...scheduler_runtime_checker_mixin import (\n    create_scheduler_watchdog,\n    ...,\n)``).
-    text = text.replace(
-        "from sglang.srt.managers.scheduler_runtime_checker_mixin import (\n"
-        "    create_scheduler_watchdog,\n"
-        "    SchedulerRuntimeCheckerMixin,\n"
-        ")\n",
+    # Remove the import block (whatever import shape isort settled on after the
+    # previous commits trimmed unused names — most often only
+    # ``create_scheduler_watchdog`` remains).
+    import re as _re
+    text = _re.sub(
+        r"from sglang\.srt\.managers\.scheduler_runtime_checker_mixin import \([^)]*\)\n",
         "",
+        text,
+    )
+    # Also handle any single-line form just in case.
+    text = _re.sub(
+        r"from sglang\.srt\.managers\.scheduler_runtime_checker_mixin import [^\n]+\n",
+        "",
+        text,
     )
     # Add new imports — invariant_checker class + WatchdogRaw (used by the
     # watchdog free function we're moving from runtime_checker mixin to
@@ -443,10 +476,25 @@ def transform(wt: Path) -> None:
     # Drop ``SchedulerRuntimeCheckerMixin,`` from inheritance.
     text = replace_call_site(text, old="    SchedulerRuntimeCheckerMixin,\n", new="")
     # Insert ctor.
-    text = replace_call_site(
+    # Insert AFTER the pool_stats_observer ctor (sister) so dep resolves.
+    text = insert_after(
         text,
-        old="        self.is_initializing = False\n",
-        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+        anchor=(
+            "        self.pool_stats_observer = SchedulerPoolStatsObserver(\n"
+            "            tree_cache=self.tree_cache,\n"
+            "            token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,\n"
+            "            req_to_token_pool=self.req_to_token_pool,\n"
+            "            session_controller=self.session_controller,\n"
+            "            hisparse_coordinator=self.hisparse_coordinator,\n"
+            "            is_hybrid_swa=self.is_hybrid_swa,\n"
+            "            is_hybrid_ssm=self.is_hybrid_ssm,\n"
+            "            enable_hisparse=self.enable_hisparse,\n"
+            "            full_tokens_per_layer=self.full_tokens_per_layer,\n"
+            "            swa_tokens_per_layer=self.swa_tokens_per_layer,\n"
+            "            max_total_num_tokens=self.max_total_num_tokens,\n"
+            "        )\n\n"
+        ),
+        addition=SCHEDULER_INIT_INSERT,
     )
     # Insert ``create_scheduler_watchdog`` just BEFORE ``class Scheduler(`` so it's
     # available at the module level.

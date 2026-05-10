@@ -311,10 +311,25 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
-    text = replace_call_site(
+    # Insert AFTER the pool_stats_observer ctor (sister) so dep resolves.
+    text = insert_after(
         text,
-        old="        self.is_initializing = False\n",
-        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+        anchor=(
+            "        self.pool_stats_observer = SchedulerPoolStatsObserver(\n"
+            "            tree_cache=self.tree_cache,\n"
+            "            token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,\n"
+            "            req_to_token_pool=self.req_to_token_pool,\n"
+            "            session_controller=self.session_controller,\n"
+            "            hisparse_coordinator=self.hisparse_coordinator,\n"
+            "            is_hybrid_swa=self.is_hybrid_swa,\n"
+            "            is_hybrid_ssm=self.is_hybrid_ssm,\n"
+            "            enable_hisparse=self.enable_hisparse,\n"
+            "            full_tokens_per_layer=self.full_tokens_per_layer,\n"
+            "            swa_tokens_per_layer=self.swa_tokens_per_layer,\n"
+            "            max_total_num_tokens=self.max_total_num_tokens,\n"
+            "        )\n\n"
+        ),
+        addition=SCHEDULER_INIT_INSERT,
     )
     # RPC dispatch: ``(GetLoadsReqInput, self.get_loads)`` → lambda.
     text = replace_call_site(

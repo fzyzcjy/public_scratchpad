@@ -73,6 +73,21 @@ def transform(wt: Path) -> None:
         return body.replace("self.raw_tokenizer_wrapper.", "self.")
 
     rtw_text = rtw.read_text()
+    # The helper bodies use Union / List / Tuple / InputFormat which may have
+    # been pruned from the file imports by ruff in the previous (#7) commit
+    # because they weren't yet referenced. Re-add them if absent before
+    # appending the helpers.
+    if "from typing import" in rtw_text:
+        # Locate the typing import line and ensure it has all required names.
+        import re as _re
+        m = _re.search(r"from typing import ([^\n]+)\n", rtw_text)
+        if m:
+            current = {n.strip() for n in m.group(1).split(",")}
+            needed = {"Any", "List", "Optional", "Tuple", "Union"}
+            merged = sorted(current | needed)
+            new_line = f"from typing import {', '.join(merged)}\n"
+            rtw_text = rtw_text.replace(m.group(0), new_line, 1)
+
     # Append helpers to the RawTokenizerWrapper class in original file order.
     for name in HELPER_NAMES:
         body = collapse_rtw_self(cut_blocks[name])

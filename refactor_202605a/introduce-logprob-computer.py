@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #1 of ``SchedulerOutputProcessorMixin``: 9 logprob methods move
 to ``SchedulerLogprobComputer`` at
-``scheduler_components/outputs/logprob_computer.py``.
+``scheduler_components/output/logprob_computer.py``.
 
 Ctor narrow kwargs: ``server_args``, ``model_config`` (2 only — logprob is
 near-stateless).
@@ -34,7 +34,7 @@ SUBJECT = "Introduce SchedulerLogprobComputer (split #1 of output_processor mixi
 BODY = """\
 Pull 9 logprob methods out of ``SchedulerOutputProcessorMixin`` into a new
 ``SchedulerLogprobComputer`` class at
-``scheduler_components/outputs/logprob_computer.py``. Scheduler holds it as
+``scheduler_components/output/logprob_computer.py``. Scheduler holds it as
 ``self.logprob_computer``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): ``server_args`` + ``model_config``
@@ -73,10 +73,13 @@ class SchedulerLogprobComputer:
 TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-from sglang.srt.managers.io_struct import LogitsProcessorOutput
+import torch
+
+from sglang.srt.layers.logits_processor import LogitsProcessorOutput
 from sglang.srt.managers.schedule_batch import Req
+from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID
 
 
 '''
@@ -94,9 +97,9 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/outputs/logprob_computer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/output/logprob_computer.py"
 
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/outputs/__init__.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/output/__init__.py"
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
 
@@ -149,9 +152,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.metrics_reporter import (\n    SchedulerMetricsReporter,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.outputs.logprob_computer import (\n"
+            "from sglang.srt.managers.scheduler_components.output.logprob_computer import (\n"
             "    SchedulerLogprobComputer,\n"
             ")\n"
         ),
@@ -165,20 +168,26 @@ def transform(wt: Path) -> None:
 
     # The remaining output_processor mixin (still in place) calls these
     # methods — update its body to use ``self.logprob_computer.X`` form.
-    text = src.read_text()
-    text = text.replace(
-        "self.add_logprob_return_values(",
-        "self.logprob_computer.add_logprob_return_values(",
-    )
-    text = text.replace(
-        "self.add_input_logprob_return_values(",
-        "self.logprob_computer.add_input_logprob_return_values(",
-    )
-    text = text.replace(
-        "self._calculate_num_input_logprobs(",
-        "self.logprob_computer.calculate_num_input_logprobs(",
-    )
-    src.write_text(text)
+    # Also update external callers (disaggregation/prefill.py) that invoke
+    # the methods directly on Scheduler.
+    for f in [
+        src,
+        wt / "python/sglang/srt/disaggregation/prefill.py",
+    ]:
+        text = f.read_text()
+        text = text.replace(
+            "self.add_logprob_return_values(",
+            "self.logprob_computer.add_logprob_return_values(",
+        )
+        text = text.replace(
+            "self.add_input_logprob_return_values(",
+            "self.logprob_computer.add_input_logprob_return_values(",
+        )
+        text = text.replace(
+            "self._calculate_num_input_logprobs(",
+            "self.logprob_computer.calculate_num_input_logprobs(",
+        )
+        f.write_text(text)
 
 
 if __name__ == "__main__":

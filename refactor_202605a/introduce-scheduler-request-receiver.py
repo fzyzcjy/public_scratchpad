@@ -301,6 +301,38 @@ def transform(wt: Path) -> None:
     )
     pp_mixin.write_text(text)
 
+    # Additional callsites: disaggregation/decode.py, disaggregation/prefill.py,
+    # hardware_backend/mlx/scheduler_mixin.py, multiplex/multiplexing_mixin.py.
+    # NOTE: anchor OLD strings with a leading newline so the 12-space pattern
+    # cannot match as a substring of a 16-space-indented line.
+    for f in [
+        wt / "python/sglang/srt/disaggregation/decode.py",
+        wt / "python/sglang/srt/disaggregation/prefill.py",
+        wt / "python/sglang/srt/hardware_backend/mlx/scheduler_mixin.py",
+        wt / "python/sglang/srt/multiplex/multiplexing_mixin.py",
+    ]:
+        ftext = f.read_text()
+        ftext = ftext.replace(
+            "\n            recv_reqs = self.recv_requests()\n",
+            "\n            last_forward_mode = (\n"
+            "                self.last_batch.forward_mode if self.last_batch is not None else None\n"
+            "            )\n"
+            "            recv_reqs = self.request_receiver.recv_requests(\n"
+            "                last_forward_mode=last_forward_mode,\n"
+            "            )\n",
+        )
+        # multiplex_mixin uses 16-space indent.
+        ftext = ftext.replace(
+            "\n                recv_reqs = self.recv_requests()\n",
+            "\n                last_forward_mode = (\n"
+            "                    self.last_batch.forward_mode if self.last_batch is not None else None\n"
+            "                )\n"
+            "                recv_reqs = self.request_receiver.recv_requests(\n"
+            "                    last_forward_mode=last_forward_mode,\n"
+            "                )\n",
+        )
+        f.write_text(ftext)
+
 
 if __name__ == "__main__":
     run_pr(

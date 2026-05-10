@@ -136,11 +136,14 @@ def transform(wt: Path) -> None:
     )
     # The two _detokenize_*_tokens calls take `decode_to_text` positionally as
     # the third arg in the old form. Convert each call's last positional arg
-    # `return_text_in_logprobs,` to `decode_to_text=return_text_in_logprobs,
-    # tokenizer=tokenizer,` so the new fn signature lines up.
-    fill_meta_info = fill_meta_info.replace(
-        "                    return_text_in_logprobs,\n                )\n            )",
-        "                    decode_to_text=return_text_in_logprobs,\n                    tokenizer=tokenizer,\n                )\n            )",
+    # `return_text_in_logprobs,` to keyword args so the new (kw-only) signature
+    # is satisfied. Use regex to be agnostic of indentation/whitespace.
+    import re as _re
+    fill_meta_info = _re.sub(
+        r"^(\s+)return_text_in_logprobs,\s*\n",
+        lambda m: f"{m.group(1)}decode_to_text=return_text_in_logprobs,\n{m.group(1)}tokenizer=tokenizer,\n",
+        fill_meta_info,
+        flags=_re.MULTILINE,
     )
 
     # convert_logprob_style -> absorb_recv

@@ -77,6 +77,7 @@ TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
 import dataclasses
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -151,7 +152,7 @@ class SchedulerKvEventsPublisher:
 
         events = self.tree_cache.take_events()
         if events:
-            self.kv_event_publisher.publish(KVEventBatch(events=events))
+            self.kv_event_publisher.publish(KVEventBatch(ts=time.time(), events=events))
 '''
 
 
@@ -191,10 +192,18 @@ def transform(wt: Path) -> None:
         del lines[s:e]
         src_text = "".join(lines)
 
-    # Inside init_metrics body, drop the line ``self.init_kv_events(self.server_args.kv_events_config)``.
+    # Inside init_metrics body, replace the ``self.init_kv_events(...)`` call
+    # with an inline ``self.enable_kv_cache_events`` assignment. (The deleted
+    # ``init_kv_events`` method's only side-effect on Scheduler was setting this
+    # attribute; ``init_cache_with_memory_pool`` reads it before the publisher
+    # is constructed.)
     src_text = src_text.replace(
         "        self.init_kv_events(self.server_args.kv_events_config)\n",
-        "",
+        "        self.enable_kv_cache_events = bool(\n"
+        "            self.server_args.kv_events_config\n"
+        "            and self.ps.attn_tp_rank == 0\n"
+        "            and self.ps.attn_cp_rank == 0\n"
+        "        )\n",
     )
     # Update callsites in the remaining mixin body.
     src_text = src_text.replace(
@@ -230,6 +239,20 @@ def transform(wt: Path) -> None:
         text,
         old="        self.is_initializing = False\n",
         new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+    )
+    # Default ``self.send_metrics_from_scheduler = None`` at the top of
+    # ``init_ipc_channels``. The original conditionally creates the socket
+    # only when ``self.current_scheduler_metrics_enabled`` is True; with the
+    # publisher now reading the field unconditionally in its ctor, the
+    # attribute must always exist.
+    text = text.replace(
+        "    def init_ipc_channels(self, port_args: PortArgs):\n"
+        "        context = zmq.Context(2)\n"
+        "        self.idle_sleeper = None\n",
+        "    def init_ipc_channels(self, port_args: PortArgs):\n"
+        "        context = zmq.Context(2)\n"
+        "        self.idle_sleeper = None\n"
+        "        self.send_metrics_from_scheduler = None\n",
     )
     # on_idle (moved to scheduler.py in C8) calls self._publish_kv_events().
     text = text.replace(

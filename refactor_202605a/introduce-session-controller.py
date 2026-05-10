@@ -99,9 +99,10 @@ class SessionController:
     session_futures: Dict[str, asyncio.Future] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        self.dispatcher.register(
-            OpenSessionReqOutput, self._handle_open_session_req_output
-        )
+        # TypeBasedDispatcher exposes only ``__init__(mapping)`` and
+        # ``__iadd__``; assign to its private ``_mapping`` to register
+        # a single (Type, handler) entry post-construction.
+        self.dispatcher._mapping[OpenSessionReqOutput] = self._handle_open_session_req_output
 
     async def open_session(
         self,
@@ -189,8 +190,9 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Reshape init_request_dispatcher: drop the dispatcher creation block.
-    # The new minimal body contains only init_communicators + sampling_params + signal_handler.
+    # Reshape init_request_dispatcher: drop the dispatcher creation + init_communicators
+    # block (both moved earlier in __init__). New body only sets the two class
+    # attributes that aren't owner-class wiring dependencies.
     text = replace_call_site(
         text,
         old=(
@@ -216,14 +218,15 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "    def init_request_dispatcher(self):\n"
-            "        self.init_communicators(self.server_args)\n"
-            "\n"
             "        self.sampling_params_class = SamplingParams\n"
             "        self.signal_handler_class = SignalHandler\n"
         ),
     )
 
-    # Insert dispatcher creation early -- right after init_metric_collector_watchdog().
+    # Insert dispatcher creation + init_communicators early -- right after
+    # init_metric_collector_watchdog(). Owner classes (LoraController /
+    # CorpusController etc.) need communicators wired into their ctor kwargs,
+    # so init_communicators must run BEFORE they're constructed.
     text = replace_call_site(
         text,
         old="        self.init_metric_collector_watchdog()\n",
@@ -238,6 +241,9 @@ def transform(wt: Path) -> None:
             "                (ActiveRanksOutput, self.update_active_ranks),\n"
             "            ]\n"
             "        )\n"
+            "\n"
+            "        # Communicators (RPC fan-out) -- needed by owner-class ctors below.\n"
+            "        self.init_communicators(self.server_args)\n"
         ),
     )
 

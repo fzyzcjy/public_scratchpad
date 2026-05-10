@@ -215,15 +215,15 @@ def transform(wt: Path) -> None:
         old="        self.offload_tags = set()\n",
         new="",
     )
-    # Insert weight_updater ctor BEFORE the dp_attn_adapter ctor so the
-    # ``offload_tags`` ref resolves. dp_attn_adapter ctor is the multi-line
-    # block introduced by ``migrate-dp-attn-mixin``; we anchor on its first
-    # line and prepend the weight_updater block.
+    # Insert weight_updater ctor BEFORE ``self.init_request_dispatcher()``,
+    # which reads ``self.weight_updater.<rpc>`` for the dispatch table. (The
+    # dp_attn_adapter ctor is later in __init__ and reads ``offload_tags`` from
+    # the weight_updater, which still resolves because we construct earlier.)
     text = replace_call_site(
         text,
-        old="        self.dp_attn_adapter = SchedulerDPAttnAdapter(\n",
+        old="        # Init request dispatcher\n        self.init_request_dispatcher()\n",
         new=SCHEDULER_INIT_INSERT_WEIGHT_UPDATER
-        + "        self.dp_attn_adapter = SchedulerDPAttnAdapter(\n",
+        + "        # Init request dispatcher\n        self.init_request_dispatcher()\n",
     )
     # Rewire dp_attn_adapter's offload_tags arg from self.offload_tags to
     # self.weight_updater.offload_tags.

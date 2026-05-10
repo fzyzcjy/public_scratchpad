@@ -96,9 +96,9 @@ class WeightDiskUpdateController:
     def __post_init__(self) -> None:
         if self.config.checkpoint_engine_wait_weights_before_ready:
             self.initial_weights_loaded = False
-        self.dispatcher.register(
-            UpdateWeightFromDiskReqOutput,
-            self._handle_update_weights_from_disk_req_output,
+        # TypeBasedDispatcher has no public register(); poke private _mapping.
+        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (
+            self._handle_update_weights_from_disk_req_output
         )
 
 '''

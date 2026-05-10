@@ -125,28 +125,10 @@ def transform(wt: Path) -> None:
 
     # Rewrite create body:
     body = create_text
-    # Signature rename + kw-only.
-    body = body.replace(
-        "def _create_tokenized_object(\n"
-        "        self,\n"
-        "        obj: Union[GenerateReqInput, EmbeddingReqInput],\n"
-        "        input_text: str,\n"
-        "        input_ids: List[int],\n"
-        "        input_embeds: Optional[List[float]] = None,\n"
-        "        mm_inputs: Optional[Any] = None,\n"
-        "        token_type_ids: Optional[List[int]] = None,\n"
-        "    ) -> Union[TokenizedGenerateReqInput, TokenizedEmbeddingReqInput]:",
-        "def build(\n"
-        "        self,\n"
-        "        obj: Union[GenerateReqInput, EmbeddingReqInput],\n"
-        "        *,\n"
-        "        input_text: str,\n"
-        "        input_ids: List[int],\n"
-        "        input_embeds: Optional[List[float]] = None,\n"
-        "        mm_inputs: Optional[Any] = None,\n"
-        "        token_type_ids: Optional[List[int]] = None,\n"
-        "    ) -> Union[TokenizedGenerateReqInput, TokenizedEmbeddingReqInput]:",
-    )
+    # Signature rename: just rename method name; keep arguments as-is. Inserting
+    # ``*,`` kwarg-only after obj is design polish and would require matching
+    # the post-black-reformatted signature literally; defer to Ch2.
+    body = body.replace("def _create_tokenized_object(", "def build(")
     body = body.replace(
         "self.preferred_sampling_params", "self.config.preferred_sampling_params"
     )
@@ -203,7 +185,7 @@ def transform(wt: Path) -> None:
             "            config=TokenizedRequestBuilderConfig(\n"
             "                vocab_size=self.model_config.vocab_size,\n"
             "                preferred_sampling_params=self.preferred_sampling_params,\n"
-            "                sampling_params_class=self.sampling_params_class,\n"
+            "                sampling_params_class=SamplingParams,\n"
             "                disaggregation_transfer_backend=self.server_args.disaggregation_transfer_backend,\n"
             "            ),\n"
             "        )\n"

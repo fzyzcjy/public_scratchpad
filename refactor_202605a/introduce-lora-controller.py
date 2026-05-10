@@ -177,7 +177,7 @@ def transform(wt: Path) -> None:
             "        self.lora_controller = LoraController(\n"
             "            server_args=self.server_args,\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-            "            update_lora_adapter_communicator=getattr(self, '_update_lora_adapter_communicator', None),\n"
+            "            update_lora_adapter_communicator=self.update_lora_adapter_communicator,\n"
             "            config=LoraControllerConfig(\n"
             "                enable_lora=bool(self.server_args.lora_paths),\n"
             "                max_loaded_loras=self.server_args.max_loaded_loras,\n"
@@ -189,6 +189,15 @@ def transform(wt: Path) -> None:
             "        # Session controller\n"
             "        self.session_controller = SessionController(\n"
         ),
+    )
+
+    # Drop the now-orphaned ``self.init_lora()`` call from facade __init__
+    # (the method body lives in LoraController.__post_init__ now).
+    text = text.replace(
+        "        # Init LoRA status\n"
+        "        self.init_lora()\n"
+        "\n",
+        "",
     )
 
     # Caller updates inside facade.

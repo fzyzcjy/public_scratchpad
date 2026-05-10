@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #3 of ``SchedulerOutputProcessorMixin``: the remaining 11
 process / collect methods move to ``SchedulerBatchResultProcessor`` at
-``scheduler_components/outputs/batch_result_processor.py``. The
+``scheduler_components/output/batch_result_processor.py``. The
 output_processor mixin file is then deleted.
 
 Ctor narrow kwargs: 8 configs + 7 collaborators + 2 sisters
@@ -33,7 +33,7 @@ SUBJECT = "Introduce SchedulerBatchResultProcessor (split #3 of output_processor
 BODY = """\
 Pull the remaining 11 process/collect methods out of
 ``SchedulerOutputProcessorMixin`` into ``SchedulerBatchResultProcessor`` at
-``scheduler_components/outputs/batch_result_processor.py``. Scheduler holds
+``scheduler_components/output/batch_result_processor.py``. Scheduler holds
 it as ``self.batch_result_processor``. The output_processor mixin file is
 deleted.
 
@@ -82,12 +82,19 @@ SCHEDULER_INIT_INSERT = """\
             decode_offload_manager=self.decode_offload_manager,
             metrics_collector=getattr(self, "metrics_collector", None),
             draft_worker=self.draft_worker,
+            model_worker=self.model_worker,
             logprob_computer=self.logprob_computer,
             output_streamer=self.output_streamer,
             abort_request=self.abort_request,
-            report_prefill_stats=self.metrics_reporter.report_prefill_stats,
-            report_decode_stats=self.metrics_reporter.report_decode_stats,
-            update_spec_metrics=self.metrics_reporter.update_spec_metrics,
+            # Wrapped in lambdas so they resolve ``self.metrics_reporter``
+            # lazily — depending on ctor insertion order this attribute may
+            # not be set at the moment ``SchedulerBatchResultProcessor`` is
+            # constructed (see also ``logprob_computer`` / ``output_streamer``
+            # — those are sister kwargs that lambda-resolve their ``self.X``
+            # the same way).
+            report_prefill_stats=lambda *a, **k: self.metrics_reporter.report_prefill_stats(*a, **k),
+            report_decode_stats=lambda *a, **k: self.metrics_reporter.report_decode_stats(*a, **k),
+            update_spec_metrics=lambda *a, **k: self.metrics_reporter.update_spec_metrics(*a, **k),
             increment_generated_tokens=lambda n: setattr(
                 self.metrics_reporter,
                 "num_generated_tokens",
@@ -140,6 +147,7 @@ class SchedulerBatchResultProcessor:
         decode_offload_manager,
         metrics_collector,
         draft_worker,
+        model_worker,
         logprob_computer,
         output_streamer,
         abort_request,
@@ -164,6 +172,7 @@ class SchedulerBatchResultProcessor:
         self.decode_offload_manager = decode_offload_manager
         self.metrics_collector = metrics_collector
         self.draft_worker = draft_worker
+        self.model_worker = model_worker
         self.logprob_computer = logprob_computer
         self.output_streamer = output_streamer
         self.abort_request = abort_request
@@ -183,7 +192,7 @@ def transform(wt: Path) -> None:
     pre = wt / "python/sglang/srt/disaggregation/prefill.py"
     dec = wt / "python/sglang/srt/disaggregation/decode.py"
     dllm = wt / "python/sglang/srt/dllm/mixin/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/outputs/batch_result_processor.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/output/batch_result_processor.py"
 
     src_text = src.read_text()
 
@@ -195,10 +204,8 @@ def transform(wt: Path) -> None:
         "if TYPE_CHECKING:\n    from sglang.srt.managers.scheduler import Scheduler\n\n",
         "",
     )
-    src_text = src_text.replace(
-        "from typing import TYPE_CHECKING, ",
-        "from typing import ",
-    )
+    # Keep ``TYPE_CHECKING`` in the typing import — the ``if TYPE_CHECKING:``
+    # block still has Req / GenerationBatchResult etc. used as type hints.
 
     # Replace class header.
     src_text = src_text.replace(
@@ -260,6 +267,20 @@ def transform(wt: Path) -> None:
         "self.advance_forward_ct_decode()",
     )
 
+    # C14 rewrote ``self.report_*_stats(...)`` / ``self.update_spec_metrics(...)``
+    # in the output_processor mixin body to ``self.metrics_reporter.<X>(...)``.
+    # In the new processor class those names are stashed Callables, so undo the
+    # ``self.metrics_reporter.`` prefix.
+    src_text = src_text.replace(
+        "self.metrics_reporter.report_prefill_stats(", "self.report_prefill_stats("
+    )
+    src_text = src_text.replace(
+        "self.metrics_reporter.report_decode_stats(", "self.report_decode_stats("
+    )
+    src_text = src_text.replace(
+        "self.metrics_reporter.update_spec_metrics(", "self.update_spec_metrics("
+    )
+
     target.write_text(src_text)
     src.unlink()
 
@@ -273,19 +294,28 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.outputs.output_streamer import (\n    SchedulerOutputStreamer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.output.output_streamer import (\n    SchedulerOutputStreamer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.outputs.batch_result_processor import (\n"
+            "from sglang.srt.managers.scheduler_components.output.batch_result_processor import (\n"
             "    SchedulerBatchResultProcessor,\n"
             ")\n"
         ),
     )
     text = replace_call_site(text, old="    SchedulerOutputProcessorMixin,\n", new="")
-    text = replace_call_site(
-        text,
-        old="        self.is_initializing = False\n",
-        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+    # Insert ctor AFTER ``output_streamer`` (sister) — so logprob_computer +
+    # output_streamer are both fully constructed by the time we hit
+    # ``self.batch_result_processor = ...``. Anchor on a unique token from
+    # the output_streamer ctor: the `load_inquirer_get_loads=lambda` kwarg.
+    import re as _re
+    match_pat = _re.compile(
+        r"(        self\.output_streamer = SchedulerOutputStreamer\(\n"
+        r"(?:.*\n)+?"
+        r"        \)\n\n)",
     )
+    m = match_pat.search(text)
+    if m is None:
+        raise RuntimeError("output_streamer ctor block not found in scheduler.py")
+    text = text[: m.end()] + SCHEDULER_INIT_INSERT + text[m.end():]
     # Hot-path callsites: ``self.process_batch_result_*(`` → ``self.batch_result_processor.process_batch_result_*(``
     for suffix in ["prefill", "decode", "idle", "prebuilt"]:
         text = text.replace(

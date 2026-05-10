@@ -117,6 +117,7 @@ def transform(wt: Path) -> None:
     pp = wt / "python/sglang/srt/managers/scheduler_pp_mixin.py"
     prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     decode = wt / "python/sglang/srt/disaggregation/decode.py"
+    test_chunked = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/scheduling/__init__.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/scheduling/dp_attn_adapter.py"
 
@@ -226,6 +227,16 @@ def transform(wt: Path) -> None:
         "        ret = self.dp_attn_adapter.maybe_prepare_mlp_sync_batch(ret)\n",
     )
     decode.write_text(dec_text)
+
+    # Test fixture: previously mocked ``s.maybe_prepare_mlp_sync_batch`` directly;
+    # now the callsite is ``s.dp_attn_adapter.maybe_prepare_mlp_sync_batch``.
+    test_text = test_chunked.read_text()
+    test_text = test_text.replace(
+        "    s.maybe_prepare_mlp_sync_batch = MagicMock(side_effect=lambda batch, **_: batch)\n",
+        "    s.dp_attn_adapter = MagicMock()\n"
+        "    s.dp_attn_adapter.maybe_prepare_mlp_sync_batch = MagicMock(side_effect=lambda batch, **_: batch)\n",
+    )
+    test_chunked.write_text(test_text)
 
 
 if __name__ == "__main__":
