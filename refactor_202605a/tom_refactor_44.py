@@ -85,6 +85,13 @@ def transform(wt: Path) -> None:
     )
     method_text = cut_lines(sched, s, e)
 
+    # Privacy flip exception (per EXECUTION_GUIDE): the leading underscore made
+    # sense as a Scheduler-internal helper; on the new owner class it is the
+    # public preparation API. Drop the underscore.
+    method_text = method_text.replace(
+        "def _maybe_prepare_ngram_embedding(",
+        "def maybe_prepare_ngram_embedding(",
+    )
     append_to_file(manager, method_text.rstrip() + "\n")
 
     # ---- Update Scheduler ----
@@ -106,12 +113,12 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Update the sole caller in Scheduler.run_batch (or wherever). Method
-    # privacy is preserved (Ch1 forbids privacy flip).
+    # Update the sole caller in Scheduler.run_batch (or wherever). The method
+    # also drops its underscore prefix on extraction (privacy-flip exception).
     text = replace_call_site(
         text,
         old="self._maybe_prepare_ngram_embedding(",
-        new="self.ngram_embedding_manager._maybe_prepare_ngram_embedding(",
+        new="self.ngram_embedding_manager.maybe_prepare_ngram_embedding(",
     )
 
     sched.write_text(text)
@@ -119,8 +126,8 @@ def transform(wt: Path) -> None:
     # Test fake fix: test_scheduler_chunked_req_gate.py constructs a partial
     # Scheduler via `__new__`, stubbing `_maybe_prepare_ngram_embedding` as a
     # MagicMock attribute. After /44, the call path is
-    # `self.ngram_embedding_manager._maybe_prepare_ngram_embedding(...)`, so
-    # the stub needs to be relocated onto a fake `ngram_embedding_manager`.
+    # `self.ngram_embedding_manager.maybe_prepare_ngram_embedding(...)` (note
+    # the privacy flip), so the stub needs to be relocated.
     test_chunked = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
     text = test_chunked.read_text()
     text = replace_call_site(
@@ -130,7 +137,7 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "    s.ngram_embedding_manager = MagicMock()\n"
-            "    s.ngram_embedding_manager._maybe_prepare_ngram_embedding = MagicMock(\n"
+            "    s.ngram_embedding_manager.maybe_prepare_ngram_embedding = MagicMock(\n"
             "        side_effect=lambda batch: batch\n"
             "    )\n"
         ),

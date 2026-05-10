@@ -1,7 +1,30 @@
 #!/usr/bin/env python3
-"""Cut `init_weights_update_group` and `destroy_weights_update_group` from
-ModelRunner; paste as free functions in new file `model_executor/weight_updater.py`.
-Updates tp_worker.py callers directly (methods are deleted).
+"""Introduce ``WeightUpdater`` owner class and migrate the two
+weight-update-group lifecycle methods.
+
+- New file ``python/sglang/srt/model_executor/weight_updater.py`` with class
+  ``WeightUpdater``. Owns the ``_model_update_group: dict`` formerly on
+  ModelRunner (Ch1 item 5: lifecycle-cohesive fields move to owner).
+- Methods ``init_weights_update_group`` and ``destroy_weights_update_group``
+  cut from ModelRunner and pasted (still as instance methods) into
+  ``WeightUpdater``. Bodies are byte-identical -- ``self._model_update_group``
+  / ``self.tp_rank`` retained as field accesses (these are now WeightUpdater
+  fields).
+- ModelRunner gains ``self.weight_updater = WeightUpdater(tp_rank=self.tp_rank)``
+  in ``__init__`` and the ``self._model_update_group = {}`` initialization is
+  removed (the dict lives on WeightUpdater).
+- Other ModelRunner methods that still read ``self._model_update_group``
+  (``update_weights_from_distributed`` / ``_update_bucketed_weights_from_distributed``
+  -- moved out in /26) are updated in place to ``self.weight_updater._model_update_group``
+  so the chain stays compilable.
+- Caller in ``tp_worker.py`` rewritten to
+  ``self.model_runner.weight_updater.init_weights_update_group(...)`` (positional
+  args preserved -- WeightUpdater method signature mirrors the old ModelRunner
+  signature).
+
+Usage:
+    uv run --python 3.12 tom_refactor_24.py run
+    uv run --python 3.12 tom_refactor_24.py verify
 """
 
 # /// script
@@ -15,9 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
-    append_to_file,
     cut_lines,
-    dedent_method_to_function,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -27,12 +48,26 @@ from _runner import run_pr
 BASE = "tom_refactor/23"
 TARGET = "tom_refactor/24"
 
-NEW_HEADER = (
-    "from __future__ import annotations\n\nimport logging\n\nimport torch\n\n"
-    "from sglang.srt.utils import init_custom_process_group\n"
-    "from sglang.srt.utils.network import NetworkAddress\n\n"
-    "logger = logging.getLogger(__name__)\n"
-)
+
+HEADER = '''from __future__ import annotations
+
+import logging
+
+import torch
+
+from sglang.srt.utils import init_custom_process_group
+from sglang.srt.utils.network import NetworkAddress
+
+logger = logging.getLogger(__name__)
+
+
+class WeightUpdater:
+
+    def __init__(self, *, tp_rank: int):
+        self.tp_rank = tp_rank
+        self._model_update_group: dict = {}
+
+'''
 
 
 def transform(wt: Path) -> None:
@@ -40,86 +75,69 @@ def transform(wt: Path) -> None:
     from mechanical_refactor_verify_utils import git_add_and_commit
 
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    new_file = wt / "python/sglang/srt/model_executor/weight_updater.py"
-    new_file.write_text(NEW_HEADER)
+    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
-    for name in ("init_weights_update_group", "destroy_weights_update_group"):
-        s, e = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name=name)
-        method_text = cut_lines(mr, s, e)
-        fn = dedent_method_to_function(method_text)
-        if name == "init_weights_update_group":
-            fn = fn.replace(
-                "def init_weights_update_group(\n    self,\n",
-                "def init_weights_update_group(\n    *,\n    _model_update_group,\n    tp_rank,\n",
-            )
-            fn = fn.replace("self.tp_rank", "tp_rank")
-            fn = fn.replace("self._model_update_group", "_model_update_group")
-        else:
-            fn = fn.replace(
-                "def destroy_weights_update_group(self, group_name):\n",
-                "def destroy_weights_update_group(*, _model_update_group, group_name):\n",
-            )
-            fn = fn.replace("self._model_update_group", "_model_update_group")
-        append_to_file(new_file, fn)
+    # Cut bottom-up so earlier line ranges stay valid.
+    s, e = find_method_lines(
+        mr.read_text(), class_name="ModelRunner", method_name="destroy_weights_update_group"
+    )
+    destroy_text = cut_lines(mr, s, e)
 
+    s, e = find_method_lines(
+        mr.read_text(), class_name="ModelRunner", method_name="init_weights_update_group"
+    )
+    init_text = cut_lines(mr, s, e)
+
+    # Methods stay indented at 4 spaces (instance methods on WeightUpdater).
+    # Bodies reference ``self._model_update_group`` and ``self.tp_rank`` --
+    # both fields exist on WeightUpdater, so no rewrite needed.
+    wu.write_text(HEADER + init_text + destroy_text.rstrip() + "\n")
+
+    # ModelRunner: remove the moved field, instantiate WeightUpdater, fix the
+    # remaining ``self._model_update_group`` references in methods that have
+    # not been moved yet (they're moved in /26).
     text = mr.read_text()
     text = insert_after(
         text,
         anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n"
+        addition="from sglang.srt.model_executor.weight_updater import WeightUpdater\n",
+    )
+    text = replace_call_site(
+        text,
+        old=(
+            "        # For weight updates\n"
+            "        self._model_update_group = {}\n"
+            "        self._weights_send_group = {}\n"
         ),
+        new=(
+            "        # For weight updates\n"
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank)\n"
+            "        self._weights_send_group = {}\n"
+        ),
+    )
+    # Methods staying on ModelRunner that still read the moved dict.
+    text = text.replace(
+        "self._model_update_group", "self.weight_updater._model_update_group"
     )
     mr.write_text(text)
 
-    tp = wt / "python/sglang/srt/managers/tp_worker.py"
-    text = tp.read_text()
+    # tp_worker.py: rewrite both call sites to go through weight_updater.
+    text = tw.read_text()
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self.model_runner.init_weights_update_group(\n"
-            "            recv_req.master_address,\n            recv_req.master_port,\n"
-            "            recv_req.rank_offset,\n            recv_req.world_size,\n"
-            "            recv_req.group_name,\n            recv_req.backend,\n        )\n"
-        ),
-        new=(
-            "        success, message = init_weights_update_group(\n"
-            "            _model_update_group=self.model_runner._model_update_group,\n"
-            "            tp_rank=self.model_runner.tp_rank,\n"
-            "            master_address=recv_req.master_address,\n"
-            "            master_port=recv_req.master_port,\n"
-            "            rank_offset=recv_req.rank_offset,\n"
-            "            world_size=recv_req.world_size,\n"
-            "            group_name=recv_req.group_name,\n"
-            "            backend=recv_req.backend,\n        )\n"
-        ),
+        old="        success, message = self.model_runner.init_weights_update_group(\n",
+        new="        success, message = self.model_runner.weight_updater.init_weights_update_group(\n",
     )
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self.model_runner.destroy_weights_update_group(\n"
-            "            recv_req.group_name,\n        )\n"
-        ),
-        new=(
-            "        success, message = destroy_weights_update_group(\n"
-            "            _model_update_group=self.model_runner._model_update_group,\n"
-            "            group_name=recv_req.group_name,\n        )\n"
-        ),
+        old="        success, message = self.model_runner.destroy_weights_update_group(\n",
+        new="        success, message = self.model_runner.weight_updater.destroy_weights_update_group(\n",
     )
-    text = replace_call_site(
-        text,
-        old="from sglang.srt.managers.io_struct import (\n",
-        new=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    destroy_weights_update_group,\n    init_weights_update_group,\n)\n"
-            "from sglang.srt.managers.io_struct import (\n"
-        ),
-    )
-    tp.write_text(text)
+    tw.write_text(text)
 
     git_add_and_commit(
-        "Extract weights update group lifecycle to free functions in weight_updater",
+        "Introduce WeightUpdater and move weights update group lifecycle methods",
         cwd=str(wt),
     )
 

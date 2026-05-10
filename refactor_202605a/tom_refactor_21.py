@@ -49,10 +49,11 @@ def transform(wt: Path) -> None:
             "        )"
         ),
         new=(
-            "        if self.model_runner.is_hybrid_swa:\n"
-            "            pool_tokens = self.model_runner.full_max_total_num_tokens\n"
-            "        else:\n"
-            "            pool_tokens = self.model_runner.max_total_num_tokens\n"
+            "        pool_tokens = (\n"
+            "            self.model_runner.full_max_total_num_tokens\n"
+            "            if self.model_runner.is_hybrid_swa\n"
+            "            else self.model_runner.max_total_num_tokens\n"
+            "        )\n"
             "        self.max_req_len = min(\n"
             "            self.model_config.context_len - 1,\n"
             "            pool_tokens - 1,\n"

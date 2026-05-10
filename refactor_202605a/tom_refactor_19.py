@@ -46,11 +46,19 @@ def transform(wt: Path) -> None:
         dedent_method_to_function(method_text)
         .replace(
             "def apply_torch_tp(self):\n",
-            "def apply_torch_tp(\n    *,\n    model,\n    device,\n    tp_size,\n):\n",
+            "def apply_torch_tp(\n    *,\n    model: nn.Module,\n    device: str,\n    tp_size: int,\n):\n",
         )
         .replace("self.tp_size", "tp_size")
         .replace("self.device", "device")
         .replace("self.model", "model")
+        # Same-file self-import: the original method's body has
+        # `from sglang.srt.layers.model_parallel import tensor_parallel` as a
+        # local import. After moving INTO that module, the import is a no-op
+        # self-reference — drop it.
+        .replace(
+            "    from sglang.srt.layers.model_parallel import tensor_parallel\n\n",
+            "",
+        )
     )
 
     mp_text = mp.read_text()

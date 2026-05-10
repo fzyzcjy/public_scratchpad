@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
-"""Cut `save_remote_model`, `save_sharded_model`, `get_weights_by_name` from
-ModelRunner; paste as free functions in `weight_exporter.py`. Update
-tp_worker.py and scheduler_update_weights_mixin.py call sites.
+"""Move ``save_remote_model`` / ``save_sharded_model`` /
+``get_weights_by_name`` onto ``WeightExporter``.
+
+- All three methods cut from ModelRunner and pasted (still as instance
+  methods) onto WeightExporter. Bodies rewrite ``self.model`` ->
+  ``self._mr.model`` and ``self.model_config`` -> ``self._mr.model_config``;
+  ``self.tp_size`` stays as is (WeightExporter field).
+- ``Optional`` import added to ``weight_exporter.py`` for the new method
+  signatures.
+- ``tp_worker.py`` and ``scheduler_update_weights_mixin.py`` callers updated
+  to go through ``...weight_exporter.<method>(...)``.
 
 Usage:
     uv run --python 3.12 tom_refactor_30.py run
@@ -21,7 +29,6 @@ sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
-    dedent_method_to_function,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -41,155 +48,72 @@ def transform(wt: Path) -> None:
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     sm = wt / "python/sglang/srt/managers/scheduler_update_weights_mixin.py"
 
+    # Cut bottom-up so earlier line ranges stay valid. ``self.model`` is the
+    # only ModelRunner-side prefix appearing in these three bodies (it covers
+    # both ``self.model`` and ``self.model_config``); ``self.tp_size`` stays
+    # because WeightExporter owns it.
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="save_sharded_model"
     )
-    sharded_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def save_sharded_model(\n"
-            "    self, path: str, pattern: Optional[str] = None, max_size: Optional[int] = None\n"
-            "):",
-            "def save_sharded_model(\n"
-            "    *,\n"
-            "    model,\n"
-            "    path: str,\n"
-            "    pattern: Optional[str] = None,\n"
-            "    max_size: Optional[int] = None,\n"
-            "):",
-        )
-        .replace("self.model", "model")
-    )
+    sharded_text = cut_lines(mr, s, e).replace("self.model", "self._mr.model")
 
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="save_remote_model"
     )
-    remote_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def save_remote_model(self, url: str):",
-            "def save_remote_model(*, model, model_path, url: str):",
-        )
-        .replace(
-            "RemoteModelLoader.save_model(self.model, self.model_config.model_path, url)",
-            "RemoteModelLoader.save_model(model, model_path, url)",
-        )
-    )
+    remote_text = cut_lines(mr, s, e).replace("self.model", "self._mr.model")
 
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="get_weights_by_name"
     )
-    gwbn_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def get_weights_by_name(\n"
-            "    self, name: str, truncate_size: int = 100\n"
-            ") -> Optional[torch.Tensor]:",
-            "def get_weights_by_name(\n"
-            "    *,\n"
-            "    model,\n"
-            "    tp_size,\n"
-            "    name: str,\n"
-            "    truncate_size: int = 100,\n"
-            ") -> Optional[torch.Tensor]:",
-        )
-        .replace(
-            "self.model.get_weights_by_name(\n"
-            "            name, truncate_size, tp_size=self.tp_size\n"
-            "        )",
-            "model.get_weights_by_name(\n"
-            "            name, truncate_size, tp_size=tp_size\n"
-            "        )",
-        )
-    )
+    gwbn_text = cut_lines(mr, s, e).replace("self.model", "self._mr.model")
 
-    # weight_exporter.py needs `Optional` for the new function signatures
-    # (save_sharded_model, get_weights_by_name kwargs).
-    we_text = we.read_text()
-    if "from typing import Optional\n" not in we_text:
-        we_text = insert_after(
-            we_text,
+    # weight_exporter.py: add ``Optional`` import for the new signatures.
+    text = we.read_text()
+    if "from typing import Optional\n" not in text:
+        text = insert_after(
+            text,
             anchor="import logging\n",
             addition="from typing import Optional\n",
         )
-        we.write_text(we_text)
+        we.write_text(text)
 
-    append_to_file(we, remote_text + "\n" + sharded_text + "\n" + gwbn_text)
+    append_to_file(
+        we,
+        remote_text.rstrip() + "\n\n" + sharded_text.rstrip() + "\n\n" + gwbn_text.rstrip() + "\n",
+        separator="\n",
+    )
 
-    # tp_worker.py already imports `weight_exporter` (added in /29); just
-    # rewrite the call site.
+    # tp_worker.py: rewrite caller for ``get_weights_by_name``.
     text = tw.read_text()
-    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-            addition="from sglang.srt.model_executor import weight_exporter\n",
-        )
     text = replace_call_site(
         text,
-        old=(
-            "        parameter = self.model_runner.get_weights_by_name(\n"
-            "            recv_req.name, recv_req.truncate_size\n"
-            "        )\n"
-        ),
-        new=(
-            "        parameter = weight_exporter.get_weights_by_name(\n"
-            "            model=self.model_runner.model,\n"
-            "            tp_size=self.model_runner.tp_size,\n"
-            "            name=recv_req.name,\n"
-            "            truncate_size=recv_req.truncate_size,\n"
-            "        )\n"
-        ),
+        old="        parameter = self.model_runner.get_weights_by_name(\n",
+        new="        parameter = self.model_runner.weight_exporter.get_weights_by_name(\n",
     )
     tw.write_text(text)
 
+    # scheduler_update_weights_mixin.py: rewrite ``save_remote_model`` /
+    # ``save_sharded_model`` callers.
     text = sm.read_text()
-    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
-        text = "from sglang.srt.model_executor import weight_exporter\n" + text
     text = replace_call_site(
         text,
         old="        self.tp_worker.model_runner.save_remote_model(url)\n",
-        new=(
-            "        weight_exporter.save_remote_model(\n"
-            "            model=self.tp_worker.model_runner.model,\n"
-            "            model_path=self.tp_worker.model_runner.model_config.model_path,\n"
-            "            url=url,\n"
-            "        )\n"
-        ),
+        new="        self.tp_worker.model_runner.weight_exporter.save_remote_model(url)\n",
     )
     text = replace_call_site(
         text,
         old="            self.draft_worker.model_runner.save_remote_model(draft_url)\n",
-        new=(
-            "            weight_exporter.save_remote_model(\n"
-            "                model=self.draft_worker.model_runner.model,\n"
-            "                model_path=self.draft_worker.model_runner.model_config.model_path,\n"
-            "                url=draft_url,\n"
-            "            )\n"
-        ),
+        new="            self.draft_worker.model_runner.weight_exporter.save_remote_model(draft_url)\n",
     )
     text = replace_call_site(
         text,
-        old=(
-            "        self.tp_worker.model_runner.save_sharded_model(\n"
-            '            path=params["path"],\n'
-            '            pattern=params["pattern"],\n'
-            '            max_size=params["max_size"],\n'
-            "        )\n"
-        ),
-        new=(
-            "        weight_exporter.save_sharded_model(\n"
-            "            model=self.tp_worker.model_runner.model,\n"
-            '            path=params["path"],\n'
-            '            pattern=params["pattern"],\n'
-            '            max_size=params["max_size"],\n'
-            "        )\n"
-        ),
+        old="        self.tp_worker.model_runner.save_sharded_model(\n",
+        new="        self.tp_worker.model_runner.weight_exporter.save_sharded_model(\n",
     )
     sm.write_text(text)
 
     git_add_and_commit(
-        "Extract weight save and get_weights_by_name to free functions in weight_exporter",
+        "Move weight save and get_weights_by_name methods onto WeightExporter",
         cwd=str(wt),
     )
 

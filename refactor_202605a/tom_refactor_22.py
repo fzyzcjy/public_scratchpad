@@ -50,16 +50,20 @@ def transform(wt: Path) -> None:
             "def prealloc_symmetric_memory_pool(self):\n",
             "def prealloc_symmetric_memory_pool(\n"
             "    *,\n"
-            "    is_draft_worker,\n"
-            "    enable_symm_mem,\n"
-            "    device,\n"
-            "    forward_stream,\n"
+            "    is_draft_worker: bool,\n"
+            "    enable_symm_mem: bool,\n"
+            "    device: str,\n"
+            "    forward_stream: torch.cuda.Stream,\n"
             "):\n",
         )
         .replace("self.is_draft_worker", "is_draft_worker")
         .replace("self.server_args.enable_symm_mem", "enable_symm_mem")
         .replace("self.forward_stream", "forward_stream")
         .replace("self.device", "device")
+        # Local `from sglang.srt.distributed import get_tp_group` import is
+        # kept inside the function body — `sglang.srt.distributed` indirectly
+        # imports this module via parallel_state, so a top-level import would
+        # introduce a cycle (matches the original method's pattern).
         .replace(
             "        return\n\n    # Memory allocation",
             "        return\n\n    from sglang.srt.distributed import get_tp_group\n\n    # Memory allocation",

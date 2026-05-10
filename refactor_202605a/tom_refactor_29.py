@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
-"""Cut `init_weights_send_group_for_remote_instance` and
-`send_weights_to_remote_instance` from ModelRunner; paste as free functions in
-new `weight_exporter.py`. Update tp_worker.py call sites.
+"""Introduce ``WeightExporter`` owner class and migrate the two
+weights-send-group methods.
 
-`self._weights_send_group` (a dict) stays on ModelRunner; the free functions
-take it as a kwarg.
+- New file ``python/sglang/srt/model_executor/weight_exporter.py`` with class
+  ``WeightExporter``. Owns the ``_weights_send_group: dict`` formerly on
+  ModelRunner (Ch1 item 5: lifecycle-cohesive fields move to owner).
+- Methods ``init_weights_send_group_for_remote_instance`` and
+  ``send_weights_to_remote_instance`` cut from ModelRunner and pasted (still
+  as instance methods) into ``WeightExporter``. Bodies rewrite
+  ``self.model.named_parameters`` -> ``self._mr.model.named_parameters``;
+  ``self.tp_rank`` / ``self.tp_size`` / ``self.gpu_id`` /
+  ``self._weights_send_group`` stay as is (all WeightExporter fields).
+- ModelRunner gains ``self.weight_exporter = WeightExporter(...)`` in
+  ``__init__`` and the ``self._weights_send_group = {}`` initialization is
+  removed (the dict lives on WeightExporter).
+- Caller in ``tp_worker.py`` rewritten to
+  ``self.model_runner.weight_exporter.<method>(...)`` (positional args
+  preserved -- WeightExporter method signatures mirror the old ModelRunner
+  signatures).
 
 Usage:
     uv run --python 3.12 tom_refactor_29.py run
@@ -23,7 +36,6 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
     cut_lines,
-    dedent_method_to_function,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -47,6 +59,22 @@ from sglang.srt.utils.network import NetworkAddress
 logger = logging.getLogger(__name__)
 
 
+class WeightExporter:
+
+    def __init__(
+        self,
+        *,
+        tp_rank: int,
+        tp_size: int,
+        gpu_id: int,
+        model_runner_ref,
+    ):
+        self.tp_rank = tp_rank
+        self.tp_size = tp_size
+        self.gpu_id = gpu_id
+        self._weights_send_group: dict = {}
+        self._mr = model_runner_ref
+
 '''
 
 
@@ -58,35 +86,14 @@ def transform(wt: Path) -> None:
     we = wt / "python/sglang/srt/model_executor/weight_exporter.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
+    # Cut bottom-up so earlier line ranges stay valid.
     s, e = find_method_lines(
         mr.read_text(),
         class_name="ModelRunner",
         method_name="send_weights_to_remote_instance",
     )
-    send_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def send_weights_to_remote_instance(\n"
-            "    self,\n"
-            "    master_address,\n"
-            "    ports,\n"
-            "    group_name,\n"
-            "):",
-            "def send_weights_to_remote_instance(\n"
-            "    *,\n"
-            "    model,\n"
-            "    _weights_send_group,\n"
-            "    tp_rank,\n"
-            "    tp_size,\n"
-            "    master_address,\n"
-            "    ports,\n"
-            "    group_name,\n"
-            "):",
-        )
-        .replace("self.tp_size", "tp_size")
-        .replace("self.tp_rank", "tp_rank")
-        .replace("self._weights_send_group", "_weights_send_group")
-        .replace("self.model.named_parameters", "model.named_parameters")
+    send_text = cut_lines(mr, s, e).replace(
+        "self.model.named_parameters", "self._mr.model.named_parameters"
     )
 
     s, e = find_method_lines(
@@ -94,102 +101,60 @@ def transform(wt: Path) -> None:
         class_name="ModelRunner",
         method_name="init_weights_send_group_for_remote_instance",
     )
-    init_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def init_weights_send_group_for_remote_instance(\n"
-            "    self,\n"
-            "    master_address,\n"
-            "    ports,\n"
-            "    group_rank,\n"
-            "    world_size,\n"
-            "    group_name,\n"
-            '    backend="nccl",\n'
-            "):",
-            "def init_weights_send_group_for_remote_instance(\n"
-            "    *,\n"
-            "    _weights_send_group,\n"
-            "    tp_rank,\n"
-            "    tp_size,\n"
-            "    gpu_id,\n"
-            "    master_address,\n"
-            "    ports,\n"
-            "    group_rank,\n"
-            "    world_size,\n"
-            "    group_name,\n"
-            '    backend="nccl",\n'
-            "):",
-        )
-        .replace("self.tp_size", "tp_size")
-        .replace("self.tp_rank", "tp_rank")
-        .replace("self.gpu_id", "gpu_id")
-        .replace("self._weights_send_group", "_weights_send_group")
+    # Body has no ModelRunner-only field references that need rewriting --
+    # ``self.tp_rank`` / ``self.tp_size`` / ``self.gpu_id`` /
+    # ``self._weights_send_group`` are all WeightExporter fields.
+    init_text = cut_lines(mr, s, e)
+
+    we.write_text(HEADER + init_text + "\n" + send_text.rstrip() + "\n")
+
+    # ModelRunner: instantiate WeightExporter; remove the moved field.
+    text = mr.read_text()
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.model_executor.weight_updater import WeightUpdater\n",
+        addition="from sglang.srt.model_executor.weight_exporter import WeightExporter\n",
     )
+    text = replace_call_site(
+        text,
+        old=(
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n"
+            "        self._weights_send_group = {}\n"
+        ),
+        new=(
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n"
+            "        self.weight_exporter = WeightExporter(\n"
+            "            tp_rank=self.tp_rank,\n"
+            "            tp_size=self.tp_size,\n"
+            "            gpu_id=self.gpu_id,\n"
+            "            model_runner_ref=self,\n"
+            "        )\n"
+        ),
+    )
+    mr.write_text(text)
 
-    we.write_text(HEADER + init_text + "\n" + send_text)
-
-    # tp_worker.py: add module import for weight_exporter; rewrite call sites.
+    # tp_worker.py: rewrite both call sites.
     text = tw.read_text()
-    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-            addition="from sglang.srt.model_executor import weight_exporter\n",
-        )
     text = replace_call_site(
         text,
         old=(
             "        success, message = (\n"
             "            self.model_runner.init_weights_send_group_for_remote_instance(\n"
-            "                recv_req.master_address,\n"
-            "                recv_req.ports,\n"
-            "                recv_req.group_rank,\n"
-            "                recv_req.world_size,\n"
-            "                recv_req.group_name,\n"
-            "                recv_req.backend,\n"
-            "            )\n"
-            "        )\n"
         ),
         new=(
-            "        success, message = weight_exporter.init_weights_send_group_for_remote_instance(\n"
-            "            _weights_send_group=self.model_runner._weights_send_group,\n"
-            "            tp_rank=self.model_runner.tp_rank,\n"
-            "            tp_size=self.model_runner.tp_size,\n"
-            "            gpu_id=self.model_runner.gpu_id,\n"
-            "            master_address=recv_req.master_address,\n"
-            "            ports=recv_req.ports,\n"
-            "            group_rank=recv_req.group_rank,\n"
-            "            world_size=recv_req.world_size,\n"
-            "            group_name=recv_req.group_name,\n"
-            "            backend=recv_req.backend,\n"
-            "        )\n"
+            "        success, message = (\n"
+            "            self.model_runner.weight_exporter.init_weights_send_group_for_remote_instance(\n"
         ),
     )
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self.model_runner.send_weights_to_remote_instance(\n"
-            "            recv_req.master_address,\n"
-            "            recv_req.ports,\n"
-            "            recv_req.group_name,\n"
-            "        )\n"
-        ),
-        new=(
-            "        success, message = weight_exporter.send_weights_to_remote_instance(\n"
-            "            model=self.model_runner.model,\n"
-            "            _weights_send_group=self.model_runner._weights_send_group,\n"
-            "            tp_rank=self.model_runner.tp_rank,\n"
-            "            tp_size=self.model_runner.tp_size,\n"
-            "            master_address=recv_req.master_address,\n"
-            "            ports=recv_req.ports,\n"
-            "            group_name=recv_req.group_name,\n"
-            "        )\n"
-        ),
+        old="        success, message = self.model_runner.send_weights_to_remote_instance(\n",
+        new="        success, message = self.model_runner.weight_exporter.send_weights_to_remote_instance(\n",
     )
     tw.write_text(text)
 
     git_add_and_commit(
-        "Extract weights send group methods to free functions in weight_exporter",
+        "Introduce WeightExporter and move weights send group methods",
         cwd=str(wt),
     )
 

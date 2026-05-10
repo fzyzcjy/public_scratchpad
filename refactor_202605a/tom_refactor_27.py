@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
-"""Cut `update_weights_from_tensor` + `_update_weights_from_flattened_bucket`
-from ModelRunner; also cut module-level helpers `_unwrap_tensor`,
-`_model_load_weights_direct` and dataclass `LocalSerializedTensor`. Paste all
-five into `weight_updater.py`. Update tp_worker.py call site.
+"""Move ``update_weights_from_tensor`` + helpers onto ``WeightUpdater``.
+
+- ``update_weights_from_tensor`` and ``_update_weights_from_flattened_bucket``
+  cut from ModelRunner and pasted (still as instance methods) onto
+  WeightUpdater. Bodies rewrite ``self.<ModelRunner-field>`` ->
+  ``self._mr.<...>`` (``model``, ``device``, ``server_args``); ``self.tp_rank``
+  stays as is -- WeightUpdater has its own ``tp_rank`` field.
+- Module-level helpers ``_unwrap_tensor`` / ``_model_load_weights_direct`` and
+  the ``LocalSerializedTensor`` dataclass also cut from
+  ``model_runner.py`` and re-homed in ``weight_updater.py`` as module-level
+  free fns / class (they're stateless utilities).
+- ``test/registered/rl/test_update_weights_from_tensor.py`` references
+  ``sglang.srt.model_executor.model_runner._model_load_weights_direct`` via a
+  dotted-path string for ``custom_weight_loader``; rewrite the path to
+  ``sglang.srt.model_executor.weight_updater._model_load_weights_direct``.
+- ``tp_worker.py`` caller rewritten to
+  ``self.model_runner.weight_updater.update_weights_from_tensor(...)``.
 
 Usage:
     uv run --python 3.12 tom_refactor_27.py run
@@ -22,7 +35,6 @@ sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
-    dedent_method_to_function,
     find_class_lines,
     find_function_lines,
     find_method_lines,
@@ -35,6 +47,22 @@ BASE = "tom_refactor/26"
 TARGET = "tom_refactor/27"
 
 
+def _rewrite_self(method_text: str) -> str:
+    """``update_weights_from_tensor`` body reads multiple ModelRunner fields
+    (``model``, ``device``, ``server_args``); WeightUpdater itself owns
+    ``tp_rank``. Apply the substitutions in an order that does not
+    accidentally re-rewrite ``self._mr.X`` strings.
+    """
+    method_text = method_text.replace("self.model.load_weights", "self._mr.model.load_weights")
+    method_text = method_text.replace("self.model,", "self._mr.model,")
+    method_text = method_text.replace("self.device", "self._mr.device")
+    method_text = method_text.replace(
+        "self.server_args.custom_weight_loader",
+        "self._mr.server_args.custom_weight_loader",
+    )
+    return method_text
+
+
 def transform(wt: Path) -> None:
     sys.path.insert(0, str(wt / ".claude/skills/mechanical-refactor-verify"))
     from mechanical_refactor_verify_utils import git_add_and_commit
@@ -43,7 +71,7 @@ def transform(wt: Path) -> None:
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
-    # Cut from bottom to top so earlier line ranges stay valid.
+    # Cut bottom-up so earlier line ranges stay valid.
     s, e = find_class_lines(mr.read_text(), class_name="LocalSerializedTensor")
     cls_text = cut_lines(mr, s, e)
 
@@ -58,127 +86,67 @@ def transform(wt: Path) -> None:
         class_name="ModelRunner",
         method_name="_update_weights_from_flattened_bucket",
     )
-    fb_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def _update_weights_from_flattened_bucket(\n"
-            "    self,\n"
-            "    flattened_tensor_bucket_dict,\n"
-            "):",
-            "def _update_weights_from_flattened_bucket(\n"
-            "    *,\n"
-            "    model,\n"
-            "    flattened_tensor_bucket_dict,\n"
-            "):",
-        )
-        .replace("self.model.load_weights", "model.load_weights")
-    )
+    fb_text = _rewrite_self(cut_lines(mr, s, e))
 
     s, e = find_method_lines(
         mr.read_text(),
         class_name="ModelRunner",
         method_name="update_weights_from_tensor",
     )
-    uwt_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def update_weights_from_tensor(\n"
-            "    self,\n"
-            '    named_tensors: List[Tuple[str, Union[torch.Tensor, "LocalSerializedTensor"]]],\n'
-            "    load_format: Optional[str] = None,\n"
-            "):",
-            "def update_weights_from_tensor(\n"
-            "    *,\n"
-            "    model,\n"
-            "    tp_rank,\n"
-            "    device,\n"
-            "    custom_weight_loader,\n"
-            '    named_tensors: List[Tuple[str, Union[torch.Tensor, "LocalSerializedTensor"]]],\n'
-            "    load_format: Optional[str] = None,\n"
-            "):",
-        )
-        .replace("self.device", "device")
-        .replace("self.tp_rank", "tp_rank")
-        # NOTE: indentation 8/12/8 after one dedent_method_to_function level.
-        .replace(
-            "self._update_weights_from_flattened_bucket(\n"
-            "            flattened_tensor_bucket_dict=named_tensors\n"
-            "        )",
-            "_update_weights_from_flattened_bucket(\n"
-            "            model=model, flattened_tensor_bucket_dict=named_tensors\n"
-            "        )",
-        )
-        .replace("self.server_args.custom_weight_loader", "custom_weight_loader")
-        .replace(
-            "_model_load_weights_direct(self.model, named_tensors)",
-            "_model_load_weights_direct(model, named_tensors)",
-        )
-        # `custom_loader(self.model, ...)` is the elif branch; rewrite to `model`.
-        .replace(
-            "custom_loader(self.model, named_tensors)",
-            "custom_loader(model, named_tensors)",
-        )
-        .replace(
-            "self.model.load_weights(named_tensors)",
-            "model.load_weights(named_tensors)",
-        )
-    )
+    uwt_text = _rewrite_self(cut_lines(mr, s, e))
 
-    appended = (
-        "\nfrom dataclasses import dataclass\n"
-        "from typing import List, Optional, Tuple, Union\n\n"
-        "from sglang.srt.model_loader.weight_utils import default_weight_loader\n"
-        "from sglang.srt.utils import MultiprocessingSerializer, dynamic_import\n"
-        "from sglang.srt.utils.patch_torch import monkey_patch_torch_reductions\n"
-        "from sglang.srt.weight_sync.tensor_bucket import (\n"
-        "    FlattenedTensorBucket,\n"
-        "    FlattenedTensorMetadata,\n"
-        ")\n\n\n"
-        + direct_text + "\n" + unwrap_text + "\n" + cls_text + "\n" + fb_text + "\n" + uwt_text
-    )
-    append_to_file(wu, appended)
-
-    # No model_runner.py import needed — after /27 cuts LocalSerializedTensor
-    # and its consumers (_unwrap_tensor / update_weights_from_tensor), no
-    # remaining references exist. An unused `weight_updater` import would be
-    # stripped by pre-commit ruff F401.
-
-    # tp_worker.py already imports `weight_updater` (added in /25); just rewrite
-    # the call site.
-    text = tw.read_text()
-    if "from sglang.srt.model_executor import weight_updater\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-            addition="from sglang.srt.model_executor import weight_updater\n",
-        )
+    # weight_updater.py: imports needed by helpers and the new methods.
+    # Consolidate the existing single-symbol ``FlattenedTensorBucket`` import
+    # with ``FlattenedTensorMetadata`` so isort doesn't have to merge them.
+    text = wu.read_text()
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self.model_runner.update_weights_from_tensor(\n"
-            "            named_tensors=MultiprocessingSerializer.deserialize(\n"
-            "                recv_req.serialized_named_tensors[self.tp_rank]\n"
-            "            ),\n"
-            "            load_format=recv_req.load_format,\n"
-            "        )\n"
-        ),
+        old="from sglang.srt.weight_sync.tensor_bucket import FlattenedTensorBucket\n",
         new=(
-            "        success, message = weight_updater.update_weights_from_tensor(\n"
-            "            model=self.model_runner.model,\n"
-            "            tp_rank=self.model_runner.tp_rank,\n"
-            "            device=self.model_runner.device,\n"
-            "            custom_weight_loader=self.model_runner.server_args.custom_weight_loader,\n"
-            "            named_tensors=MultiprocessingSerializer.deserialize(\n"
-            "                recv_req.serialized_named_tensors[self.tp_rank]\n"
-            "            ),\n"
-            "            load_format=recv_req.load_format,\n"
-            "        )\n"
+            "from sglang.srt.weight_sync.tensor_bucket import (\n"
+            "    FlattenedTensorBucket,\n"
+            "    FlattenedTensorMetadata,\n"
+            ")\n"
         ),
+    )
+    # Pre-commit's isort merged the two `from sglang.srt.utils` lines into
+    # one combined alphabetical import; anchor on that.
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.utils import get_available_gpu_memory, init_custom_process_group\n",
+        addition=(
+            "from dataclasses import dataclass\n"
+            "from typing import List, Tuple, Union\n\n"
+            "from sglang.srt.model_loader.weight_utils import default_weight_loader\n"
+            "from sglang.srt.utils import MultiprocessingSerializer, dynamic_import\n"
+            "from sglang.srt.utils.patch_torch import monkey_patch_torch_reductions\n"
+        ),
+    )
+    wu.write_text(text)
+
+    # Append the two methods to the class first (still at 4-space indent).
+    append_to_file(
+        wu,
+        uwt_text.rstrip() + "\n\n" + fb_text.rstrip() + "\n",
+        separator="\n",
+    )
+    # Append module-level helpers / dataclass after the class.
+    append_to_file(
+        wu,
+        direct_text.rstrip() + "\n\n\n" + unwrap_text.rstrip() + "\n\n\n" + cls_text.rstrip() + "\n",
+        separator="\n\n",
+    )
+
+    # tp_worker.py: rewrite caller.
+    text = tw.read_text()
+    text = replace_call_site(
+        text,
+        old="        success, message = self.model_runner.update_weights_from_tensor(\n",
+        new="        success, message = self.model_runner.weight_updater.update_weights_from_tensor(\n",
     )
     tw.write_text(text)
 
-    # test file references _model_load_weights_direct via dotted-path string;
-    # update the path now that the helper has moved to weight_updater.
+    # Test file references the helper via dotted-path string; update it.
     test_uwt = wt / "test/registered/rl/test_update_weights_from_tensor.py"
     text = test_uwt.read_text()
     text = replace_call_site(
@@ -189,7 +157,7 @@ def transform(wt: Path) -> None:
     test_uwt.write_text(text)
 
     git_add_and_commit(
-        "Extract update_weights_from_tensor and helpers to weight_updater",
+        "Move update_weights_from_tensor and helpers onto WeightUpdater",
         cwd=str(wt),
     )
 

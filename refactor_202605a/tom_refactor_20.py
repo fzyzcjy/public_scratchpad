@@ -43,7 +43,7 @@ def transform(wt: Path) -> None:
         dedent_method_to_function(cut_lines(mr, start, end))
         .replace(
             "def init_threads_binding(self):\n",
-            "def init_threads_binding(\n    *,\n    tp_rank,\n    tp_size,\n):\n",
+            "def init_threads_binding(\n    *,\n    tp_rank: int,\n    tp_size: int,\n):\n",
         )
         .replace("self.tp_size", "tp_size")
         .replace("self.tp_rank", "tp_rank")

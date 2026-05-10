@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Cut `update_weights_from_disk` from ModelRunner; paste as a free function in
-`weight_updater.py`. R4 concession: takes `model_runner_ref` kwarg because the
-body has 10+ `self.X` reads + 4 self-write writebacks + a call to
-`self.init_device_graphs()`. Body is byte-identical except for s/self/model_runner_ref/
-plus the signature change (`self,` -> `*,\n    model_runner_ref,`).
+"""Move ``update_weights_from_disk`` onto ``WeightUpdater``.
 
-Caller sites updated:
-- model_runner.py: inline callsite inside `update_expert_location` body
-- tp_worker.py: positional args -> explicit kwargs
-- eagle_worker_v2.py: positional args -> explicit kwargs
+- WeightUpdater ctor gains a ``model_runner_ref`` kwarg (R4 concession). The
+  back-reference (``self._mr``) is needed because the method body reads many
+  ModelRunner fields (``model``, ``server_args``, ``model_config``, ``device``,
+  ``gpu_id``, ``load_config``) and calls ``init_device_graphs()``.
+- Method moves byte-identical except ``self.X`` -> ``self._mr.X`` for every
+  field that lives on ModelRunner.
+- ModelRunner: ctor now passes ``model_runner_ref=self`` to WeightUpdater;
+  ``update_weights_from_disk`` is deleted from the class.
+- Inline call inside ``update_expert_location`` (still on ModelRunner) is
+  rewritten to ``self.weight_updater.update_weights_from_disk(...)``.
+- ``tp_worker.py`` and ``eagle_worker_v2.py`` callers now go through
+  ``self.model_runner.weight_updater.update_weights_from_disk(...)`` /
+  ``self._draft_worker.draft_runner.weight_updater.update_weights_from_disk(...)``.
 
 Usage:
     uv run --python 3.12 tom_refactor_25.py run
@@ -28,7 +33,6 @@ sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
-    dedent_method_to_function,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -48,33 +52,41 @@ def transform(wt: Path) -> None:
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     ew = wt / "python/sglang/srt/speculative/eagle_worker_v2.py"
 
+    # Cut update_weights_from_disk from ModelRunner.
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="update_weights_from_disk"
     )
-    func_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def update_weights_from_disk(\n"
-            "    self,\n"
-            "    model_path: str,\n"
-            "    load_format: str,\n"
-            "    weight_name_filter: Optional[Callable[[str], bool]] = None,\n"
-            "    recapture_cuda_graph: bool = False,\n"
-            ") -> tuple[bool, str]:\n",
-            "def update_weights_from_disk(\n"
-            "    *,\n"
-            "    model_runner_ref,\n"
-            "    model_path: str,\n"
-            "    load_format: str,\n"
-            "    weight_name_filter: Optional[Callable[[str], bool]] = None,\n"
-            "    recapture_cuda_graph: bool = False,\n"
-            ") -> tuple[bool, str]:\n",
-        )
-        .replace("self.", "model_runner_ref.")
-    )
+    method_text = cut_lines(mr, s, e)
 
-    # Add imports needed by the new free function to weight_updater.py.
+    # Rewrite ``self.<fields-on-ModelRunner>`` -> ``self._mr.<...>``. The
+    # fields read by this body (model, model_config, device, gpu_id,
+    # server_args, load_config) and the method call (init_device_graphs)
+    # all live on ModelRunner, so a blanket s/self./self._mr./ is safe --
+    # WeightUpdater itself currently exposes only ``tp_rank`` /
+    # ``_model_update_group``, neither of which appears in this body.
+    method_text = method_text.replace("self.", "self._mr.")
+
+    # Append the method to the WeightUpdater class. ``cut_lines`` preserved
+    # the 4-space indentation, so it slots into the class body verbatim.
+    append_to_file(wu, method_text.rstrip() + "\n", separator="\n")
+
+    # Update WeightUpdater ctor: add ``model_runner_ref`` kwarg + ``_mr`` field.
     text = wu.read_text()
+    text = replace_call_site(
+        text,
+        old=(
+            "    def __init__(self, *, tp_rank: int):\n"
+            "        self.tp_rank = tp_rank\n"
+            "        self._model_update_group: dict = {}\n"
+        ),
+        new=(
+            "    def __init__(self, *, tp_rank: int, model_runner_ref):\n"
+            "        self.tp_rank = tp_rank\n"
+            "        self._model_update_group: dict = {}\n"
+            "        self._mr = model_runner_ref\n"
+        ),
+    )
+    # Imports needed by the new method body.
     text = insert_after(
         text,
         anchor="import logging\n",
@@ -95,17 +107,15 @@ def transform(wt: Path) -> None:
         ),
     )
     wu.write_text(text)
-    append_to_file(wu, func_text)
 
-    # model_runner.py: add module import; replace the inline call inside
-    # `update_expert_location` body with a module-qualified call.
+    # ModelRunner: pass ``model_runner_ref=self`` to WeightUpdater ctor;
+    # rewrite the inline call inside ``update_expert_location``.
     text = mr.read_text()
-    if "from sglang.srt.model_executor import weight_updater\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig\n",
-            addition="from sglang.srt.model_executor import weight_updater\n",
-        )
+    text = replace_call_site(
+        text,
+        old="        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank)\n",
+        new="        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n",
+    )
     text = replace_call_site(
         text,
         old=(
@@ -116,74 +126,35 @@ def transform(wt: Path) -> None:
             "                )\n"
         ),
         new=(
-            "                weight_updater.update_weights_from_disk(\n"
-            "                    model_runner_ref=self,\n"
-            "                    model_path=get_global_server_args().model_path,\n"
-            "                    load_format=get_global_server_args().load_format,\n"
+            "                self.weight_updater.update_weights_from_disk(\n"
+            "                    get_global_server_args().model_path,\n"
+            "                    get_global_server_args().load_format,\n"
             "                    weight_name_filter=weight_name_filter,\n"
             "                )\n"
         ),
     )
     mr.write_text(text)
 
-    # tp_worker.py: add module import; rewrite caller.
+    # tp_worker.py: rewrite caller (positional args preserved).
     text = tw.read_text()
-    if "from sglang.srt.model_executor import weight_updater\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-            addition="from sglang.srt.model_executor import weight_updater\n",
-        )
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self.model_runner.update_weights_from_disk(\n"
-            "            recv_req.model_path,\n"
-            "            recv_req.load_format,\n"
-            "            recapture_cuda_graph=recv_req.recapture_cuda_graph,\n"
-            "        )\n"
-        ),
-        new=(
-            "        success, message = weight_updater.update_weights_from_disk(\n"
-            "            model_runner_ref=self.model_runner,\n"
-            "            model_path=recv_req.model_path,\n"
-            "            load_format=recv_req.load_format,\n"
-            "            recapture_cuda_graph=recv_req.recapture_cuda_graph,\n"
-            "        )\n"
-        ),
+        old="        success, message = self.model_runner.update_weights_from_disk(\n",
+        new="        success, message = self.model_runner.weight_updater.update_weights_from_disk(\n",
     )
     tw.write_text(text)
 
-    # eagle_worker_v2.py: add module import; rewrite caller.
+    # eagle_worker_v2.py: rewrite caller.
     text = ew.read_text()
-    if "from sglang.srt.model_executor import weight_updater\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import CaptureHiddenMode, ForwardBatch\n",
-            addition="from sglang.srt.model_executor import weight_updater\n",
-        )
     text = replace_call_site(
         text,
-        old=(
-            "        success, message = self._draft_worker.draft_runner.update_weights_from_disk(\n"
-            "            recv_req.model_path,\n"
-            "            recv_req.load_format,\n"
-            "            recapture_cuda_graph=recv_req.recapture_cuda_graph,\n"
-            "        )\n"
-        ),
-        new=(
-            "        success, message = weight_updater.update_weights_from_disk(\n"
-            "            model_runner_ref=self._draft_worker.draft_runner,\n"
-            "            model_path=recv_req.model_path,\n"
-            "            load_format=recv_req.load_format,\n"
-            "            recapture_cuda_graph=recv_req.recapture_cuda_graph,\n"
-            "        )\n"
-        ),
+        old="        success, message = self._draft_worker.draft_runner.update_weights_from_disk(\n",
+        new="        success, message = self._draft_worker.draft_runner.weight_updater.update_weights_from_disk(\n",
     )
     ew.write_text(text)
 
     git_add_and_commit(
-        "Extract update_weights_from_disk to free function in weight_updater",
+        "Move update_weights_from_disk onto WeightUpdater",
         cwd=str(wt),
     )
 

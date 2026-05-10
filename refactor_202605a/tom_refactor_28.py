@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Cut `update_weights_from_ipc` from ModelRunner; paste as a free function in
-`weight_updater.py`. Update tp_worker.py call site.
+"""Move ``update_weights_from_ipc`` onto ``WeightUpdater``.
 
-R4 concession: takes `model_runner_ref` kwarg because
-`SGLangCheckpointEngineWorkerExtensionImpl` ctor accepts a full `ModelRunner`
-reference. Standard R4 kwarg name (matches /25, /32, /33, /34, /35).
+- Method cut from ModelRunner and pasted (still as instance method) onto
+  WeightUpdater. The body's
+  ``SGLangCheckpointEngineWorkerExtensionImpl(self)`` is rewritten to
+  ``SGLangCheckpointEngineWorkerExtensionImpl(self._mr)`` (the extension
+  expects a ``ModelRunner`` reference).
+- Method deleted from ModelRunner.
+- ``tp_worker.py`` caller rewritten to
+  ``self.model_runner.weight_updater.update_weights_from_ipc(recv_req)``.
 
 Usage:
     uv run --python 3.12 tom_refactor_28.py run
@@ -22,11 +26,8 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
-    append_to_file,
     cut_lines,
-    dedent_method_to_function,
     find_method_lines,
-    insert_after,
     replace_call_site,
 )
 from _runner import run_pr
@@ -42,48 +43,55 @@ def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
+    ew = wt / "python/sglang/srt/speculative/eagle_worker_v2.py"
 
     s, e = find_method_lines(
         mr.read_text(),
         class_name="ModelRunner",
         method_name="update_weights_from_ipc",
     )
-    func_text = (
-        dedent_method_to_function(cut_lines(mr, s, e))
-        .replace(
-            "def update_weights_from_ipc(self, recv_req):",
-            "def update_weights_from_ipc(*, model_runner_ref, recv_req):",
-        )
-        .replace(
-            "SGLangCheckpointEngineWorkerExtensionImpl(self)",
-            "SGLangCheckpointEngineWorkerExtensionImpl(model_runner_ref)",
-        )
+    method_text = cut_lines(mr, s, e).replace(
+        "SGLangCheckpointEngineWorkerExtensionImpl(self)",
+        "SGLangCheckpointEngineWorkerExtensionImpl(self._mr)",
     )
-    append_to_file(wu, func_text)
 
-    # tp_worker.py already imports `weight_updater` (added in /25); just rewrite
-    # the call site.
-    text = tw.read_text()
-    if "from sglang.srt.model_executor import weight_updater\n" not in text:
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-            addition="from sglang.srt.model_executor import weight_updater\n",
+    # Splice the new method into ``WeightUpdater``: insert immediately before
+    # the module-level helpers section (sentinel = the trailing
+    # ``def _model_load_weights_direct(...)`` block added in /27).
+    text = wu.read_text()
+    sentinel = "\ndef _model_load_weights_direct("
+    if sentinel not in text:
+        raise RuntimeError(
+            "Expected ``_model_load_weights_direct`` in weight_updater.py "
+            "(added in /27). Has the chain run?"
         )
+    text = text.replace(
+        sentinel,
+        "\n" + method_text.rstrip() + "\n\n" + sentinel,
+        1,
+    )
+    wu.write_text(text)
+
+    # tp_worker.py: rewrite caller.
+    text = tw.read_text()
     text = replace_call_site(
         text,
         old="        success, message = self.model_runner.update_weights_from_ipc(recv_req)\n",
-        new=(
-            "        success, message = weight_updater.update_weights_from_ipc(\n"
-            "            model_runner_ref=self.model_runner,\n"
-            "            recv_req=recv_req,\n"
-            "        )\n"
-        ),
+        new="        success, message = self.model_runner.weight_updater.update_weights_from_ipc(recv_req)\n",
     )
     tw.write_text(text)
 
+    # eagle_worker_v2.py: rewrite caller.
+    text = ew.read_text()
+    text = replace_call_site(
+        text,
+        old="        success, message = self._draft_worker.draft_runner.update_weights_from_ipc(\n",
+        new="        success, message = self._draft_worker.draft_runner.weight_updater.update_weights_from_ipc(\n",
+    )
+    ew.write_text(text)
+
     git_add_and_commit(
-        "Extract update_weights_from_ipc to free function in weight_updater",
+        "Move update_weights_from_ipc onto WeightUpdater",
         cwd=str(wt),
     )
 

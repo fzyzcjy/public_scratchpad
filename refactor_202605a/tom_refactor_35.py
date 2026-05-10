@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Delete the 7 hybrid-arch property delegates left behind by /34 on
 ModelRunner; ripple all consumers to call the free functions in
-`configs.hybrid_arch` directly via module-qualified calls.
+`configs.hybrid_arch` directly.
+
+Each hybrid_arch function takes `model_config: ModelConfig`; `mamba2_config`
+and `mambaish_config` additionally need `is_draft_worker: bool` kwarg.
 
 Per Ch1 rule "**不留 1 行 delegate**", drop the delegates as soon as consumers
-are updated to call the free function. The `_get_linear_attn_registry_result`
-helper (and the `_UNSET` sentinel + `_linear_attn_registry_cache` field) stay
-on ModelRunner — that helper writes back to per-instance cache state, so it
-isn't a property delegate.
+are updated.
+
+Usage:
+    uv run --python 3.12 tom_refactor_35.py run
+    uv run --python 3.12 tom_refactor_35.py verify
 """
 
 # /// script
@@ -32,25 +36,38 @@ TARGET = "tom_refactor/35"
 
 _HYBRID_ARCH_IMPORT = "from sglang.srt.configs import hybrid_arch\n"
 
-
-def _import_block(names: list[str]) -> str:
-    # Module-qualified style: a single import line for the hybrid_arch module,
-    # regardless of how many of its functions the consumer file uses. The
-    # `names` parameter is kept only for API compatibility with the call sites
-    # below; the produced import is the same regardless of names.
-    del names
-    return _HYBRID_ARCH_IMPORT
+# Functions that need only model_config.
+_NO_KWARG = {
+    "qwen3_next_config",
+    "hybrid_lightning_config",
+    "hybrid_gdn_config",
+    "kimi_linear_config",
+    "linear_attn_model_spec",
+}
+# Functions that ALSO need is_draft_worker.
+_WITH_DRAFT = {
+    "mamba2_config",
+    "mambaish_config",
+}
 
 
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
-    """Each free function takes a single `model_runner_ref` kwarg (R4 unified
-    approach in /34); rewrite `<accessor>.<name>` ->
-    `hybrid_arch.<name>(model_runner_ref=<accessor>)`."""
+    """Rewrite `<accessor>.<name>` access into a hybrid_arch.<name>(...) call.
+
+    For functions in _NO_KWARG, the call is hybrid_arch.<name>(<accessor>.model_config).
+    For functions in _WITH_DRAFT, the call additionally passes is_draft_worker.
+    """
     for name in function_names:
-        text = text.replace(
-            f"{accessor}.{name}",
-            f"hybrid_arch.{name}(model_runner_ref={accessor})",
-        )
+        if name in _WITH_DRAFT:
+            replacement = (
+                f"hybrid_arch.{name}("
+                f"{accessor}.model_config, "
+                f"is_draft_worker={accessor}.is_draft_worker"
+                f")"
+            )
+        else:
+            replacement = f"hybrid_arch.{name}({accessor}.model_config)"
+        text = text.replace(f"{accessor}.{name}", replacement)
     return text
 
 
@@ -74,7 +91,7 @@ def transform(wt: Path) -> None:
 
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
 
-    # ---- Delete each delegate method on ModelRunner. ----
+    # Delete each delegate method on ModelRunner.
     delegate_methods = [
         "qwen3_next_config",
         "hybrid_lightning_config",
@@ -88,15 +105,11 @@ def transform(wt: Path) -> None:
         s, e = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name=name)
         cut_lines(mr, s, e)
 
-    # ---- Drop the module import block introduced by /34. ----
-    # The /34 script adds a single `from sglang.srt.configs import hybrid_arch`
-    # line; pre-commit (isort/ruff) leaves a single-line module import alone,
-    # so we look for that one form. (After /35, model_runner.py no longer uses
-    # any hybrid_arch.* — all consumers are now downstream.)
+    # Drop the hybrid_arch module import from ModelRunner — after delegates are
+    # gone, ModelRunner has no remaining hybrid_arch.* call.
     text = mr.read_text()
-    if _HYBRID_ARCH_IMPORT not in text:
-        raise AssertionError("hybrid_arch module import not found in expected form")
-    text = text.replace(_HYBRID_ARCH_IMPORT, "")
+    if _HYBRID_ARCH_IMPORT in text:
+        text = text.replace(_HYBRID_ARCH_IMPORT, "")
     mr.write_text(text)
 
     # ---- Ripple consumers ----
@@ -168,20 +181,16 @@ def transform(wt: Path) -> None:
         )
 
     # Test fake fix: pool_configurator's test mocks `mr.mambaish_config = None`
-    # directly on a MagicMock. After /35, consumers call hybrid_arch.X(mr)
-    # which traverses `mr.model_config.hf_config.get_text_config()` and falls
-    # back to `mr._get_linear_attn_registry_result()`. The fake
-    # `hf_config = SimpleNamespace(...)` lacks `get_text_config`, and
-    # `_get_linear_attn_registry_result` defaults to a truthy MagicMock that
-    # makes `mambaish_config(...)` return `MagicMock()` instead of `None`.
-    # Stub both so mambaish_config evaluates to None as the test intends.
+    # directly on a MagicMock. After /35, consumers call
+    # hybrid_arch.mambaish_config(mr.model_config, is_draft_worker=...).
+    # The function traverses `model_config.hf_config.get_text_config()`. Stub
+    # `get_text_config` so the traversal succeeds and falls back to None.
     test_pc = wt / "test/registered/unit/model_executor/test_pool_configurator.py"
     text = test_pc.read_text()
     text = text.replace(
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n',
         '    mc.hf_config = SimpleNamespace(architectures=["LlamaForCausalLM"])\n'
-        '    mc.hf_config.get_text_config = lambda: mc.hf_config\n'
-        '    mr._get_linear_attn_registry_result = lambda: None\n',
+        '    mc.hf_config.get_text_config = lambda: mc.hf_config\n',
     )
     test_pc.write_text(text)
 
