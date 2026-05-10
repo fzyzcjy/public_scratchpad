@@ -70,6 +70,12 @@ ORDER: list[str] = [
     "drop-rank-zero-filter",
     "move-resolve-language-model",
     "move-step-span-name",
+    "kvc-introduce-skeleton",
+    "kvc-extract-mla-dim",
+    "kvc-migrate-leaves",
+    "kvc-migrate-init-pools",
+    "kvc-migrate-configure",
+    "kvc-drop-mixin-inheritance",
 ]
 
 

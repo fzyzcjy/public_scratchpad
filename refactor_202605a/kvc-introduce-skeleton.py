@@ -37,8 +37,8 @@ from _runner import run_pr
 ID = "kvc-introduce-skeleton"
 SUBJECT = "Introduce KVCacheConfigurator + KVCacheConfigResult skeletons"
 BODY = ""
-AREA = "nonmech_model_runner"
-BASE = "tom_refactor_202605a/primary/mech_model_runner"
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/move-step-span-name"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 

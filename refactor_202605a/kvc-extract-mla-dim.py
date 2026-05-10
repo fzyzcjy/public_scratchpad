@@ -52,8 +52,8 @@ from _runner import run_pr
 ID = "kvc-extract-mla-dim"
 SUBJECT = "Extract calculate_mla_kv_cache_dim to free function in mem_cache.kv_cache_configurator"
 BODY = ""
-AREA = "nonmech_model_runner"
-BASE = "tom_refactor_202605a/primary/nonmech_model_runner/kvc-introduce-skeleton"
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/kvc-introduce-skeleton"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 

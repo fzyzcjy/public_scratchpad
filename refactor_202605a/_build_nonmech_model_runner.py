@@ -27,12 +27,7 @@ CHAIN_BRANCH = "tom_refactor_202605a/primary/nonmech_model_runner"
 
 # Chain ordering. Each entry is the `<id>` part of a `<id>.py` script in this
 # directory.
-ORDER: list[str] = [
-    "kvc-introduce-skeleton",
-    "kvc-extract-mla-dim",
-    "kvc-migrate-method-bodies",
-    "kvc-drop-mixin-inheritance",
-]
+ORDER: list[str] = []
 
 
 def run(cmd: list[str], *, cwd: Path, check: bool = True) -> str:

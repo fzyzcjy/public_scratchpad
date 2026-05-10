@@ -33,8 +33,8 @@ from _runner import run_pr
 ID = "kvc-drop-mixin-inheritance"
 SUBJECT = "Drop ModelRunnerKVCacheMixin inheritance; ModelRunner uses KVCacheConfigurator directly"
 BODY = ""
-AREA = "nonmech_model_runner"
-BASE = "tom_refactor_202605a/primary/nonmech_model_runner/kvc-migrate-method-bodies"
+AREA = "mech_model_runner"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/kvc-migrate-configure"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
