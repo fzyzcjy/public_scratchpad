@@ -218,14 +218,12 @@ def transform(wt: Path) -> None:
     # Drop ``: Scheduler`` annotations.
     text = text.replace("self: Scheduler", "self")
 
-    # Drop ``if TYPE_CHECKING:`` block + Scheduler import (only contents).
+    # The ``if TYPE_CHECKING:`` block has multiple imports (Scheduler, Req,
+    # PrefillAdder, etc.). Drop only the Scheduler import line — keep the
+    # block + the ``TYPE_CHECKING`` typing import intact for the others.
     text = text.replace(
-        "if TYPE_CHECKING:\n    from sglang.srt.managers.scheduler import Scheduler\n\n",
+        "    from sglang.srt.managers.scheduler import Scheduler\n",
         "",
-    )
-    text = text.replace(
-        "from typing import TYPE_CHECKING, ",
-        "from typing import ",
     )
 
     # Replace the class header. The original file's class line is the only

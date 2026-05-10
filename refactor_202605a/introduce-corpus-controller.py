@@ -168,6 +168,29 @@ def transform(wt: Path) -> None:
 
     tm.write_text(text)
 
+    # External entrypoint callers (http_server.py).
+    import glob
+    import re as _re
+    for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
+        f = Path(fpath)
+        t = f.read_text()
+        t = _re.sub(
+            r"\btokenizer_manager\.add_external_corpus\(",
+            "tokenizer_manager.corpus_controller.add_external_corpus(",
+            t,
+        )
+        t = _re.sub(
+            r"\btokenizer_manager\.remove_external_corpus\(",
+            "tokenizer_manager.corpus_controller.remove_external_corpus(",
+            t,
+        )
+        t = _re.sub(
+            r"\btokenizer_manager\.list_external_corpora\(",
+            "tokenizer_manager.corpus_controller.list_external_corpora(",
+            t,
+        )
+        f.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

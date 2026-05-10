@@ -18,7 +18,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, replace_call_site
+from _helpers import cut_lines, find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "move-on-idle-to-scheduler-main"
@@ -78,6 +78,14 @@ def transform(wt: Path) -> None:
         new=log_idle_text
         + on_idle_text
         + "    def is_fully_idle(self, for_health_check=False) -> bool:\n",
+    )
+    # ``_maybe_log_idle_metrics`` body uses ``QueueCount.from_reqs(...)`` —
+    # add the import (was previously transitively pulled in via the
+    # runtime_checker mixin).
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.managers.scheduler_components.setup import kv_cache\n",
+        addition="from sglang.srt.observability.metrics_collector import QueueCount\n",
     )
     sched.write_text(text)
 

@@ -137,8 +137,8 @@ class RequestLogManager:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     obs_dir = wt / "python/sglang/srt/managers/observability"
+    # __init__.py created by define-scheduler-sender; just ensure dir.
     obs_dir.mkdir(exist_ok=True)
-    (obs_dir / "__init__.py").write_text("")
     new = obs_dir / "request_log_manager.py"
 
     # Cut bottom-up.
@@ -328,6 +328,20 @@ def transform(wt: Path) -> None:
             "        )",
         )
         multi.write_text(t)
+
+    # External entrypoint callers of tokenizer_manager.request_logger ->
+    # tokenizer_manager.request_log_manager.request_logger.
+    import glob
+    import re as _re
+    for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
+        f = Path(fpath)
+        t = f.read_text()
+        t = _re.sub(
+            r"\btokenizer_manager\.request_logger\b",
+            "tokenizer_manager.request_log_manager.request_logger",
+            t,
+        )
+        f.write_text(t)
 
 
 if __name__ == "__main__":

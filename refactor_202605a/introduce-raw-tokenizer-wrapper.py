@@ -203,8 +203,8 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     inputs_dir = wt / "python/sglang/srt/managers/inputs"
+    # __init__.py created by define-scheduler-sender; just ensure dir.
     inputs_dir.mkdir(exist_ok=True)
-    (inputs_dir / "__init__.py").write_text("")
     new = inputs_dir / "raw_tokenizer_wrapper.py"
     new.write_text(HEADER)
 

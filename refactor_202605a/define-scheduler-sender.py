@@ -49,11 +49,23 @@ class SchedulerSender(Protocol):
 
 
 def transform(wt: Path) -> None:
-    io_dir = wt / "python/sglang/srt/managers/io"
-    io_dir.mkdir(exist_ok=True)
-    init_file = io_dir / "__init__.py"
-    init_file.write_text("")
-    sender_file = io_dir / "scheduler_sender.py"
+    # Create all 5 manager subpackage dirs upfront with non-empty __init__.py.
+    # Empty __init__.py files on some setuptools editable-install paths fail
+    # to register as packages, manifesting as ModuleNotFoundError on the
+    # subpackage. A short docstring is enough to side-step that.
+    base = wt / "python/sglang/srt/managers"
+    for sub, doc in [
+        ("io", "IPC channel abstractions for tokenizer process."),
+        ("inputs", "Tokenizer-process input pipeline (tokenization, validation, MM)."),
+        ("outputs", "Tokenizer-process output pipeline (batch handling, response emit)."),
+        ("observability", "Tokenizer-process observability (logs, metrics)."),
+        ("control", "Tokenizer-process control plane (pause, session, weight update, lora, corpus)."),
+    ]:
+        d = base / sub
+        d.mkdir(exist_ok=True)
+        (d / "__init__.py").write_text(f'"""{doc}"""\n')
+
+    sender_file = base / "io" / "scheduler_sender.py"
     sender_file.write_text(CONTENT)
 
 

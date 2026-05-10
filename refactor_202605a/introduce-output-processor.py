@@ -118,8 +118,8 @@ class OutputProcessor:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     out_dir = wt / "python/sglang/srt/managers/outputs"
+    # __init__.py created by define-scheduler-sender; just ensure dir.
     out_dir.mkdir(exist_ok=True)
-    (out_dir / "__init__.py").write_text("")
     new = out_dir / "output_processor.py"
 
     s, e = find_method_lines(

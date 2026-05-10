@@ -226,7 +226,8 @@ def transform(wt: Path) -> None:
     text = rewire(text)
     multi_mixin.write_text(text)
 
-    # External callers in entrypoints (tokenizer_manager.abort_request -> .pause_controller.abort_request).
+    # External callers in entrypoints (tokenizer_manager.{abort_request,
+    # pause_generation, continue_generation} -> .pause_controller.<X>).
     import glob
     for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
         f = Path(fpath)
@@ -234,6 +235,16 @@ def transform(wt: Path) -> None:
         t = re.sub(
             r"\btokenizer_manager\.abort_request\(",
             "tokenizer_manager.pause_controller.abort_request(",
+            t,
+        )
+        t = re.sub(
+            r"\btokenizer_manager\.pause_generation\(",
+            "tokenizer_manager.pause_controller.pause_generation(",
+            t,
+        )
+        t = re.sub(
+            r"\btokenizer_manager\.continue_generation\(",
+            "tokenizer_manager.pause_controller.continue_generation(",
             t,
         )
         f.write_text(t)

@@ -206,6 +206,20 @@ def transform(wt: Path) -> None:
 
     tm.write_text(text)
 
+    # External entrypoint callers of tokenizer_manager.create_abort_task ->
+    # tokenizer_manager.response_emitter.create_abort_task.
+    import glob
+    import re as _re
+    for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
+        f = Path(fpath)
+        t = f.read_text()
+        t = _re.sub(
+            r"\btokenizer_manager\.create_abort_task\(",
+            "tokenizer_manager.response_emitter.create_abort_task(",
+            t,
+        )
+        f.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

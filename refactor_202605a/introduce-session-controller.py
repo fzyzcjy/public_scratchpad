@@ -147,8 +147,8 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     control_dir = wt / "python/sglang/srt/managers/control"
+    # __init__.py created by define-scheduler-sender; just ensure dir.
     control_dir.mkdir(exist_ok=True)
-    (control_dir / "__init__.py").write_text("")
     new = control_dir / "session_controller.py"
 
     # Cut _handle_open_session_req_output from facade.

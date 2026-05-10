@@ -379,6 +379,11 @@ def transform(wt: Path) -> None:
     s, e = find_function_lines(src_text, function_name="create_scheduler_watchdog")
     watchdog_lines = src_text.splitlines(keepends=True)[s:e]
     watchdog_text = "".join(watchdog_lines)
+    # ``Scheduler`` is defined later in scheduler.py, so use a string forward
+    # reference to avoid an ``F821 Undefined name`` lint error.
+    watchdog_text = watchdog_text.replace(
+        "scheduler: Scheduler,", 'scheduler: "Scheduler",'
+    )
     # The watchdog body uses ``scheduler._check_all_pools(scheduler.get_pool_stats())``
     # — already rewritten by C9 to the pool_stats_observer form. Now also
     # rewrite ``scheduler._check_all_pools(...)`` → ``scheduler.invariant_checker._check_all_pools(...)``.
@@ -422,14 +427,17 @@ def transform(wt: Path) -> None:
         ")\n",
         "",
     )
-    # Add new imports.
+    # Add new imports — invariant_checker class + WatchdogRaw (used by the
+    # watchdog free function we're moving from runtime_checker mixin to
+    # scheduler.py).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n    PoolStats,\n    SchedulerPoolStatsObserver,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.observability.invariant_checker import (\n"
             "    SchedulerInvariantChecker,\n"
             ")\n"
+            "from sglang.srt.utils.watchdog import WatchdogRaw\n"
         ),
     )
     # Drop ``SchedulerRuntimeCheckerMixin,`` from inheritance.

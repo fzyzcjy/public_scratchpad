@@ -145,6 +145,18 @@ def main() -> None:
         run(["git", "commit", "-m", msg, "--quiet"], cwd=WT)
         run_pre_commit(WT)
 
+    # Final all-files pre-commit pass to match CI behavior. CI runs
+    # ``pre-commit run --all-files``; the per-commit run only sees changed
+    # files and can miss formatting drift in files isort/black retouches
+    # later. Amend any auto-fix into the LAST commit so the chain HEAD is
+    # CI-clean.
+    print("\n=== final --all-files pre-commit pass ===", flush=True)
+    run(["pre-commit", "run", "--all-files"], cwd=WT, check=False)
+    porcelain = run(["git", "status", "--porcelain"], cwd=WT).strip()
+    if porcelain:
+        run(["git", "add", "-A"], cwd=WT)
+        run(["git", "commit", "--amend", "--no-edit", "--quiet"], cwd=WT)
+
     print("\n=== chain built. final HEAD ===", flush=True)
     run(["git", "log", "--oneline", "-32"], cwd=WT)
     head = run(["git", "rev-parse", "HEAD"], cwd=WT).strip()
