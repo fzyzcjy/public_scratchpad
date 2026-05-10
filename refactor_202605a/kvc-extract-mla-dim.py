@@ -21,9 +21,9 @@ Two internal callers in the mixin (``init_memory_pool`` /
 ``_apply_memory_pool_config`` paths) switch from
 ``self.calculate_mla_kv_cache_dim()`` to a bare from-import call —
 ``calculate_mla_kv_cache_dim(...)`` (the function name itself is
-domain-specific enough that no module prefix is needed). The mixin
-keeps the method stub for now — actual deletion happens in
-``kvc-migrate-method-bodies`` along with the other mixin methods.
+domain-specific enough that no module prefix is needed). The original
+method definition is **deleted** from the mixin in this same commit —
+this is a move, not a copy.
 
 Usage:
     uv run --python 3.12 kvc-extract-mla-dim.py run
@@ -42,6 +42,7 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
+    cut_lines,
     dedent_method_to_function,
     find_method_lines,
     insert_after,
@@ -73,7 +74,7 @@ def transform(wt: Path) -> None:
     mixin = wt / "python/sglang/srt/model_executor/model_runner_kv_cache_mixin.py"
     cfg = wt / "python/sglang/srt/mem_cache/kv_cache_configurator.py"
 
-    # ---- Cut the method out of the mixin source ----
+    # ---- Cut the method out of the mixin source (and delete it there) ----
     mixin_text = mixin.read_text()
     s, e = find_method_lines(
         mixin_text,
@@ -82,6 +83,7 @@ def transform(wt: Path) -> None:
     )
     method_text = "".join(mixin_text.splitlines(keepends=True)[s:e])
     body_text = dedent_method_to_function(method_text)
+    cut_lines(mixin, s, e)
 
     # ---- Substitute self-reads for the matching kwarg names ----
     # Signature swap: method form → free function with explicit kwargs.
