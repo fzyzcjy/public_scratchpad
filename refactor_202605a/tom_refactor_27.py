@@ -20,7 +20,6 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
-    add_to_grouped_import,
     append_to_file,
     cut_lines,
     dedent_method_to_function,
@@ -135,15 +134,18 @@ def transform(wt: Path) -> None:
 
     # No model_runner.py import needed — after /27 cuts LocalSerializedTensor
     # and its consumers (_unwrap_tensor / update_weights_from_tensor), no
-    # remaining references exist. An unused `LocalSerializedTensor` import
-    # would be stripped by pre-commit ruff F401.
+    # remaining references exist. An unused `weight_updater` import would be
+    # stripped by pre-commit ruff F401.
 
+    # tp_worker.py already imports `weight_updater` (added in /25); just rewrite
+    # the call site.
     text = tw.read_text()
-    text = add_to_grouped_import(
-        text,
-        anchor_name="update_weights_from_distributed as _free_update_weights_from_distributed",
-        new_line="    update_weights_from_tensor as _free_update_weights_from_tensor,",
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -155,7 +157,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_update_weights_from_tensor(\n"
+            "        success, message = weight_updater.update_weights_from_tensor(\n"
             "            model=self.model_runner.model,\n"
             "            tp_rank=self.model_runner.tp_rank,\n"
             "            device=self.model_runner.device,\n"

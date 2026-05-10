@@ -128,21 +128,14 @@ def transform(wt: Path) -> None:
 
     we.write_text(HEADER + init_text + "\n" + send_text)
 
+    # tp_worker.py: add module import for weight_exporter; rewrite call sites.
     text = tw.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_ipc as _free_update_weights_from_ipc,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.weight_exporter import (\n"
-            "    init_weights_send_group_for_remote_instance as _free_init_weights_send_group_for_remote_instance,\n"
-            "    send_weights_to_remote_instance as _free_send_weights_to_remote_instance,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_exporter\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -158,7 +151,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_init_weights_send_group_for_remote_instance(\n"
+            "        success, message = weight_exporter.init_weights_send_group_for_remote_instance(\n"
             "            _weights_send_group=self.model_runner._weights_send_group,\n"
             "            tp_rank=self.model_runner.tp_rank,\n"
             "            tp_size=self.model_runner.tp_size,\n"
@@ -182,7 +175,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_send_weights_to_remote_instance(\n"
+            "        success, message = weight_exporter.send_weights_to_remote_instance(\n"
             "            model=self.model_runner.model,\n"
             "            _weights_send_group=self.model_runner._weights_send_group,\n"
             "            tp_rank=self.model_runner.tp_rank,\n"

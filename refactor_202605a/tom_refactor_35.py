@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Delete the 7 hybrid-arch property delegates left behind by /34 on
 ModelRunner; ripple all consumers to call the free functions in
-`configs.hybrid_arch` directly.
+`configs.hybrid_arch` directly via module-qualified calls.
 
 Per Ch1 rule "**不留 1 行 delegate**", drop the delegates as soon as consumers
 are updated to call the free function. The `_get_linear_attn_registry_result`
@@ -29,21 +29,27 @@ from _runner import run_pr
 BASE = "tom_refactor/34"
 TARGET = "tom_refactor/35"
 
+
+_HYBRID_ARCH_IMPORT = "from sglang.srt.configs import hybrid_arch\n"
+
+
 def _import_block(names: list[str]) -> str:
-    names = sorted(set(names))
-    if len(names) == 1:
-        return f"from sglang.srt.configs.hybrid_arch import {names[0]}\n"
-    body = "".join(f"    {n},\n" for n in names)
-    return f"from sglang.srt.configs.hybrid_arch import (\n{body})\n"
+    # Module-qualified style: a single import line for the hybrid_arch module,
+    # regardless of how many of its functions the consumer file uses. The
+    # `names` parameter is kept only for API compatibility with the call sites
+    # below; the produced import is the same regardless of names.
+    del names
+    return _HYBRID_ARCH_IMPORT
 
 
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
     """Each free function takes a single `model_runner_ref` kwarg (R4 unified
-    approach in /34); rewrite `<accessor>.<name>` -> `<name>(model_runner_ref=<accessor>)`."""
+    approach in /34); rewrite `<accessor>.<name>` ->
+    `hybrid_arch.<name>(model_runner_ref=<accessor>)`."""
     for name in function_names:
         text = text.replace(
             f"{accessor}.{name}",
-            f"{name}(model_runner_ref={accessor})",
+            f"hybrid_arch.{name}(model_runner_ref={accessor})",
         )
     return text
 
@@ -57,7 +63,8 @@ def _patch_file(
 ) -> None:
     text = path.read_text()
     text = _rewrite_accesses(text, accessor=accessor, function_names=function_names)
-    text = text.replace(import_anchor, _import_block(function_names) + import_anchor)
+    if _HYBRID_ARCH_IMPORT not in text:
+        text = text.replace(import_anchor, _HYBRID_ARCH_IMPORT + import_anchor)
     path.write_text(text)
 
 
@@ -81,32 +88,15 @@ def transform(wt: Path) -> None:
         s, e = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name=name)
         cut_lines(mr, s, e)
 
-    # ---- Drop the alias-import block introduced by /34. ----
+    # ---- Drop the module import block introduced by /34. ----
+    # The /34 script adds a single `from sglang.srt.configs import hybrid_arch`
+    # line; pre-commit (isort/ruff) leaves a single-line module import alone,
+    # so we look for that one form. (After /35, model_runner.py no longer uses
+    # any hybrid_arch.* — all consumers are now downstream.)
     text = mr.read_text()
-    # Pre-commit (isort/ruff) splits the 7-symbol grouped import into a mix of
-    # single-line `import X as Y` and 1-symbol `(\n    X as Y,\n)` blocks based
-    # on line-length. Strip both forms for each of the 7 symbols.
-    for name in (
-        "hybrid_gdn_config",
-        "hybrid_lightning_config",
-        "kimi_linear_config",
-        "linear_attn_model_spec",
-        "mamba2_config",
-        "mambaish_config",
-        "qwen3_next_config",
-    ):
-        single_line = f"from sglang.srt.configs.hybrid_arch import {name} as _free_{name}\n"
-        block = (
-            "from sglang.srt.configs.hybrid_arch import (\n"
-            f"    {name} as _free_{name},\n"
-            ")\n"
-        )
-        if single_line in text:
-            text = text.replace(single_line, "")
-        elif block in text:
-            text = text.replace(block, "")
-        else:
-            raise AssertionError(f"alias import for {name} not found in expected forms")
+    if _HYBRID_ARCH_IMPORT not in text:
+        raise AssertionError("hybrid_arch module import not found in expected form")
+    text = text.replace(_HYBRID_ARCH_IMPORT, "")
     mr.write_text(text)
 
     # ---- Ripple consumers ----
@@ -131,7 +121,8 @@ def transform(wt: Path) -> None:
     hla_text = _rewrite_accesses(
         hla_text, accessor="model_runner", function_names=["mamba2_config"]
     )
-    hla_text = hla_text.replace(attn_anchor, _import_block(["mamba2_config"]) + attn_anchor)
+    if _HYBRID_ARCH_IMPORT not in hla_text:
+        hla_text = hla_text.replace(attn_anchor, _HYBRID_ARCH_IMPORT + attn_anchor)
     hla.write_text(hla_text)
 
     _patch_file(

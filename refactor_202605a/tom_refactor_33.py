@@ -80,23 +80,16 @@ def transform(wt: Path) -> None:
 
     # ---- Update model_runner.py ----
     text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.device_graphs import (\n"
-            "    init_device_graphs as _free_init_device_graphs,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.device_graphs import (\n"
-            "    init_piecewise_cuda_graphs as _free_init_piecewise_cuda_graphs,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import device_graphs\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
+            addition="from sglang.srt.model_executor import device_graphs\n",
+        )
     text = text.replace(
         "self.init_piecewise_cuda_graphs()",
         (
-            "_free_init_piecewise_cuda_graphs(\n"
+            "device_graphs.init_piecewise_cuda_graphs(\n"
             "            model_runner_ref=self,\n"
             "            resolve_language_model=resolve_language_model,\n"
             "        )"

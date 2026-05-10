@@ -78,18 +78,15 @@ def transform(wt: Path) -> None:
     dg.write_text(_DEVICE_GRAPHS_HEADER + func_text)
 
     text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
-        addition=(
-            "from sglang.srt.model_executor.device_graphs import (\n"
-            "    init_device_graphs as _free_init_device_graphs,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import device_graphs\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
+            addition="from sglang.srt.model_executor import device_graphs\n",
+        )
     text = text.replace(
         "self.init_device_graphs()",
-        "_free_init_device_graphs(model_runner_ref=self)",
+        "device_graphs.init_device_graphs(model_runner_ref=self)",
     )
     mr.write_text(text)
 

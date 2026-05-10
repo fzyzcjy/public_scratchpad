@@ -105,22 +105,15 @@ def transform(wt: Path) -> None:
 
     append_to_file(we, remote_text + "\n" + sharded_text + "\n" + gwbn_text)
 
+    # tp_worker.py already imports `weight_exporter` (added in /29); just
+    # rewrite the call site.
     text = tw.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.weight_exporter import (\n"
-            "    send_weights_to_remote_instance as _free_send_weights_to_remote_instance,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.weight_exporter import (\n"
-            "    get_weights_by_name as _free_get_weights_by_name,\n"
-            "    save_remote_model as _free_save_remote_model,\n"
-            "    save_sharded_model as _free_save_sharded_model,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_exporter\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -129,7 +122,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        parameter = _free_get_weights_by_name(\n"
+            "        parameter = weight_exporter.get_weights_by_name(\n"
             "            model=self.model_runner.model,\n"
             "            tp_size=self.model_runner.tp_size,\n"
             "            name=recv_req.name,\n"
@@ -140,17 +133,13 @@ def transform(wt: Path) -> None:
     tw.write_text(text)
 
     text = sm.read_text()
-    text = (
-        "from sglang.srt.model_executor.weight_exporter import (\n"
-        "    save_remote_model as _free_save_remote_model,\n"
-        "    save_sharded_model as _free_save_sharded_model,\n"
-        ")\n" + text
-    )
+    if "from sglang.srt.model_executor import weight_exporter\n" not in text:
+        text = "from sglang.srt.model_executor import weight_exporter\n" + text
     text = replace_call_site(
         text,
         old="        self.tp_worker.model_runner.save_remote_model(url)\n",
         new=(
-            "        _free_save_remote_model(\n"
+            "        weight_exporter.save_remote_model(\n"
             "            model=self.tp_worker.model_runner.model,\n"
             "            model_path=self.tp_worker.model_runner.model_config.model_path,\n"
             "            url=url,\n"
@@ -161,7 +150,7 @@ def transform(wt: Path) -> None:
         text,
         old="            self.draft_worker.model_runner.save_remote_model(draft_url)\n",
         new=(
-            "            _free_save_remote_model(\n"
+            "            weight_exporter.save_remote_model(\n"
             "                model=self.draft_worker.model_runner.model,\n"
             "                model_path=self.draft_worker.model_runner.model_config.model_path,\n"
             "                url=draft_url,\n"
@@ -178,7 +167,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        _free_save_sharded_model(\n"
+            "        weight_exporter.save_sharded_model(\n"
             "            model=self.tp_worker.model_runner.model,\n"
             '            path=params["path"],\n'
             '            pattern=params["pattern"],\n'

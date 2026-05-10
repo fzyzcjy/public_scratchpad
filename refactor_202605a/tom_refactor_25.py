@@ -26,7 +26,6 @@ from pathlib import Path
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
-    add_to_grouped_import,
     append_to_file,
     cut_lines,
     dedent_method_to_function,
@@ -98,18 +97,15 @@ def transform(wt: Path) -> None:
     wu.write_text(text)
     append_to_file(wu, func_text)
 
-    # model_runner.py: add free-function import; replace the inline call inside
-    # `update_expert_location` body with a direct free-function call.
+    # model_runner.py: add module import; replace the inline call inside
+    # `update_expert_location` body with a module-qualified call.
     text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig\n",
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_disk as _free_update_weights_from_disk,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -120,7 +116,7 @@ def transform(wt: Path) -> None:
             "                )\n"
         ),
         new=(
-            "                _free_update_weights_from_disk(\n"
+            "                weight_updater.update_weights_from_disk(\n"
             "                    model_runner_ref=self,\n"
             "                    model_path=get_global_server_args().model_path,\n"
             "                    load_format=get_global_server_args().load_format,\n"
@@ -130,13 +126,14 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    # tp_worker.py: add to existing grouped weight_updater import; rewrite caller.
+    # tp_worker.py: add module import; rewrite caller.
     text = tw.read_text()
-    text = add_to_grouped_import(
-        text,
-        anchor_name="init_weights_update_group",
-        new_line="    update_weights_from_disk as _free_update_weights_from_disk,",
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -147,7 +144,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_update_weights_from_disk(\n"
+            "        success, message = weight_updater.update_weights_from_disk(\n"
             "            model_runner_ref=self.model_runner,\n"
             "            model_path=recv_req.model_path,\n"
             "            load_format=recv_req.load_format,\n"
@@ -157,17 +154,14 @@ def transform(wt: Path) -> None:
     )
     tw.write_text(text)
 
-    # eagle_worker_v2.py: add new import; rewrite caller.
+    # eagle_worker_v2.py: add module import; rewrite caller.
     text = ew.read_text()
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.model_executor.forward_batch_info import CaptureHiddenMode, ForwardBatch\n",
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_disk as _free_update_weights_from_disk,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import CaptureHiddenMode, ForwardBatch\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -178,7 +172,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_update_weights_from_disk(\n"
+            "        success, message = weight_updater.update_weights_from_disk(\n"
             "            model_runner_ref=self._draft_worker.draft_runner,\n"
             "            model_path=recv_req.model_path,\n"
             "            load_format=recv_req.load_format,\n"

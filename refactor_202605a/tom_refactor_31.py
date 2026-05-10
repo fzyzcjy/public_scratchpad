@@ -6,7 +6,7 @@ to call the imported free function directly with explicit kwargs (assembled
 from `self._model_runner.X`).
 
 The `update_weights_from_disk_callable` kwarg is rebuilt at the caller site
-using `functools.partial(_free_update_weights_from_disk, model_runner_ref=...)`.
+using `functools.partial(weight_updater.update_weights_from_disk, model_runner_ref=...)`.
 
 Usage:
     uv run --python 3.12 tom_refactor_31.py run
@@ -47,8 +47,8 @@ def transform(wt: Path) -> None:
     )
     cut_lines(mr, s, e)
 
-    # eplb_manager.py: import update_expert_location + functools + free
-    # update_weights_from_disk; rewrite the caller.
+    # eplb_manager.py: import update_expert_location + functools + the
+    # weight_updater module; rewrite the caller.
     text = eplb.read_text()
     text = insert_after(
         text,
@@ -60,9 +60,7 @@ def transform(wt: Path) -> None:
         anchor="from sglang.srt.eplb.expert_location import ExpertLocationMetadata\n",
         addition=(
             "from sglang.srt.eplb.expert_location_updater import update_expert_location\n"
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_disk as _free_update_weights_from_disk,\n"
-            ")\n"
+            "from sglang.srt.model_executor import weight_updater\n"
         ),
     )
     text = replace_call_site(
@@ -83,7 +81,7 @@ def transform(wt: Path) -> None:
             "                tp_rank=self._model_runner.tp_rank,\n"
             "                expert_backup_client=self._model_runner.expert_backup_client,\n"
             "                update_weights_from_disk_callable=functools.partial(\n"
-            "                    _free_update_weights_from_disk,\n"
+            "                    weight_updater.update_weights_from_disk,\n"
             "                    model_runner_ref=self._model_runner,\n"
             "                ),\n"
             "            )\n"

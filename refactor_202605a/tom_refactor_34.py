@@ -10,8 +10,8 @@ stay byte-identical modulo `self` -> `model_runner_ref`. The helper
 `model_runner_ref._get_linear_attn_registry_result()`.
 
 ModelRunner keeps a 1-line property delegate per name (no Ch1 rename); the
-delegate calls the aliased free function. Delegate deletion + consumer
-ripple happens in /35.
+delegate calls the module-qualified free function. Delegate deletion +
+consumer ripple happens in /35.
 """
 
 # /// script
@@ -69,7 +69,7 @@ def _extract_property_to_function(
     free-function source. Body is R4 byte-identical modulo `self` ->
     `model_runner_ref`, except references to `self.<sibling>` (other extracted
     properties whose delegates will be deleted in /35) are rewired to call the
-    free function directly."""
+    free function directly (within hybrid_arch.py — unqualified)."""
     text = mr_path.read_text()
     start, end = find_method_lines(text, class_name="ModelRunner", method_name=name)
     src = text.splitlines(keepends=True)
@@ -77,7 +77,7 @@ def _extract_property_to_function(
     delegate = (
         "    @property\n"
         f"    def {name}(self):\n"
-        f"        return _free_{name}(model_runner_ref=self)\n"
+        f"        return hybrid_arch.{name}(model_runner_ref=self)\n"
         "\n"
     )
     mr_path.write_text("".join(src[:start] + [delegate] + src[end:]))
@@ -90,7 +90,8 @@ def _extract_property_to_function(
     )
     # Rewire sibling property accesses BEFORE the global `self.` swap, so we
     # produce direct free-function calls instead of relying on (about-to-be-
-    # deleted) delegates on ModelRunner.
+    # deleted) delegates on ModelRunner. These calls are within hybrid_arch.py,
+    # so they stay unqualified.
     for sibling in sibling_property_names:
         fn = fn.replace(
             f"self.{sibling}",
@@ -150,20 +151,10 @@ def transform(wt: Path) -> None:
     assert old_configs_block in text, "configs import block not found"
     text = text.replace(old_configs_block, "")
 
-    # Insert the new aliased hybrid_arch imports right where the configs
+    # Insert the new module-qualified hybrid_arch import right where the configs
     # block used to live; placement uses the existing `linear_attn_model_registry`
     # import line as anchor.
-    new_import = (
-        "from sglang.srt.configs.hybrid_arch import (\n"
-        "    hybrid_gdn_config as _free_hybrid_gdn_config,\n"
-        "    hybrid_lightning_config as _free_hybrid_lightning_config,\n"
-        "    kimi_linear_config as _free_kimi_linear_config,\n"
-        "    linear_attn_model_spec as _free_linear_attn_model_spec,\n"
-        "    mamba2_config as _free_mamba2_config,\n"
-        "    mambaish_config as _free_mambaish_config,\n"
-        "    qwen3_next_config as _free_qwen3_next_config,\n"
-        ")\n"
-    )
+    new_import = "from sglang.srt.configs import hybrid_arch\n"
     anchor = (
         "from sglang.srt.configs.linear_attn_model_registry import get_linear_attn_config\n"
     )

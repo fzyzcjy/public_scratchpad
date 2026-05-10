@@ -62,25 +62,20 @@ def transform(wt: Path) -> None:
     )
     append_to_file(wu, func_text)
 
+    # tp_worker.py already imports `weight_updater` (added in /25); just rewrite
+    # the call site.
     text = tw.read_text()
-    text = insert_after(
-        text,
-        anchor=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_tensor as _free_update_weights_from_tensor,\n"
-            ")\n"
-        ),
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_ipc as _free_update_weights_from_ipc,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old="        success, message = self.model_runner.update_weights_from_ipc(recv_req)\n",
         new=(
-            "        success, message = _free_update_weights_from_ipc(\n"
+            "        success, message = weight_updater.update_weights_from_ipc(\n"
             "            model_runner_for_checkpoint_engine=self.model_runner,\n"
             "            recv_req=recv_req,\n"
             "        )\n"

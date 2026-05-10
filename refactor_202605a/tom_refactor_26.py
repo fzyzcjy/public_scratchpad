@@ -126,20 +126,19 @@ def transform(wt: Path) -> None:
     append_to_file(wu, appended)
 
     # No model_runner.py import needed — model_runner doesn't reference
-    # `_free_update_weights_from_distributed`; only tp_worker does. Adding an
-    # unused import would be stripped by pre-commit (ruff F401), breaking
-    # downstream anchors that rely on the import being present.
+    # `weight_updater.update_weights_from_distributed`; only tp_worker does.
+    # An unused module import would be stripped by pre-commit (ruff F401),
+    # breaking downstream anchors that rely on the import being present.
 
+    # tp_worker.py already imports `weight_updater` (added in /25); just rewrite
+    # the call site.
     text = tw.read_text()
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
-        addition=(
-            "from sglang.srt.model_executor.weight_updater import (\n"
-            "    update_weights_from_distributed as _free_update_weights_from_distributed,\n"
-            ")\n"
-        ),
-    )
+    if "from sglang.srt.model_executor import weight_updater\n" not in text:
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTensors\n",
+            addition="from sglang.srt.model_executor import weight_updater\n",
+        )
     text = replace_call_site(
         text,
         old=(
@@ -152,7 +151,7 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        success, message = _free_update_weights_from_distributed(\n"
+            "        success, message = weight_updater.update_weights_from_distributed(\n"
             "            model=self.model_runner.model,\n"
             "            _model_update_group=self.model_runner._model_update_group,\n"
             "            device=self.model_runner.device,\n"
