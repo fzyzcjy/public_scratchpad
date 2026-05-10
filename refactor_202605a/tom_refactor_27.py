@@ -177,6 +177,17 @@ def transform(wt: Path) -> None:
     )
     tw.write_text(text)
 
+    # test file references _model_load_weights_direct via dotted-path string;
+    # update the path now that the helper has moved to weight_updater.
+    test_uwt = wt / "test/registered/rl/test_update_weights_from_tensor.py"
+    text = test_uwt.read_text()
+    text = replace_call_site(
+        text,
+        old="sglang.srt.model_executor.model_runner._model_load_weights_direct",
+        new="sglang.srt.model_executor.weight_updater._model_load_weights_direct",
+    )
+    test_uwt.write_text(text)
+
     git_add_and_commit(
         "Extract update_weights_from_tensor and helpers to weight_updater",
         cwd=str(wt),
