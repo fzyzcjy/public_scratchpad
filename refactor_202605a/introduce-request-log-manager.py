@@ -66,12 +66,26 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 HEADER = '''from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import os
+import pickle
+import socket
+import sys
 from collections import deque
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
+import fastapi
+
+from sglang.srt.managers.io_struct import ConfigureLoggingReq
 from sglang.srt.managers.request_state import ReqState
+from sglang.srt.observability.req_time_stats import (
+    convert_time_to_realtime,
+    real_time,
+)
 from sglang.srt.observability.request_metrics_exporter import (
     RequestMetricsExporterManager,
 )
@@ -154,10 +168,18 @@ def transform(wt: Path) -> None:
     ]
 
     def rewrite(body: str) -> str:
-        # self.server_args.X stays but switches to self.server_args reference owned
-        # by RequestLogManager. Field name is the same.
+        # self.server_args.X stays (RequestLogManager owns server_args).
+        # self.rid_to_state -> rid_to_state (for dump_requests_before_crash, which now
+        # takes rid_to_state as kwarg per design md L74).
+        body = body.replace("self.rid_to_state.items()", "rid_to_state.items()")
+        body = body.replace("self.rid_to_state[", "rid_to_state[")
         return body
 
+    # Convert dump_requests_before_crash signature to take rid_to_state as kwarg.
+    method_bodies[3] = method_bodies[3].replace(
+        "def dump_requests_before_crash(\n        self,",
+        "def dump_requests_before_crash(\n        self,\n        *,\n        rid_to_state: Dict[str, ReqState],",
+    )
     rewritten = [rewrite(b).rstrip() for b in method_bodies]
     new.write_text(HEADER + "\n\n".join(rewritten) + "\n")
 
@@ -270,12 +292,42 @@ def transform(wt: Path) -> None:
         "self.record_request_for_crash_dump(state, out_dict)",
         "self.request_log_manager.record_request_for_crash_dump(state, out_dict)",
     )
+    # dump_requests_before_crash callers: now requires rid_to_state kwarg.
+    # 1. SignalHandler.running_phase_sigquit_handler call: tokenizer_manager.dump_requests_before_crash() ->
+    #    tokenizer_manager.request_log_manager.dump_requests_before_crash(rid_to_state=tokenizer_manager.rid_to_state)
     text = text.replace(
-        "self.dump_requests_before_crash(",
-        "self.request_log_manager.dump_requests_before_crash(",
+        "self.tokenizer_manager.dump_requests_before_crash()",
+        "self.tokenizer_manager.request_log_manager.dump_requests_before_crash(\n"
+        "            rid_to_state=self.tokenizer_manager.rid_to_state,\n"
+        "        )",
+    )
+    # 2. print_exception_wrapper / other facade-internal callers (without args):
+    text = text.replace(
+        "self.dump_requests_before_crash()",
+        "self.request_log_manager.dump_requests_before_crash(rid_to_state=self.rid_to_state)",
+    )
+    # 3. print_exception_wrapper closure: func.__self__.dump_requests_before_crash() ->
+    #    func.__self__.request_log_manager.dump_requests_before_crash(rid_to_state=...)
+    text = text.replace(
+        "func.__self__.dump_requests_before_crash()",
+        "func.__self__.request_log_manager.dump_requests_before_crash(\n"
+        "            rid_to_state=func.__self__.rid_to_state,\n"
+        "        )",
     )
 
     tm.write_text(text)
+
+    # multi_tokenizer_mixin.py also has print_exception_wrapper duplicated.
+    multi = wt / "python/sglang/srt/managers/multi_tokenizer_mixin.py"
+    if multi.exists():
+        t = multi.read_text()
+        t = t.replace(
+            "func.__self__.dump_requests_before_crash()",
+            "func.__self__.request_log_manager.dump_requests_before_crash(\n"
+            "            rid_to_state=func.__self__.rid_to_state,\n"
+            "        )",
+        )
+        multi.write_text(t)
 
 
 if __name__ == "__main__":

@@ -95,6 +95,8 @@ class OutputProcessorConfig:
     speculative_algorithm: str
     speculative_num_draft_tokens: int
     dp_size: int
+    enable_lora: bool
+    served_model_name: str
 
 
 @dataclass(slots=True, kw_only=True)
@@ -149,14 +151,21 @@ def transform(wt: Path) -> None:
         "self.config.speculative_num_draft_tokens",
     )
     body = body.replace("self.server_args.dp_size", "self.config.dp_size")
+    body = body.replace("self.server_args.batch_notify_size", "self.config.batch_notify_size")
+    body = body.replace("self.server_args.enable_lora", "self.config.enable_lora")
     body = body.replace("self.enable_metrics", "self.config.enable_metrics")
-    # served_model_name (from request_tracing call) is provided as ctor kwarg through
-    # config -- but config doesn't have it; the call passes self.config.X. Leave the
-    # call literal alone -- the test of the call shape may need adjustment if that
-    # was the failure mode. Mostly the body uses local vars.
+    # served_model_name lives on facade -- now config.
     body = body.replace(
         "served_model_name=self.served_model_name,",
-        "served_model_name=self.config.served_model_name if hasattr(self.config, 'served_model_name') else '',",
+        "served_model_name=self.config.served_model_name,",
+    )
+    # raw_tokenizer_wrapper.tokenizer -> self.tokenizer (OutputProcessor's field)
+    body = body.replace(
+        "self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer"
+    )
+    # crash_dump_folder lives on request_log_manager
+    body = body.replace(
+        "self.crash_dump_folder", "self.request_log_manager.crash_dump_folder"
     )
 
     new.write_text(HEADER + body.rstrip() + "\n")
@@ -199,6 +208,8 @@ def transform(wt: Path) -> None:
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"
             "                speculative_num_draft_tokens=self.server_args.speculative_num_draft_tokens,\n"
             "                dp_size=self.server_args.dp_size,\n"
+            "                enable_lora=bool(self.server_args.lora_paths),\n"
+            "                served_model_name=self.server_args.served_model_name,\n"
             "            ),\n"
             "        )\n"
             "\n"

@@ -76,6 +76,7 @@ from sglang.srt.managers.io_struct import (
     PauseGenerationReqInput,
 )
 from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.scheduler import is_health_check_generate_req
 from sglang.srt.utils.aio_rwlock import RWLock
 from sglang.utils import TypeBasedDispatcher
 
@@ -131,8 +132,29 @@ def transform(wt: Path) -> None:
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
         cut_blocks[n] = cut_lines(tm, s, e)
 
-    # Compose new file (keep original method order: pause -> continue -> abort -> _handle_abort_req).
-    bodies = [cut_blocks[n] for n in method_names]
+    # Compose new file. Apply self.X rewrites within method bodies before writing:
+    # - self.enable_metrics             -> self.config.enable_metrics
+    # - self.server_args.weight_version -> self.config.weight_version
+    # - self.server_args.skip_tokenizer_init -> self.config.skip_tokenizer_init
+    # - self.raw_tokenizer_wrapper.tokenizer -> self.tokenizer (field on PauseController)
+    # - self.request_metrics_recorder.metrics_collector -> self.metrics_collector (field)
+    def rewrite_body(body: str) -> str:
+        body = body.replace("self.enable_metrics", "self.config.enable_metrics")
+        body = body.replace("self.server_args.weight_version", "self.config.weight_version")
+        body = body.replace(
+            "self.server_args.skip_tokenizer_init",
+            "self.config.skip_tokenizer_init",
+        )
+        body = body.replace(
+            "self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer"
+        )
+        body = body.replace(
+            "self.request_metrics_recorder.metrics_collector",
+            "self.metrics_collector",
+        )
+        return body
+
+    bodies = [rewrite_body(cut_blocks[n]) for n in method_names]
     new.write_text(HEADER + "\n\n".join(b.rstrip() for b in bodies) + "\n")
 
     # ===== Drop is_pause/is_pause_cond fields from init_running_status =====
@@ -203,6 +225,18 @@ def transform(wt: Path) -> None:
     text = multi_mixin.read_text()
     text = rewire(text)
     multi_mixin.write_text(text)
+
+    # External callers in entrypoints (tokenizer_manager.abort_request -> .pause_controller.abort_request).
+    import glob
+    for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
+        f = Path(fpath)
+        t = f.read_text()
+        t = re.sub(
+            r"\btokenizer_manager\.abort_request\(",
+            "tokenizer_manager.pause_controller.abort_request(",
+            t,
+        )
+        f.write_text(t)
 
 
 if __name__ == "__main__":

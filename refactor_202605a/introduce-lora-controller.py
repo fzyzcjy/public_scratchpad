@@ -45,7 +45,7 @@ HEADER = '''from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import fastapi
 
@@ -53,7 +53,12 @@ from sglang.srt.lora.lora_registry import LoRARef, LoRARegistry
 from sglang.srt.managers.io_struct import (
     EmbeddingReqInput,
     GenerateReqInput,
+    LoadLoRAAdapterFromTensorsReqInput,
+    LoadLoRAAdapterFromTensorsReqOutput,
     LoadLoRAAdapterReqInput,
+    LoadLoRAAdapterReqOutput,
+    UnloadLoRAAdapterReqInput,
+    UnloadLoRAAdapterReqOutput,
 )
 from sglang.srt.server_args import ServerArgs
 
@@ -73,6 +78,7 @@ class LoraController:
     """LoRA load/unload/LRU + per-request acquire/release."""
 
     server_args: ServerArgs
+    auto_create_handle_loop: Callable[[], None]
     update_lora_adapter_communicator: Any = None  # set after facade.init_communicators
     config: LoraControllerConfig = None  # type: ignore[assignment]
     lora_registry: LoRARegistry = None  # type: ignore[assignment]
@@ -170,6 +176,7 @@ def transform(wt: Path) -> None:
             "        # Lora controller\n"
             "        self.lora_controller = LoraController(\n"
             "            server_args=self.server_args,\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "            update_lora_adapter_communicator=getattr(self, '_update_lora_adapter_communicator', None),\n"
             "            config=LoraControllerConfig(\n"
             "                enable_lora=bool(self.server_args.lora_paths),\n"
@@ -217,6 +224,12 @@ def transform(wt: Path) -> None:
         text = text.replace(
             "tokenizer_manager.unload_lora_adapter(",
             "tokenizer_manager.lora_controller.unload_lora_adapter(",
+        )
+        # tokenizer_manager.lora_registry attribute access -> via lora_controller
+        text = _re.sub(
+            r"\btokenizer_manager\.lora_registry\b",
+            "tokenizer_manager.lora_controller.lora_registry",
+            text,
         )
         f.write_text(text)
 

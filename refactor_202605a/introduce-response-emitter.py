@@ -64,12 +64,13 @@ HEADER = '''from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
 import fastapi
 
 from sglang.srt.environ import envs
-from sglang.srt.http_status import HTTPStatus
+from sglang.srt.managers import logprob_ops
 from sglang.srt.managers.control.lora_controller import LoraController
 from sglang.srt.managers.control.pause_controller import PauseController
 from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput
@@ -87,6 +88,7 @@ _REQUEST_STATE_WAIT_TIMEOUT = envs.SGLANG_REQUEST_STATE_WAIT_TIMEOUT.get()
 @dataclass(slots=True, kw_only=True)
 class ResponseEmitterConfig:
     incremental_streaming_output: bool
+    enable_lora: bool
 
 
 @dataclass(slots=True, kw_only=True)
@@ -127,6 +129,10 @@ def transform(wt: Path) -> None:
             "self.server_args.incremental_streaming_output",
             "self.config.incremental_streaming_output",
         )
+        body = body.replace(
+            "self.server_args.enable_lora",
+            "self.config.enable_lora",
+        )
         return body
 
     bodies = [rewrite(cut_blocks[n]) for n in method_names]
@@ -163,6 +169,7 @@ def transform(wt: Path) -> None:
             "            request_metrics_recorder=self.request_metrics_recorder,\n"
             "            config=ResponseEmitterConfig(\n"
             "                incremental_streaming_output=self.server_args.incremental_streaming_output,\n"
+            "                enable_lora=bool(self.server_args.lora_paths),\n"
             "            ),\n"
             "        )\n"
             "\n"

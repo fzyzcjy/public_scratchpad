@@ -57,6 +57,8 @@ from typing import Any, Awaitable, List, Optional, Tuple, Union
 
 import fastapi
 
+from typing import Callable
+
 from sglang.srt.managers.control.pause_controller import PauseController
 from sglang.srt.managers.io_struct import (
     UpdateWeightFromDiskReqInput,
@@ -85,6 +87,7 @@ class WeightDiskUpdateController:
     pause_controller: PauseController
     model_update_lock: RWLock
     server_args: ServerArgs  # R4 transitional: directly mutates model_path/load_format/weight_version
+    auto_create_handle_loop: Callable[[], None]
     config: WeightDiskUpdateControllerConfig
     initial_weights_loaded: bool = True
     model_update_result: Optional[Awaitable[UpdateWeightFromDiskReqOutput]] = None
@@ -140,9 +143,7 @@ def transform(wt: Path) -> None:
         body = body.replace("self.server_args.dp_size", "self.config.dp_size")
         body = body.replace("self.served_model_name = ", "self.server_args.served_model_name = ")
         body = body.replace("self.model_path = model_path", "self.server_args.model_path = model_path")
-        # auto_create_handle_loop call -- caller-side guard handled by facade route handler;
-        # remove the call inside the moved method.
-        body = body.replace("        self.auto_create_handle_loop()\n\n", "")
+        # auto_create_handle_loop kept as Callable injection (no deletion -- Ch1 forbids).
         return body
 
     rewritten = {n: rewrite(cut_blocks[n]) for n in method_names}
@@ -204,6 +205,7 @@ def transform(wt: Path) -> None:
             "            pause_controller=self.pause_controller,\n"
             "            model_update_lock=self.model_update_lock,\n"
             "            server_args=self.server_args,\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "            config=WeightDiskUpdateControllerConfig(\n"
             "                dp_size=self.server_args.dp_size,\n"
             "                initial_load_format=self.server_args.load_format,\n"

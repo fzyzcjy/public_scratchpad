@@ -255,6 +255,29 @@ def transform(wt: Path) -> None:
     text = rewrite_self_field_refs(text)
     control.write_text(text)
 
+    # ===== External callers (entrypoints/, template_manager.py) =====
+    # tokenizer_manager.tokenizer / .processor -> .raw_tokenizer_wrapper.tokenizer / .processor
+    import glob
+    external_files = [Path(p) for p in glob.glob(
+        str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True
+    )]
+    external_files.append(wt / "python/sglang/srt/managers/template_manager.py")
+    for f in external_files:
+        if not f.exists():
+            continue
+        t = f.read_text()
+        t = re.sub(
+            r"\btokenizer_manager\.tokenizer\b",
+            "tokenizer_manager.raw_tokenizer_wrapper.tokenizer",
+            t,
+        )
+        t = re.sub(
+            r"\btokenizer_manager\.processor\b",
+            "tokenizer_manager.raw_tokenizer_wrapper.processor",
+            t,
+        )
+        f.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

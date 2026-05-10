@@ -38,11 +38,18 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 HEADER = '''from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Callable, List, Optional
 
+from sglang.srt.managers.communicator import FanOutCommunicator
 from sglang.srt.managers.io_struct import (
     AddExternalCorpusReqInput,
+    AddExternalCorpusReqOutput,
+    ListExternalCorporaReqInput,
+    ListExternalCorporaReqOutput,
+    RemoveExternalCorpusReqInput,
+    RemoveExternalCorpusReqOutput,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,6 +70,10 @@ class CorpusController:
     list_external_corpora_communicator: Any
     tokenizer: Optional[Any]
     config: CorpusControllerConfig
+    # Facade callable injected so we can ensure the handle_loop is running
+    # before sending RPCs (originally the moved methods called
+    # self.auto_create_handle_loop() which only exists on TokenizerManager).
+    auto_create_handle_loop: Callable[[], None]
 
 '''
 
@@ -99,7 +110,21 @@ def transform(wt: Path) -> None:
             "self: TokenizerManager\n", "self\n"
         )
 
-    bodies = [strip_typehint(cut_blocks[n]) for n in method_names]
+    def rewrite_body(body: str) -> str:
+        body = body.replace(
+            "self.server_args.speculative_algorithm",
+            "self.config.speculative_algorithm",
+        )
+        body = body.replace(
+            "self.server_args.speculative_ngram_external_corpus_max_tokens",
+            "self.config.max_external_corpus_tokens",
+        )
+        body = body.replace(
+            "self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer"
+        )
+        return body
+
+    bodies = [rewrite_body(strip_typehint(cut_blocks[n])) for n in method_names]
     new.write_text(HEADER + "\n\n".join(b.rstrip() for b in bodies) + "\n")
 
     # ===== Update tokenizer_manager.py =====
@@ -133,6 +158,7 @@ def transform(wt: Path) -> None:
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"
             "                max_external_corpus_tokens=self.server_args.speculative_ngram_external_corpus_max_tokens,\n"
             "            ),\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "        )\n"
             "\n"
             "        # Session controller\n"
