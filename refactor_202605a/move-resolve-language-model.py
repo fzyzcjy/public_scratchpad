@@ -36,7 +36,6 @@ from _helpers import (
     append_to_file,
     cut_lines,
     find_function_lines,
-    insert_after,
     replace_call_site,
 )
 from _runner import run_pr
@@ -59,22 +58,6 @@ def transform(wt: Path) -> None:
 
     append_to_file(ml_utils, func_text.rstrip() + "\n")
 
-    # ModelRunner still references the symbol at the
-    # ``init_piecewise_cuda_graphs`` call site (kwarg pass-through). Add an
-    # import so the name resolves; place after the existing ``model_loader``
-    # imports cluster (anchor: ``set_default_torch_dtype`` is already imported
-    # from the same module elsewhere in the chain, but we use a fresh anchor
-    # tied to ModelConfig from ``configs.model_config`` to stay independent).
-    text = mr.read_text()
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.constants import GPU_MEMORY_TYPE_WEIGHTS\n",
-        addition=(
-            "from sglang.srt.model_loader.utils import resolve_language_model\n"
-        ),
-    )
-    mr.write_text(text)
-
     # fp4 caller: rewrite local-import path.
     text = fp4.read_text()
     text = replace_call_site(
@@ -83,6 +66,17 @@ def transform(wt: Path) -> None:
         new="from sglang.srt.model_loader.utils import resolve_language_model",
     )
     fp4.write_text(text)
+
+    # device_graphs caller (local import inside ``init_piecewise_cuda_graphs``,
+    # added by ``extract-piecewise-cuda-graphs``): rewrite to the new home.
+    dg = wt / "python/sglang/srt/model_executor/device_graphs.py"
+    text = dg.read_text()
+    text = replace_call_site(
+        text,
+        old="from sglang.srt.model_executor.model_runner import resolve_language_model",
+        new="from sglang.srt.model_loader.utils import resolve_language_model",
+    )
+    dg.write_text(text)
 
 if __name__ == "__main__":
     run_pr(
