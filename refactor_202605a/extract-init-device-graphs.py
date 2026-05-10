@@ -33,7 +33,7 @@ SUBJECT = "Extract init_device_graphs to free function in model_executor.device_
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-update-expert-location"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 
 _DEVICE_GRAPHS_HEADER = '''\
@@ -95,7 +95,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,

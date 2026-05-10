@@ -31,7 +31,7 @@ SUBJECT = "Extract kernel_warmup and _flashinfer_autotune to free functions"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-autotune-helpers"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 
 def transform(wt: Path) -> None:
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,

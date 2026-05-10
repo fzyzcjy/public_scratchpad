@@ -1,23 +1,26 @@
 """Shared runner for `<id>.py` transform scripts in tom_refactor_202605a chain.
 
+Scripts now describe a single commit by identifier; they do **not** push to
+any per-commit branch. Push semantics are handled by the chain-rebuild
+orchestrators (`_build_<area>.py`). See PR_CHAIN.md for the workflow.
+
 Each per-PR script defines a `transform(wt: Path)` function that mutates the
-worktree (no commit) and calls `run_pr(transform=..., base=..., target=...,
-id=..., subject=..., body=...)`. The runner builds the commit message itself
-from `id`/`subject`/`body` so that commit message and PR description stay in
-lockstep — see PR_CHAIN.md "PR body / commit description 规则".
+worktree (no commit) and calls
+`run_pr(transform=..., base=..., area_branch=..., id=..., subject=..., body=...)`.
+The runner builds the commit message itself from `id`/`subject`/`body` so
+that commit message and (eventual) PR description stay in lockstep.
 
 Three modes (typer subcommand):
 
     run     create a fresh worktree at BASE, run transform, commit with the
-            formatted message, run pre-commit, and force-push the resulting
-            commit as TARGET. This is the production flow used to (re-)build
-            the chain.
-    verify  create a fresh worktree at BASE, run transform, commit, run
-            pre-commit, and diff against the existing TARGET on upstream.
-            PASS = no diff. Use for review of an already-pushed PR.
+            formatted message, run pre-commit. Builds the commit locally;
+            does NOT push anywhere — the chain orchestrator owns the push.
+    verify  find the commit in upstream/<area_branch> whose subject starts
+            with `<id>: `, create a worktree at that commit's parent, run
+            transform, commit, run pre-commit, and diff against the found
+            commit. PASS = no diff.
     apply   run transform on a caller-supplied worktree directory (no commit,
-            no push). Use for manual debugging — point at a local checkout of
-            BASE and inspect the resulting working tree.
+            no push). Use for manual debugging.
 
 Commit message format:
 
@@ -57,12 +60,12 @@ def _exec(cmd: list[str], *, cwd: Optional[Path] = None, check: bool = True) -> 
 
 
 def _make_worktree(target_dir: Path, base_ref: str) -> None:
+    """`base_ref` may be a local revision (sha, refname) or `upstream/<ref>` after fetch."""
     if target_dir.exists():
         _exec(["git", "worktree", "remove", "--force", str(target_dir)], cwd=REPO, check=False)
         if target_dir.exists():
             shutil.rmtree(target_dir)
-    _exec(["git", "fetch", "upstream", base_ref], cwd=REPO)
-    _exec(["git", "worktree", "add", "--detach", str(target_dir), f"upstream/{base_ref}"], cwd=REPO)
+    _exec(["git", "worktree", "add", "--detach", str(target_dir), base_ref], cwd=REPO)
 
 
 def _build_commit_message(*, id: str, subject: str, body: str) -> str:
@@ -74,12 +77,13 @@ def _build_commit_message(*, id: str, subject: str, body: str) -> str:
     return "\n".join(parts) + "\n"
 
 
-def _commit(wt: Path, *, message: str) -> None:
+def _commit(wt: Path, *, message: str) -> bool:
     porcelain = _exec(["git", "status", "--porcelain"], cwd=wt).strip()
     if not porcelain:
-        return
+        return False
     _exec(["git", "add", "-A"], cwd=wt)
     _exec(["git", "commit", "-m", message, "--quiet"], cwd=wt)
+    return True
 
 
 def _run_pre_commit(wt: Path) -> None:
@@ -93,19 +97,42 @@ def _run_pre_commit(wt: Path) -> None:
         _exec(["git", "commit", "--amend", "--no-edit", "--quiet"], cwd=wt)
 
 
+def _find_chain_commit(area_branch: str, id: str) -> str:
+    """Return the SHA of the commit in upstream/<area_branch> whose subject
+    starts with `<id>: `. Raises if not found or ambiguous.
+    """
+    _exec(["git", "fetch", "upstream", area_branch], cwd=REPO)
+    log = _exec(
+        ["git", "log", "--format=%H %s", f"upstream/{area_branch}"],
+        cwd=REPO,
+    )
+    matches = [
+        line.split(" ", 1)[0]
+        for line in log.splitlines()
+        if line.partition(" ")[2].startswith(f"{id}: ")
+    ]
+    if not matches:
+        raise RuntimeError(f"no commit with subject prefix '{id}: ' on upstream/{area_branch}")
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"multiple commits with subject prefix '{id}: ' on upstream/{area_branch}: {matches}"
+        )
+    return matches[0]
+
+
 def _cleanup(wt: Path) -> None:
     _exec(["git", "worktree", "remove", "--force", str(wt)], cwd=REPO, check=False)
 
 
-def _safe_wt_name(target: str) -> str:
-    return target.replace("/", "-")
+def _safe_wt_name(s: str) -> str:
+    return s.replace("/", "-")
 
 
 def run_pr(
     *,
     transform: Callable[[Path], None],
     base: str,
-    target: str,
+    area_branch: str,
     id: str,
     subject: str,
     body: str,
@@ -116,64 +143,50 @@ def run_pr(
 
     @app.command()
     def run(
-        keep: Annotated[bool, typer.Option(help="Keep worktree after push (for inspection)")] = False,
+        keep: Annotated[bool, typer.Option(help="Keep worktree after build (for inspection)")] = False,
     ) -> None:
-        """Build the PR commit and force-push to upstream."""
-        wt = Path(f"/tmp/refactor-wt-{_safe_wt_name(target)}")
-        _make_worktree(wt, base)
+        """Build the commit locally on a worktree at BASE; no push."""
+        wt = Path(f"/tmp/refactor-wt-{_safe_wt_name(id)}")
+        _exec(["git", "fetch", "upstream", base], cwd=REPO)
+        _make_worktree(wt, f"upstream/{base}")
         sys.path.insert(0, str(SKILL_PATH))
         transform(wt)
-        _commit(wt, message=commit_message)
-        head_after = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
-        head_base = _exec(["git", "rev-parse", f"upstream/{base}"], cwd=REPO).strip()
-        if head_after == head_base:
-            print(f"WARN: transform produced no commit; force-pushing BASE to {target}")
-        else:
+        committed = _commit(wt, message=commit_message)
+        if committed:
             _run_pre_commit(wt)
-        _exec(["git", "push", "-f", "upstream", f"HEAD:refs/heads/{target}"], cwd=wt)
-        # Sync local branch to upstream so `git branch` view stays clean.
-        _exec(["git", "fetch", "upstream", target], cwd=REPO)
-        new_head = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
-        _exec(
-            ["git", "update-ref", f"refs/heads/{target}", new_head],
-            cwd=REPO,
-            check=False,
-        )
-        _exec(
-            ["git", "branch", f"--set-upstream-to=upstream/{target}", target],
-            cwd=REPO,
-            check=False,
-        )
+        head = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
         if not keep:
+            print(f"DONE {id} (HEAD={head[:12]}); cleaned up worktree")
             _cleanup(wt)
-            print(f"DONE {target}")
         else:
-            print(f"DONE {target} (worktree kept at {wt})")
+            print(f"DONE {id} (HEAD={head[:12]}); worktree kept at {wt}")
 
     @app.command()
     def verify() -> None:
-        """Re-run transform and diff against upstream/<target>; PASS if no diff."""
-        wt = Path(f"/tmp/verify-wt-{_safe_wt_name(target)}")
-        _make_worktree(wt, base)
+        """Reproduce the chain commit and diff against upstream/<area_branch>."""
+        try:
+            chain_sha = _find_chain_commit(area_branch, id)
+        except RuntimeError as e:
+            print(f"FAIL: {e}")
+            raise typer.Exit(code=1)
+        wt = Path(f"/tmp/verify-wt-{_safe_wt_name(id)}")
+        _make_worktree(wt, f"{chain_sha}~1")
         sys.path.insert(0, str(SKILL_PATH))
         transform(wt)
-        _commit(wt, message=commit_message)
-        head_after = _exec(["git", "rev-parse", "HEAD"], cwd=wt).strip()
-        head_base = _exec(["git", "rev-parse", f"upstream/{base}"], cwd=REPO).strip()
-        if head_after != head_base:
+        committed = _commit(wt, message=commit_message)
+        if committed:
             _run_pre_commit(wt)
-        _exec(["git", "fetch", "upstream", target], cwd=REPO)
         diff = _exec(
-            ["git", "diff", f"upstream/{target}", "--", "."],
+            ["git", "diff", chain_sha, "--", "."],
             cwd=wt,
             check=False,
         ).strip()
         if diff:
-            print(f"FAIL: {target} differs from transform output:")
+            print(f"FAIL: {id} differs from upstream/{area_branch} commit {chain_sha[:12]}:")
             print(diff[:5000])
             _cleanup(wt)
             raise typer.Exit(code=1)
-        print(f"PASS: {target} reproduces the commit exactly.")
+        print(f"PASS: {id} reproduces upstream/{area_branch} commit {chain_sha[:12]} exactly.")
         _cleanup(wt)
 
     @app.command()

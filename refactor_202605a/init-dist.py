@@ -39,7 +39,7 @@ SUBJECT = "Extract init_torch_distributed to distributed/bootstrap.py"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-lora-moe-buffers"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 # Header for the new bootstrap.py file: imports + module-level constants
 # (the original ones live on model_runner.py and are referenced inside the
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,

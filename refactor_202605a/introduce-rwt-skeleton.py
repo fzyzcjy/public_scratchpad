@@ -37,7 +37,7 @@ SUBJECT = "Extract RemoteInstanceWeightTransport skeleton with remote_instance_i
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/init-dist"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 # New file holding the transport class. Field names mirror the original
 # ModelRunner field names; ``model`` is bound late (after load_model in
@@ -174,7 +174,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,

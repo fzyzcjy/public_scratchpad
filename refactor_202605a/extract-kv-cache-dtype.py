@@ -33,7 +33,7 @@ SUBJECT = "Extract configure_kv_cache_dtype to mem_cache.kv_cache_dtype"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/extract-prealloc-symm-pool"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 
 NEW_HEADER = (
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,

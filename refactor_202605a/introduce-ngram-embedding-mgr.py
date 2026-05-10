@@ -49,7 +49,7 @@ SUBJECT = "Introduce NgramEmbeddingManager (PR 1/3 of ngram embedding migration)
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/raw/mech_model_runner/rwt-migrate-modelexpress-publish"
-TARGET = f"tom_refactor_202605a/raw/{AREA}/{ID}"
+AREA_BRANCH = f"tom_refactor_202605a/raw/{AREA}"
 
 
 MANAGER_HEADER = '''from __future__ import annotations
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     run_pr(
         transform=transform,
         base=BASE,
-        target=TARGET,
+        area_branch=AREA_BRANCH,
         id=ID,
         subject=SUBJECT,
         body=BODY,
