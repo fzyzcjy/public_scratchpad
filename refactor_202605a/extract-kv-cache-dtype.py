@@ -67,6 +67,9 @@ def transform(wt: Path) -> None:
     method_text = cut_lines(mr, start, end)
     fn = (
         dedent_method_to_function(method_text)
+        # Insert an initial-copy line right after the def so the body never
+        # mutates kwarg-passed `server_args.kv_cache_dtype`. All subsequent
+        # reads/writes go through the local `server_args_kv_cache_dtype`.
         .replace(
             "def configure_kv_cache_dtype(self):\n",
             "def configure_kv_cache_dtype(\n"
@@ -74,15 +77,19 @@ def transform(wt: Path) -> None:
             "    server_args: ServerArgs,\n"
             "    model: nn.Module,\n"
             "    model_dtype: torch.dtype,\n"
-            ") -> tuple[str, torch.dtype]:\n",
+            ") -> tuple[str, torch.dtype]:\n"
+            "    server_args_kv_cache_dtype = server_args.kv_cache_dtype\n",
         )
+        # Specific must come before the general `self.server_args` swap so
+        # that `self.server_args.kv_cache_dtype` writes land on the local var.
+        .replace("self.server_args.kv_cache_dtype", "server_args_kv_cache_dtype")
         .replace("self.server_args", "server_args")
         .replace("self.model", "model")
         .replace("self.kv_cache_dtype = ", "kv_cache_dtype = ")
         .replace("self.kv_cache_dtype", "kv_cache_dtype")
         .replace("self.dtype", "model_dtype")
     )
-    fn = fn.rstrip() + "\n    return server_args.kv_cache_dtype, kv_cache_dtype\n"
+    fn = fn.rstrip() + "\n    return server_args_kv_cache_dtype, kv_cache_dtype\n"
 
     # Add the typing-related global imports the new signature needs.
     header_with_imports = NEW_HEADER.replace(

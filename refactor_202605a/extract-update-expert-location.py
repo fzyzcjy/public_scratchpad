@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Cut `update_expert_location` from ModelRunner; paste as a free function in
-`eplb/expert_location_updater.py`. The body has 6 self.X reads + 1 call to
-`weight_updater.update_weights_from_disk(model_runner_ref=self, ...)`.
+"""Cut `update_expert_location` from ModelRunner; paste as a free function
+named `update_expert_location_with_recovery` in
+`eplb/expert_location_updater.py`. The renamed reflects what the function
+actually does: update metadata + p2p-recovery missing experts + reload from
+disk on miss. The bare `update` already exists as a method on
+`ExpertLocationUpdater` in the same module, so `update_expert_location` alone
+would be ambiguous at the call site (per the privacy-flip / extraction-time
+rename exception in EXECUTION_GUIDE).
 
-The 6 self.X reads become explicit kwargs (R1). The `weight_updater` call,
-which originally bound `self` as `model_runner_ref`, is parameterised as a
-`update_weights_from_disk_callable` kwarg; the eplb_manager caller bakes
-`model_runner_ref=self._model_runner` via ``functools.partial``.
+The body has 6 self.X reads + 1 call to
+`self.weight_updater.update_weights_from_disk(...)`. The 6 self.X reads
+become explicit kwargs (R1). The `weight_updater` call is parameterised as a
+`update_weights_from_disk_callable` kwarg; the eplb_manager caller passes
+the bound method directly.
 
 Usage:
     uv run --python 3.12 extract-update-expert-location.py run
@@ -34,7 +40,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-update-expert-location"
-SUBJECT = "Extract ModelRunner.update_expert_location to free function in expert_location_updater"
+SUBJECT = "Extract ModelRunner.update_expert_location to free update_expert_location_with_recovery in expert_location_updater"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/primary/mech_model_runner/we-move-save-get"
@@ -80,8 +86,10 @@ def transform(wt: Path) -> None:
             "):\n",
             # Preserve original typed params `new_expert_location_metadata` /
             # `update_layer_ids` exactly as on the source method; new kwargs
-            # get fresh annotations.
-            "def update_expert_location(\n"
+            # get fresh annotations. Function name gets `_with_recovery`
+            # suffix to disambiguate from the existing `update` method on
+            # `ExpertLocationUpdater` in the same module.
+            "def update_expert_location_with_recovery(\n"
             "    *,\n"
             "    expert_location_updater: ExpertLocationUpdater,\n"
             "    model: nn.Module,\n"
@@ -127,7 +135,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.eplb.expert_location import ExpertLocationMetadata\n",
         addition=(
-            "from sglang.srt.eplb.expert_location_updater import update_expert_location\n"
+            "from sglang.srt.eplb.expert_location_updater import update_expert_location_with_recovery\n"
         ),
     )
     text = replace_call_site(
@@ -139,7 +147,7 @@ def transform(wt: Path) -> None:
             "            )\n"
         ),
         new=(
-            "            update_expert_location(\n"
+            "            update_expert_location_with_recovery(\n"
             "                expert_location_updater=self._model_runner.expert_location_updater,\n"
             "                model=self._model_runner.model,\n"
             "                new_expert_location_metadata=expert_location_metadata,\n"
