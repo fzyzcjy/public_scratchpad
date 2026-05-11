@@ -80,7 +80,7 @@ TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import torch
 
@@ -146,10 +146,10 @@ def transform(wt: Path) -> None:
     # 3. Build the final target file: HEADER + MLPSyncBatchInfo + 2 free fns
     #    + (existing skeleton class body, methods appended).
     existing = target.read_text()
-    # The prep wrote: "from __future__ import annotations\n\nclass SchedulerDPAttnAdapter:..."
-    # Find where the class begins in the existing target so we keep the
-    # skeleton body verbatim while replacing the header.
-    cls_marker = "class SchedulerDPAttnAdapter:"
+    # The prep wrote: "from __future__ import annotations\n\n@dataclass(...)\nclass SchedulerDPAttnAdapter:..."
+    # Find where the dataclass decorator + class begins so we keep the
+    # skeleton body verbatim (incl. the decorator) while replacing the header.
+    cls_marker = "@dataclass(kw_only=True, slots=True, frozen=True)\nclass SchedulerDPAttnAdapter:"
     if cls_marker not in existing:
         raise RuntimeError("SchedulerDPAttnAdapter skeleton not found in target")
     skeleton_class_body = existing[existing.index(cls_marker):].rstrip() + "\n"

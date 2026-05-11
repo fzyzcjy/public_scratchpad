@@ -73,31 +73,24 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 WEIGHT_UPDATER_HEADER = '''from __future__ import annotations  # noqa: F401
 
-from typing import Callable  # noqa: F401
+from dataclasses import dataclass, field  # noqa: F401
+from typing import Any, Callable, Optional  # noqa: F401
 
 
+@dataclass(kw_only=True, slots=True)
 class SchedulerWeightUpdaterManager:
     """Hot weight-update / memory-occupation / model-save / weight-inspection
     control surface. Composition target on Scheduler
     (``self.weight_updater``)."""
 
-    def __init__(
-        self,
-        *,
-        tp_worker,
-        draft_worker,
-        tp_cpu_group,
-        memory_saver_adapter,
-        flush_cache: Callable[..., bool],
-        is_fully_idle: Callable[..., bool],
-    ) -> None:
-        self.tp_worker = tp_worker
-        self.draft_worker = draft_worker
-        self.tp_cpu_group = tp_cpu_group
-        self.memory_saver_adapter = memory_saver_adapter
-        self.flush_cache = flush_cache
-        self.is_fully_idle = is_fully_idle
-        self.offload_tags: set = set()
+    tp_worker: Any
+    draft_worker: Any
+    tp_cpu_group: Any
+    memory_saver_adapter: Any
+    flush_cache: Callable[..., bool]
+    is_fully_idle: Callable[..., bool]
+    offload_tags: set = field(default_factory=set)
+    stashed_model_static_state: Any = None
 '''
 
 

@@ -61,28 +61,24 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 PROFILER_MANAGER_HEADER = '''from __future__ import annotations  # noqa: F401
 
+from dataclasses import dataclass
 from pathlib import Path  # noqa: F401
-from typing import Callable, List, Optional  # noqa: F401
+from typing import Any, Callable, List, Optional  # noqa: F401
 
 from sglang.srt.environ import envs  # noqa: F401
 from sglang.srt.utils.profile_utils import ProfileManager  # noqa: F401
 
 
+@dataclass(kw_only=True)
 class SchedulerProfilerManager:
     """torch profiler / RPD / cuda profiler lifecycle. Composition target on
     Scheduler (``self.profiler_manager``). Owns 19 mutable runtime fields."""
 
-    def __init__(
-        self,
-        *,
-        ps,
-        dp_tp_cpu_group,
-        get_forward_ct: Callable[[], int],
-    ) -> None:
-        self.ps = ps
-        self.dp_tp_cpu_group = dp_tp_cpu_group
-        self.get_forward_ct = get_forward_ct
+    ps: Any
+    dp_tp_cpu_group: Any
+    get_forward_ct: Callable[[], int]
 
+    def __post_init__(self) -> None:
 '''
 
 

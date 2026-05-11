@@ -80,7 +80,10 @@ NEW_INIT_TOKENIZER_HEADER = '''    @staticmethod
 PROPERTY_FACADE = '''
     # ---- raw_tokenizer_wrapper facade -----------------------------------
     # ``tokenizer`` / ``processor`` / ``mm_processor`` are the TokenizerManager
-    # public API; storage is delegated to ``self.raw_tokenizer_wrapper``.
+    # public read-API; storage is delegated to ``self.raw_tokenizer_wrapper``.
+    # Read-only by design — writes go through ``self.raw_tokenizer_wrapper``
+    # directly (the only writes happen inside
+    # ``RawTokenizerWrapper.init_tokenizer_and_processor``).
     # ``async_dynamic_batch_tokenizer`` stays internal — access via
     # ``self.raw_tokenizer_wrapper.async_dynamic_batch_tokenizer`` directly.
 
@@ -88,25 +91,13 @@ PROPERTY_FACADE = '''
     def tokenizer(self):
         return self.raw_tokenizer_wrapper.tokenizer
 
-    @tokenizer.setter
-    def tokenizer(self, value):
-        self.raw_tokenizer_wrapper.tokenizer = value
-
     @property
     def processor(self):
         return self.raw_tokenizer_wrapper.processor
 
-    @processor.setter
-    def processor(self, value):
-        self.raw_tokenizer_wrapper.processor = value
-
     @property
     def mm_processor(self):
         return self.raw_tokenizer_wrapper.mm_processor
-
-    @mm_processor.setter
-    def mm_processor(self, value):
-        self.raw_tokenizer_wrapper.mm_processor = value
 
 '''
 

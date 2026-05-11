@@ -92,8 +92,8 @@ TARGET_FILE_HEADER = '''\
 from __future__ import annotations  # noqa: F401
 
 import dataclasses  # noqa: F401
-from dataclasses import dataclass  # noqa: F401
-from typing import Callable, List, Optional, Tuple  # noqa: F401
+from dataclasses import dataclass
+from typing import Any, Callable, List, Optional, Tuple  # noqa: F401
 
 
 # ``SchedulerStats`` is referenced only for the ``update_scheduler_stats``
@@ -106,40 +106,24 @@ class SchedulerStats: ...  # type: ignore[no-redef]
 
 
 SKELETON_CLASS = '''\
+@dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerPoolStatsObserver:
     """Read-only KV / req / session pool statistics. Composition target on
     Scheduler (``self.pool_stats_observer``)."""
 
-    def __init__(
-        self,
-        *,
-        tree_cache,
-        token_to_kv_pool_allocator,
-        req_to_token_pool,
-        session_controller,
-        hisparse_coordinator,
-        is_hybrid_swa: bool,
-        is_hybrid_ssm: bool,
-        enable_hisparse: bool,
-        full_tokens_per_layer,
-        swa_tokens_per_layer,
-        max_total_num_tokens: int,
-        get_last_batch: Callable,
-        get_running_batch: Callable,
-    ) -> None:
-        self.tree_cache = tree_cache
-        self.token_to_kv_pool_allocator = token_to_kv_pool_allocator
-        self.req_to_token_pool = req_to_token_pool
-        self.session_controller = session_controller
-        self.hisparse_coordinator = hisparse_coordinator
-        self.is_hybrid_swa = is_hybrid_swa
-        self.is_hybrid_ssm = is_hybrid_ssm
-        self.enable_hisparse = enable_hisparse
-        self.full_tokens_per_layer = full_tokens_per_layer
-        self.swa_tokens_per_layer = swa_tokens_per_layer
-        self.max_total_num_tokens = max_total_num_tokens
-        self.get_last_batch = get_last_batch
-        self.get_running_batch = get_running_batch
+    tree_cache: Any
+    token_to_kv_pool_allocator: Any
+    req_to_token_pool: Any
+    session_controller: Any
+    hisparse_coordinator: Any
+    is_hybrid_swa: bool
+    is_hybrid_ssm: bool
+    enable_hisparse: bool
+    full_tokens_per_layer: Any
+    swa_tokens_per_layer: Any
+    max_total_num_tokens: int
+    get_last_batch: Callable
+    get_running_batch: Callable
 '''
 
 
