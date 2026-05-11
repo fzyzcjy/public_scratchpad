@@ -166,6 +166,22 @@ def transform(wt: Path) -> None:
     )
     tm.write_text(text)
 
+    # ---- Test-file rewrite. The method was privacy-flipped on move
+    # (``_validate_batch_tokenization_constraints`` → ``validate_batch_tokenization_constraints``)
+    # and reachable via ``self.request_validator``.
+    test_file = wt / "test/manual/test_tokenizer_batch_encode.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        t = _re.sub(
+            r"self\.tokenizer_manager\._validate_batch_tokenization_constraints\(\s*([^,]+),\s*([^)]+)\s*\)",
+            (
+                r"self.tokenizer_manager.request_validator.validate_batch_tokenization_constraints("
+                r"\n            batch_size=\1, obj=\2\n        )"
+            ),
+            t,
+        )
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

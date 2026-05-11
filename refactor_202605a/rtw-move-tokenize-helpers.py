@@ -147,6 +147,19 @@ def transform(wt: Path) -> None:
         )
     tm.write_text(text)
 
+    # ---- 4. Test-file rewrite. The 4 helpers are private (leading underscore)
+    # so they're NOT on the @property facade; tests must reach them via
+    # ``raw_tokenizer_wrapper`` directly.
+    test_file = wt / "test/manual/test_tokenizer_manager.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        for name in HELPER_NAMES:
+            t = t.replace(
+                f"self.tokenizer_manager.{name}(",
+                f"self.tokenizer_manager.raw_tokenizer_wrapper.{name}(",
+            )
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

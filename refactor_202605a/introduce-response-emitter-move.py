@@ -133,10 +133,14 @@ def transform(wt: Path) -> None:
     for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
         f = Path(fpath)
         t = f.read_text()
+        # ``\s*`` after ``\(`` + ``re.DOTALL`` together absorb the black-wrapped
+        # multi-line form where ``(`` ends one line and the receiver is on the
+        # next line.
         t_new = _re.sub(
-            r"(?<![\w.])([\w][\w.]*)\.create_abort_task\(\1\.response_emitter,\s*",
+            r"(?<![\w.])([\w][\w.]*)\.create_abort_task\(\s*\1\.response_emitter,\s*",
             r"\1.response_emitter.create_abort_task(",
             t,
+            flags=_re.DOTALL,
         )
         if t_new != t:
             f.write_text(t_new)
