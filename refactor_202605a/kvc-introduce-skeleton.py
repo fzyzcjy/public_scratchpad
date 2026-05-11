@@ -201,6 +201,13 @@ def transform(wt: Path) -> None:
                 ")\n"
             ),
         )
+    if "from sglang.srt.layers.dp_attention import get_attention_tp_size" not in text:
+        # ``attention_tp_size=get_attention_tp_size()`` is used in the ctor.
+        text = insert_after(
+            text,
+            anchor="from sglang.srt.configs.device_config import DeviceConfig\n",
+            addition="from sglang.srt.layers.dp_attention import get_attention_tp_size\n",
+        )
 
     # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
     # lives in its own ``init_kv_cache_configurator`` helper method.
