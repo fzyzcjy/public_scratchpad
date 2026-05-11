@@ -275,17 +275,16 @@ def _move_is_health_check(wt: Path) -> None:
     block = cut_lines(sched, s, e)
     append_to_file(utils, block, separator="\n\n")
 
-    # utils.py: add HEALTH_CHECK_RID_PREFIX import.
+    # utils.py: add HEALTH_CHECK_RID_PREFIX import (function body uses it).
     utils_text = utils.read_text()
-    if "HEALTH_CHECK_RID_PREFIX" not in utils_text:
-        utils_text = replace_call_site(
-            utils_text,
-            old="from sglang.srt.eplb.expert_distribution import ExpertDistributionMetrics\n",
-            new=(
-                "from sglang.srt.constants import HEALTH_CHECK_RID_PREFIX\n"
-                "from sglang.srt.eplb.expert_distribution import ExpertDistributionMetrics\n"
-            ),
-        )
+    utils_text = replace_call_site(
+        utils_text,
+        old="from sglang.srt.eplb.expert_distribution import ExpertDistributionMetrics\n",
+        new=(
+            "from sglang.srt.constants import HEALTH_CHECK_RID_PREFIX\n"
+            "from sglang.srt.eplb.expert_distribution import ExpertDistributionMetrics\n"
+        ),
+    )
     utils.write_text(utils_text)
 
     # scheduler.py: pull is_health_check_generate_req from utils alongside
