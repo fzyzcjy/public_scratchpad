@@ -25,9 +25,13 @@ SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 ORDER: list[str] = [
     # Stage 0 — 基础设施
     "move-req-state",
+    "move-init-req-prep",
+    "move-init-req-move",
     "move-logprob-ops",
-    "move-request-tracing",
-    "move-spec-decoding-meta",
+    "move-request-tracing-prep",
+    "move-request-tracing-move",
+    "move-spec-decoding-meta-prep",
+    "move-spec-decoding-meta-move",
     "define-scheduler-sender",
     # Stage 1 — score handler early
     "introduce-score-request-handler",

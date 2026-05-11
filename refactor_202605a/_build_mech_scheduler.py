@@ -37,11 +37,15 @@ SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 # Chain ordering. Each entry is the `<id>` part of a `<id>.py` script in this
 # directory.
 ORDER: list[str] = [
-    # Group A — Scheduler 主类抽出
-    "extract-get-draft-kv-pool",
-    "extract-maybe-register-hicache-draft",
-    "extract-build-kv-cache",
-    "introduce-scheduler-request-receiver",
+    # Group A — Scheduler 主类抽出 (each: prep + move)
+    "extract-get-draft-kv-pool-prep",
+    "extract-get-draft-kv-pool-move",
+    "extract-maybe-register-hicache-draft-prep",
+    "extract-maybe-register-hicache-draft-move",
+    "extract-build-kv-cache-prep",
+    "extract-build-kv-cache-move",
+    "introduce-scheduler-request-receiver-prep",
+    "introduce-scheduler-request-receiver-move",
     # Group B — Mixin mech-move
     "migrate-dp-attn-mixin",
     "migrate-profiler-mixin",
