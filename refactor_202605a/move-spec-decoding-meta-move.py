@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mechanical move of _calculate_spec_decoding_metrics (staticmethod form)
-out of TokenizerManager into ``managers/spec_decoding_meta.py`` as free
+out of TokenizerManager into ``managers/tokenizer_manager_components/spec_decoding_meta.py`` as free
 function ``fill_spec_decoding_meta``. Prep landed in
 ``move-spec-decoding-meta-prep``.
 """
@@ -19,13 +19,13 @@ from _helpers import cut_lines, find_method_lines, insert_after, replace_call_si
 from _runner import run_pr
 
 ID = "move-spec-decoding-meta-move"
-SUBJECT = "Move _calculate_spec_decoding_metrics to managers/spec_decoding_meta.py as fill_spec_decoding_meta"
+SUBJECT = "Move _calculate_spec_decoding_metrics to managers/tokenizer_manager_components/spec_decoding_meta.py as fill_spec_decoding_meta"
 BODY = """\
 Physical move only:
   - Cut staticmethod from TM
   - Drop @staticmethod, dedent
   - Rename _calculate_spec_decoding_metrics -> fill_spec_decoding_meta
-  - Write managers/spec_decoding_meta.py
+  - Write managers/tokenizer_manager_components/spec_decoding_meta.py
   - Caller: TokenizerManager._calculate_spec_decoding_metrics(...) ->
     spec_decoding_meta.fill_spec_decoding_meta(...)
 """
@@ -50,7 +50,7 @@ from sglang.srt.managers.io_struct import (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/spec_decoding_meta.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/spec_decoding_meta.py"
 
     s, e = find_method_lines(
         tm.read_text(), class_name="TokenizerManager", method_name="_calculate_spec_decoding_metrics"

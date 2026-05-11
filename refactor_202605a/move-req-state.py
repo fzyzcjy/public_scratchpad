@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Move ReqState dataclass from tokenizer_manager.py into a new
-``managers/request_state.py`` module. The ``_init_req_state`` method stays
+``managers/tokenizer_manager_components/request_state.py`` module. The ``_init_req_state`` method stays
 on TokenizerManager in this commit (it still references ``ReqState`` via
 the new import). Per MECH_COMMIT_SPLIT, the method's prep+move land in
 two subsequent commits.
@@ -20,7 +20,7 @@ from _helpers import cut_lines, find_class_lines, insert_after
 from _runner import run_pr
 
 ID = "move-req-state"
-SUBJECT = "Move ReqState dataclass to managers/request_state.py"
+SUBJECT = "Move ReqState dataclass to managers/tokenizer_manager_components/request_state.py"
 BODY = """\
 ReqState dataclass moves byte-identical to new module. _init_req_state
 method stays on TokenizerManager in this commit; its body still
@@ -49,7 +49,15 @@ from sglang.srt.observability.req_time_stats import APIServerReqTimeStats
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_state.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_state.py"
+
+    # First TM-component module being introduced in this chain: create the
+    # subdirectory + empty __init__.py for it. Subsequent prep/move scripts
+    # just write into this same directory.
+    new.parent.mkdir(parents=True, exist_ok=True)
+    init_py = new.parent / "__init__.py"
+    if not init_py.exists():
+        init_py.write_text("")
 
     s, e = find_class_lines(tm.read_text(), class_name="ReqState")
     class_text = cut_lines(tm, s, e)
@@ -60,7 +68,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
-        addition="from sglang.srt.managers.request_state import ReqState\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState\n",
     )
     tm.write_text(text)
 

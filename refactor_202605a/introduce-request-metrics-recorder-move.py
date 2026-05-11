@@ -33,13 +33,13 @@ EXTRA_IMPORTS = '''from sglang.srt.managers.io_struct import (
     BatchStrOutput,
     GenerateReqInput,
 )
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 '''
 
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rmr = wt / "python/sglang/srt/managers/request_metrics_recorder.py"
+    rmr = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_metrics_recorder.py"
 
     # Cut bottom-up.
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="collect_metrics")

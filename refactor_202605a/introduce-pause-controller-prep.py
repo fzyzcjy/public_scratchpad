@@ -58,7 +58,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from sglang.srt.managers.io_struct import AbortReq  # noqa: F401  (used in handler signature once method moves in)
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.utils.aio_rwlock import RWLock
 
 
@@ -151,7 +151,7 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     multi_mixin = wt / "python/sglang/srt/managers/multi_tokenizer_mixin.py"
-    new = wt / "python/sglang/srt/managers/pause_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/pause_controller.py"
 
     new.write_text(SKELETON)
 
@@ -172,7 +172,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.pause_controller import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.pause_controller import (\n"
             "    PauseController,\n"
             "    PauseControllerConfig,\n"
             ")\n"

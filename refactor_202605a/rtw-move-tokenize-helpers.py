@@ -63,7 +63,7 @@ HELPER_NAMES = (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rtw = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
+    rtw = wt / "python/sglang/srt/managers/tokenizer_manager_components/raw_tokenizer_wrapper.py"
 
     # ---- 0. Expand raw_tokenizer_wrapper.py's typing import to cover the
     # post-move signatures (Tuple / Union / List). Strip any trailing

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mechanical move of _init_req_state (staticmethod form) out of
-TokenizerManager into ``managers/request_state.py`` as free function
+TokenizerManager into ``managers/tokenizer_manager_components/request_state.py`` as free function
 ``init_req``. Per MECH_COMMIT_SPLIT: only physical relocation + the
 scope-induced rename ``_init_req_state`` -> ``init_req`` (leading ``_``
 loses meaning at module level).
@@ -23,14 +23,14 @@ from _helpers import cut_lines, find_method_lines, insert_after, replace_call_si
 from _runner import run_pr
 
 ID = "move-init-req-move"
-SUBJECT = "Move _init_req_state (now staticmethod) to managers/request_state.py as init_req"
+SUBJECT = "Move _init_req_state (now staticmethod) to managers/tokenizer_manager_components/request_state.py as init_req"
 BODY = """\
 Physical move only:
   - Cut @staticmethod _init_req_state from TokenizerManager
   - Drop ``@staticmethod`` decorator; dedent body to module level
   - Rename ``_init_req_state`` -> ``init_req`` (scope-induced; leading ``_``
     has no meaning at module level)
-  - Append to managers/request_state.py with the additional imports needed
+  - Append to managers/tokenizer_manager_components/request_state.py with the additional imports needed
     by the body
   - Update three caller sites: ``TokenizerManager._init_req_state(...)``
     -> ``init_req(...)`` (pure prefix replacement)
@@ -56,7 +56,7 @@ TRACE_IMPORT = (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rs = wt / "python/sglang/srt/managers/request_state.py"
+    rs = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_state.py"
 
     # Cut the staticmethod from TM.
     s, e = find_method_lines(
@@ -110,8 +110,8 @@ def transform(wt: Path) -> None:
     # Update tokenizer_manager.py import + 3 caller sites.
     text = tm.read_text()
     text = text.replace(
-        "from sglang.srt.managers.request_state import ReqState\n",
-        "from sglang.srt.managers.request_state import ReqState, init_req\n",
+        "from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState\n",
+        "from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState, init_req\n",
     )
     text = replace_call_site(
         text,

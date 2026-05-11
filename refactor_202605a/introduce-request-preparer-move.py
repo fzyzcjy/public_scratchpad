@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rp = wt / "python/sglang/srt/managers/request_preparer.py"
+    rp = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_preparer.py"
 
     method_names = (
         "_tokenize_one_request",

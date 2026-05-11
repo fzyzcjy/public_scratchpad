@@ -175,7 +175,7 @@ def _retype_method(text: str, class_name: str, method_name: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/lora_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/lora_controller.py"
     new.write_text(SKELETON)
 
     # ---- TM: import + composition wiring + init_lora removal + communicator plug-in ----
@@ -183,7 +183,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.lora_controller import LoraController\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.lora_controller import LoraController\n",
     )
 
     # Composition wiring: replace init_lora() call with LoraController(...) construction

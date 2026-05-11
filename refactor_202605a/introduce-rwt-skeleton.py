@@ -103,7 +103,11 @@ def transform(wt: Path) -> None:
 
     text = insert_after(
         text,
-        anchor="from sglang.srt.model_executor.model_runner_components.pool_configurator import MemoryPoolConfig\n",
+        anchor=(
+            "from sglang.srt.model_executor.model_runner_components.pool_configurator import (\n"
+            "    MemoryPoolConfig,\n"
+            ")\n"
+        ),
         addition=(
             "from sglang.srt.model_executor.model_runner_components.remote_instance_weight_transport import (\n"
             "    RemoteInstanceWeightTransport,\n"

@@ -138,7 +138,7 @@ def transform(wt: Path) -> None:
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
-    new = wt / "python/sglang/srt/managers/session_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/session_controller.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -176,7 +176,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.session_controller import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.session_controller import (\n"
             "    SessionController,\n"
             "    SessionControllerConfig,\n"
             ")\n"
@@ -246,7 +246,7 @@ def transform(wt: Path) -> None:
         mixin_text,
         old="    from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
         new=(
-            "    from sglang.srt.managers.session_controller import SessionController\n"
+            "    from sglang.srt.managers.tokenizer_manager_components.session_controller import SessionController\n"
             "    from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
         ),
     )

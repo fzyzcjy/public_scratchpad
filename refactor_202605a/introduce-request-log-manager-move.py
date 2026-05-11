@@ -40,7 +40,7 @@ import sys
 from datetime import datetime
 from typing import Dict
 
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.observability.req_time_stats import (
     convert_time_to_realtime,
     real_time,
@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rlm = wt / "python/sglang/srt/managers/request_log_manager.py"
+    rlm = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_log_manager.py"
 
     # Cut all 5 methods bottom-up so earlier line numbers stay valid.
     # init_request_logging_and_dumping body is discarded (factory replaced it).

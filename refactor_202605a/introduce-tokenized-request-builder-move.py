@@ -47,7 +47,7 @@ from sglang.srt.managers.io_struct import (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    trb = wt / "python/sglang/srt/managers/tokenized_request_builder.py"
+    trb = wt / "python/sglang/srt/managers/tokenizer_manager_components/tokenized_request_builder.py"
 
     # Cut bottom-up.
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_resolve_embed_overrides")
@@ -104,7 +104,7 @@ def transform(wt: Path) -> None:
         # TokenizerManager import (which may stay if other code uses it).
         t = t.replace(
             "from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
-            "from sglang.srt.managers.tokenized_request_builder import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.tokenized_request_builder import (\n"
             "    TokenizedRequestBuilder,\n"
             ")\n"
             "from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",

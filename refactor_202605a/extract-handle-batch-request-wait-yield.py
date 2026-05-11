@@ -108,7 +108,7 @@ WAIT_YIELD_FACADE_NEW = """        async for x in self.response_emitter._handle_
 
 
 def transform(wt: Path) -> None:
-    emitter = wt / "python/sglang/srt/managers/response_emitter.py"
+    emitter = wt / "python/sglang/srt/managers/tokenizer_manager_components/response_emitter.py"
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
 
     emitter_text = emitter.read_text()

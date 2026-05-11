@@ -5,7 +5,7 @@ Make convert_to_span_attrs a @staticmethod with explicit ``served_model_name``
 kwarg; drop the ``self.server_args.enable_trace`` early-return (caller
 already gates on ``state.time_stats.trace_ctx.tracing_enable``). Body stays
 in TokenizerManager class; the next commit ``move-request-tracing-move``
-physically relocates it to ``managers/request_tracing.py``.
+physically relocates it to ``managers/tokenizer_manager_components/request_tracing.py``.
 """
 
 # /// script

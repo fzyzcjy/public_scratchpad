@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    op = wt / "python/sglang/srt/managers/output_processor.py"
+    op = wt / "python/sglang/srt/managers/tokenizer_manager_components/output_processor.py"
 
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_handle_batch_output")
     handle_text = cut_lines(tm, s, e)

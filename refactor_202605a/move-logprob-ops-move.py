@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mechanical move of the 4 logprob staticmethods (now @staticmethod after
 ``move-logprob-ops-prep``) out of TokenizerManager into a new
-``managers/logprob_ops.py`` module.
+``managers/tokenizer_manager_components/logprob_ops.py`` module.
 
 Also cuts the module-level constant ``_INCREMENTAL_STREAMING_META_INFO_KEYS``
 and module-level free fn ``_slice_streaming_output_meta_info`` from
@@ -38,7 +38,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "move-logprob-ops-move"
-SUBJECT = "Move 4 logprob staticmethods + slice helper to managers/logprob_ops.py"
+SUBJECT = "Move 4 logprob staticmethods + slice helper to managers/tokenizer_manager_components/logprob_ops.py"
 BODY = """\
 Physical move only:
   - Cut 4 @staticmethod logprob methods from TokenizerManager
@@ -70,7 +70,7 @@ HEADER = '''from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 
 from sglang.srt.managers.io_struct import BatchStrOutput
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 INCREMENTAL_STREAMING_META_INFO_KEYS = (
     "output_token_logprobs",
@@ -119,7 +119,7 @@ def _staticmethod_to_function(method_text: str, *, new_name: str, old_name: str)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/logprob_ops.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/logprob_ops.py"
 
     # Cut bottom-up (highest line numbers first) so earlier ranges remain valid.
     s, e = find_method_lines(

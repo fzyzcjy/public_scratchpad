@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rv = wt / "python/sglang/srt/managers/request_validator.py"
+    rv = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_validator.py"
 
     method_names = (
         "_validate_one_request",

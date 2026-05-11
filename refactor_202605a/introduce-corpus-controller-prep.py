@@ -129,7 +129,7 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
-    new = wt / "python/sglang/srt/managers/corpus_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/corpus_controller.py"
 
     new.write_text(SKELETON)
 
@@ -139,7 +139,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.corpus_controller import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.corpus_controller import (\n"
             "    CorpusController,\n"
             "    CorpusControllerConfig,\n"
             ")\n"

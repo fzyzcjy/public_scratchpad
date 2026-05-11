@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    pc = wt / "python/sglang/srt/managers/pause_controller.py"
+    pc = wt / "python/sglang/srt/managers/tokenizer_manager_components/pause_controller.py"
 
     # Cut bottom-up to preserve line numbers between cuts. ``_handle_abort_req``
     # was privacy-flipped to ``handle_abort_req`` in prep.

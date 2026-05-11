@@ -53,7 +53,7 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, List, Optional
 
-from sglang.srt.managers.pause_controller import PauseController
+from sglang.srt.managers.tokenizer_manager_components.pause_controller import PauseController
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils.aio_rwlock import RWLock
 
@@ -179,7 +179,7 @@ def _retype_method(text: str, class_name: str, method_name: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/weight_disk_update_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_disk_update_controller.py"
     new.write_text(SKELETON)
 
     # ---- TM: drop facade fields + import + composition wiring ----
@@ -216,7 +216,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.weight_disk_update_controller import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.weight_disk_update_controller import (\n"
             "    WeightDiskUpdateController,\n"
             "    WeightDiskUpdateControllerConfig,\n"
             ")\n"

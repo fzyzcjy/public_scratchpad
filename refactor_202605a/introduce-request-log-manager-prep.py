@@ -152,14 +152,14 @@ def _retag_method(text: str, method_name: str, new_header: str, body_rewrite=Non
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_log_manager.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_log_manager.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.request_log_manager import RequestLogManager\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.request_log_manager import RequestLogManager\n",
     )
 
     # Composition wiring.

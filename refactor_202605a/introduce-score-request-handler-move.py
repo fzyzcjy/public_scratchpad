@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     old_mixin = wt / "python/sglang/srt/managers/tokenizer_manager_score_mixin.py"
-    srh = wt / "python/sglang/srt/managers/score_request_handler.py"
+    srh = wt / "python/sglang/srt/managers/tokenizer_manager_components/score_request_handler.py"
 
     # ---- 1. Extract the (already-prepped) mixin class body. Bytes inside
     # the class body are identical to what we want in the new class, except
@@ -160,6 +160,67 @@ def transform(wt: Path) -> None:
 
     # ScoreResult import in engine_score_mixin.py already points at the new
     # handler module (rewired in prep); nothing more to do for it.
+
+    # ---- 6. Stale module docstring in engine_score_mixin.py mentioning the
+    # deleted mixin class.
+    engine_text = engine.read_text()
+    engine_text = engine_text.replace(
+        "These methods delegate to TokenizerManager.score_request() which is provided\n"
+        "by TokenizerManagerScoreMixin.",
+        "These methods delegate to ``self.tokenizer_manager.score_request_handler.score_request()``\n"
+        "(provided by ScoreRequestHandler).",
+    )
+    engine.write_text(engine_text)
+
+    # ---- 7. Test files referencing the deleted ``tokenizer_manager_score_mixin``
+    # module / its ``TokenizerManagerScoreMixin`` class / its ``ScoreResult``
+    # re-export. ``score_request_handler`` is the new home for both.
+    test_serving_rerank = wt / "test/registered/prefill_only/test_serving_rerank.py"
+    if test_serving_rerank.exists():
+        t = test_serving_rerank.read_text()
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult",
+        )
+        test_serving_rerank.write_text(t)
+
+    test_embed_overrides = wt / "test/registered/prefill_only/test_embed_overrides.py"
+    if test_embed_overrides.exists():
+        t = test_embed_overrides.read_text()
+        # Fix module-doc reference.
+        t = t.replace(
+            "- Score mixin override resolution (tokenizer_manager_score_mixin.py)",
+            "- ScoreRequestHandler override resolution (score_request_handler.py)",
+        )
+        # Replace import + class inheritance. The mixin pattern doesn't work
+        # against a frozen+slots dataclass; turn ``_FakeMixin`` into a plain
+        # stub class and call ScoreRequestHandler's methods as unbound. Tests
+        # that mutate ``self.mixin.is_generation`` etc. still work because
+        # ``_FakeMixin`` has no slots restriction.
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+            "    TokenizerManagerScoreMixin,\n"
+            ")",
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreRequestHandler",
+        )
+        t = t.replace(
+            "class _FakeMixin(TokenizerManagerScoreMixin):",
+            "class _FakeMixin:",
+        )
+        # Rewrite ``self.mixin.<method>(...)`` → ``ScoreRequestHandler.<method>(self.mixin, ...)``
+        # for the methods that ScoreRequestHandler owns (now post-move).
+        for method in (
+            "_resolve_overrides_for_sequence",
+            "_resolve_embed_overrides_for_request",
+            "_build_token_id_inputs",
+            "score_request",
+        ):
+            t = _re.sub(
+                rf"\bself\.mixin\.{_re.escape(method)}\(",
+                f"ScoreRequestHandler.{method}(self.mixin, ",
+                t,
+            )
+        test_embed_overrides.write_text(t)
 
 
 if __name__ == "__main__":

@@ -44,9 +44,9 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict
 
-from sglang.srt.managers.lora_controller import LoraController
-from sglang.srt.managers.request_log_manager import RequestLogManager
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.lora_controller import LoraController
+from sglang.srt.managers.tokenizer_manager_components.request_log_manager import RequestLogManager
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 
 @dataclass(slots=True, kw_only=True)
@@ -130,7 +130,7 @@ def _retype_method(text: str, method_name: str, new_header: str) -> str:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/response_emitter.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/response_emitter.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -138,7 +138,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.response_emitter import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.response_emitter import (\n"
             "    ResponseEmitter,\n"
             "    ResponseEmitterConfig,\n"
             ")\n"

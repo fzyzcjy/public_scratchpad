@@ -38,6 +38,7 @@ SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 # Chain ordering. Each entry is the `<id>` part of a `<id>.py` script in this
 # directory. Each script provides its own SUBJECT and (optional) BODY.
 ORDER: list[str] = [
+    "move-pool-configurator",
     "extract-init-cublas-prep",
     "extract-init-cublas-move",
     "extract-apply-torch-tp-prep",

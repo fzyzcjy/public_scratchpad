@@ -177,7 +177,7 @@ def _rewrite_method(text: str, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_validator.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_validator.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -185,7 +185,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.request_validator import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.request_validator import (\n"
             "    RequestValidator,\n"
             "    RequestValidatorConfig,\n"
             ")\n"

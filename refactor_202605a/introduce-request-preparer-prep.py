@@ -42,11 +42,11 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from sglang.srt.managers.multimodal_processor_owner import MultimodalProcessor
-from sglang.srt.managers.raw_tokenizer_wrapper import RawTokenizerWrapper
-from sglang.srt.managers.request_state import ReqState
-from sglang.srt.managers.request_validator import RequestValidator
-from sglang.srt.managers.tokenized_request_builder import TokenizedRequestBuilder
+from sglang.srt.managers.tokenizer_manager_components.multimodal_processor_owner import MultimodalProcessor
+from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import RawTokenizerWrapper
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_validator import RequestValidator
+from sglang.srt.managers.tokenizer_manager_components.tokenized_request_builder import TokenizedRequestBuilder
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -165,7 +165,7 @@ def _rewrite_body(body: str) -> str:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_preparer.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_preparer.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -173,7 +173,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.request_preparer import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.request_preparer import (\n"
             "    RequestPreparer,\n"
             "    RequestPreparerConfig,\n"
             ")\n"

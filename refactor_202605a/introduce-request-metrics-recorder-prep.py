@@ -128,14 +128,14 @@ def _replace_method_header(text: str, class_name: str, method_name: str, new_hea
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_metrics_recorder.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_metrics_recorder.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.request_metrics_recorder import RequestMetricsRecorder\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.request_metrics_recorder import RequestMetricsRecorder\n",
     )
 
     # Composition wiring. disaggregation_mode field stays on TM (not removed).

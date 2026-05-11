@@ -56,7 +56,7 @@ from typing import AsyncGenerator, List, Optional, Tuple, Union
 import fastapi
 
 from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput
-from sglang.srt.managers.request_state import init_req
+from sglang.srt.managers.tokenizer_manager_components.request_state import init_req
 from sglang.srt.managers.scheduler_input_blocker import input_blocker_guard_region
 from sglang.srt.utils import get_bool_env_var
 
@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    brd = wt / "python/sglang/srt/managers/batch_request_dispatcher.py"
+    brd = wt / "python/sglang/srt/managers/tokenizer_manager_components/batch_request_dispatcher.py"
 
     # ---- 1. Cut the helper out of TM.
     s, e = find_method_lines(
@@ -99,12 +99,12 @@ def transform(wt: Path) -> None:
     )
 
     # ---- 3. Paste into BatchRequestDispatcher class body. Inject EXTRA_IMPORTS
-    # after the existing ``from sglang.srt.managers.response_emitter import ResponseEmitter``
+    # after the existing ``from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter``
     # block (last skeleton import).
     brd_text = brd.read_text()
     brd_text = brd_text.replace(
-        "from sglang.srt.managers.response_emitter import ResponseEmitter\n",
-        "from sglang.srt.managers.response_emitter import ResponseEmitter\n\n"
+        "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n",
+        "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n\n"
         + EXTRA_IMPORTS,
     )
     # Append method at the end of the BatchRequestDispatcher class body. Anchor

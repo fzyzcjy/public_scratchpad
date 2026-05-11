@@ -46,7 +46,7 @@ from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 import torch
 
 from sglang.srt.configs.model_config import ModelConfig
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,7 +156,7 @@ def _convert_methods_to_staticmethod(text: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     mixin = wt / "python/sglang/srt/managers/tokenizer_manager_score_mixin.py"
-    new = wt / "python/sglang/srt/managers/score_request_handler.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/score_request_handler.py"
     engine = wt / "python/sglang/srt/entrypoints/engine_score_mixin.py"
     serving_score = wt / "python/sglang/srt/entrypoints/openai/serving_score.py"
     serving_rerank = wt / "python/sglang/srt/entrypoints/openai/serving_rerank.py"
@@ -170,7 +170,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
         addition=(
-            "from sglang.srt.managers.score_request_handler import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import (\n"
             "    ScoreRequestHandler,\n"
             "    ScoreRequestHandlerConfig,\n"
             ")\n"
@@ -234,7 +234,7 @@ def transform(wt: Path) -> None:
     mtext = insert_after(
         mtext,
         anchor="from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput\n",
-        addition="from sglang.srt.managers.score_request_handler import ScoreResult\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult\n",
     )
 
     mtext = _convert_methods_to_staticmethod(mtext)
@@ -249,7 +249,7 @@ def transform(wt: Path) -> None:
     etext = replace_call_site(
         etext,
         old="from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
-        new="from sglang.srt.managers.score_request_handler import ScoreResult",
+        new="from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult",
     )
     # Two sites in engine_score_mixin.py: score_request.
     etext = replace_call_site(
@@ -263,7 +263,7 @@ def transform(wt: Path) -> None:
     # Need a TokenizerManagerScoreMixin import in engine_score_mixin.py.
     etext = insert_after(
         etext,
-        anchor="from sglang.srt.managers.score_request_handler import ScoreResult\n",
+        anchor="from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult\n",
         addition=(
             "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
             "    TokenizerManagerScoreMixin,\n"

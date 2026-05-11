@@ -61,9 +61,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
-from sglang.srt.managers.request_preparer import RequestPreparer
-from sglang.srt.managers.request_state import ReqState
-from sglang.srt.managers.response_emitter import ResponseEmitter
+from sglang.srt.managers.tokenizer_manager_components.request_preparer import RequestPreparer
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -86,7 +86,7 @@ class BatchRequestDispatcher:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/batch_request_dispatcher.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/batch_request_dispatcher.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -96,13 +96,13 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor=(
-            "from sglang.srt.managers.corpus_controller import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.corpus_controller import (\n"
             "    CorpusController,\n"
             "    CorpusControllerConfig,\n"
             ")\n"
         ),
         addition=(
-            "from sglang.srt.managers.batch_request_dispatcher import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.batch_request_dispatcher import (\n"
             "    BatchRequestDispatcher,\n"
             "    BatchRequestDispatcherConfig,\n"
             ")\n"

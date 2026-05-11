@@ -59,7 +59,7 @@ _INCREMENTAL_STREAMING_META_INFO_KEYS = (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    re_ = wt / "python/sglang/srt/managers/response_emitter.py"
+    re_ = wt / "python/sglang/srt/managers/tokenizer_manager_components/response_emitter.py"
 
     # Cut bottom-up to keep line numbers stable.
     method_names = (

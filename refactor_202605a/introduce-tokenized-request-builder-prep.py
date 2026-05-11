@@ -98,7 +98,7 @@ NEW_CREATE_HEADER = '''    @staticmethod
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/tokenized_request_builder.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/tokenized_request_builder.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -106,7 +106,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.tokenized_request_builder import (\n"
+            "from sglang.srt.managers.tokenizer_manager_components.tokenized_request_builder import (\n"
             "    TokenizedRequestBuilder,\n"
             "    TokenizedRequestBuilderConfig,\n"
             ")\n"

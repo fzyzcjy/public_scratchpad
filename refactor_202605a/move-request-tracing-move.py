@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mechanical move of convert_to_span_attrs (staticmethod form) out of
-TokenizerManager to ``managers/request_tracing.py`` as free function
+TokenizerManager to ``managers/tokenizer_manager_components/request_tracing.py`` as free function
 ``make_span_attrs``. Per MECH_COMMIT_SPLIT: only physical relocation + the
 rename ``convert_to_span_attrs`` -> ``make_span_attrs``.
 
@@ -23,14 +23,14 @@ from _helpers import cut_lines, find_method_lines, insert_after, replace_call_si
 from _runner import run_pr
 
 ID = "move-request-tracing-move"
-SUBJECT = "Move convert_to_span_attrs to managers/request_tracing.py as make_span_attrs"
+SUBJECT = "Move convert_to_span_attrs to managers/tokenizer_manager_components/request_tracing.py as make_span_attrs"
 BODY = """\
 Physical move only:
   - Cut @staticmethod convert_to_span_attrs from TokenizerManager
   - Drop ``@staticmethod`` decorator; dedent body to module level
   - Rename ``convert_to_span_attrs`` -> ``make_span_attrs`` (clearer name
     at module scope; absorbed per (2) of plan note 2026-05-11)
-  - Write managers/request_tracing.py with the needed imports
+  - Write managers/tokenizer_manager_components/request_tracing.py with the needed imports
   - Update single caller in _handle_batch_output to ``request_tracing.make_span_attrs(...)``
 """
 AREA = "mech_tokenizer_manager"
@@ -48,7 +48,7 @@ from sglang.srt.managers.io_struct import (
     BatchStrOutput,
     BatchTokenIDOutput,
 )
-from sglang.srt.managers.request_state import ReqState
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.observability.trace import SpanAttributes
 
 
@@ -57,7 +57,7 @@ from sglang.srt.observability.trace import SpanAttributes
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/request_tracing.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/request_tracing.py"
 
     # Cut staticmethod from TM.
     s, e = find_method_lines(

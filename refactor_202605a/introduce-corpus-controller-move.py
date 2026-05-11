@@ -45,7 +45,7 @@ from sglang.srt.managers.io_struct import (
 def transform(wt: Path) -> None:
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
-    cc = wt / "python/sglang/srt/managers/corpus_controller.py"
+    cc = wt / "python/sglang/srt/managers/tokenizer_manager_components/corpus_controller.py"
 
     method_names = ("add_external_corpus", "remove_external_corpus", "list_external_corpora")
 

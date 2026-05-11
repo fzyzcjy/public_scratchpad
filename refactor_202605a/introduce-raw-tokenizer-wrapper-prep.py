@@ -126,7 +126,7 @@ def _method_ranges(text: str, class_name: str, method_name: str):
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/raw_tokenizer_wrapper.py"
     new.write_text(HEADER)
 
     text = tm.read_text()
@@ -154,7 +154,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
-        addition="from sglang.srt.managers.raw_tokenizer_wrapper import RawTokenizerWrapper\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import RawTokenizerWrapper\n",
     )
 
     # ---- 3. Retype init_tokenizer_and_processor on TM. Body stays here;

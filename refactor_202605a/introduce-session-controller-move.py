@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    sc = wt / "python/sglang/srt/managers/session_controller.py"
+    sc = wt / "python/sglang/srt/managers/tokenizer_manager_components/session_controller.py"
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
 
@@ -144,7 +144,7 @@ def transform(wt: Path) -> None:
     mixin_text = control_mixin.read_text()
     mixin_text = replace_call_site(
         mixin_text,
-        old="    from sglang.srt.managers.session_controller import SessionController\n",
+        old="    from sglang.srt.managers.tokenizer_manager_components.session_controller import SessionController\n",
         new="",
     )
     control_mixin.write_text(mixin_text)

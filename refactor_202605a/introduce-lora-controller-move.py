@@ -81,7 +81,7 @@ def _strip_static_prefix(body: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    lc = wt / "python/sglang/srt/managers/lora_controller.py"
+    lc = wt / "python/sglang/srt/managers/tokenizer_manager_components/lora_controller.py"
 
     # Cut 2 methods from TM, bottom-up (highest start line first).
     tm_methods = ("_validate_and_resolve_lora", "_resolve_lora_path")

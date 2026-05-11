@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rtw = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
+    rtw = wt / "python/sglang/srt/managers/tokenizer_manager_components/raw_tokenizer_wrapper.py"
 
     # ---- 1. Cut the @staticmethod init_tokenizer_and_processor body from TM.
     s, e = find_method_lines(
@@ -126,27 +126,22 @@ def transform(wt: Path) -> None:
     )
     rtw.write_text(rtw_text)
 
-    # ---- 4. Drop the now-unused imports from TM. ``import os`` may still be
-    # used elsewhere — only drop the obviously-RTW-specific imports.
+    # ---- 4. TM caller rewrite: composition wiring used the prep-stage
+    # ``TokenizerManager.init_tokenizer_and_processor(self.raw_tokenizer_wrapper, ...)``
+    # form. After move, collapse to instance method call.
     text = tm.read_text()
-    # Drop multimodal processor import (only used by init_tokenizer_and_processor + InputFormat helpers
-    # that still live on TM until rtw-move-tokenize-helpers — but those use `import_processors`
-    # implicitly too?). Safer: leave imports alone in TM and let pre-commit's ruff F401 prune.
-
-    # ---- 5. Drop the prep-injected facade-attr rewrites in entrypoints / tests
-    # / docs. With @property the canonical form is ``tm.tokenizer`` etc., so the
-    # ``tm.raw_tokenizer_wrapper.tokenizer`` form should NOT exist anywhere
-    # except inside raw_tokenizer_wrapper.py itself. Sanity-check: search and
-    # warn if any other file references ``raw_tokenizer_wrapper.tokenizer``.
-    bad = []
-    for f in (wt / "python").rglob("*.py"):
-        if f == rtw:
-            continue
-        if "raw_tokenizer_wrapper.tokenizer" in f.read_text():
-            bad.append(f)
-    if bad:
-        # Don't fail — just print so we know if anything slips through.
-        print(f"WARN: residual raw_tokenizer_wrapper.tokenizer refs in: {bad}")
+    text = text.replace(
+        "        TokenizerManager.init_tokenizer_and_processor(\n"
+        "            self.raw_tokenizer_wrapper,\n"
+        "            server_args=self.server_args,\n"
+        "            model_config=self.model_config,\n"
+        "        )",
+        "        self.raw_tokenizer_wrapper.init_tokenizer_and_processor(\n"
+        "            server_args=self.server_args,\n"
+        "            model_config=self.model_config,\n"
+        "        )",
+    )
+    tm.write_text(text)
 
 
 if __name__ == "__main__":

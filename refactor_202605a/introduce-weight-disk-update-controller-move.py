@@ -78,7 +78,7 @@ def _strip_static_prefix(body: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    wd = wt / "python/sglang/srt/managers/weight_disk_update_controller.py"
+    wd = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_disk_update_controller.py"
 
     # Cut 4 methods from TM, bottom-up (highest start line first). The handler
     # method was privacy-flipped in prep.

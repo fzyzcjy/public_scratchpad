@@ -113,7 +113,11 @@ def transform(wt: Path) -> None:
     text = mr.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.model_executor.model_runner_components.weight_updater import WeightUpdater\n",
+        anchor=(
+            "from sglang.srt.model_executor.model_runner_components.weight_updater import (\n"
+            "    WeightUpdater,\n"
+            ")\n"
+        ),
         addition="from sglang.srt.model_executor.model_runner_components.weight_exporter import WeightExporter\n",
     )
     # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
