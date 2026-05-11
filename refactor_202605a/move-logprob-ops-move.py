@@ -232,16 +232,11 @@ def transform(wt: Path) -> None:
         old="TokenizerManager.convert_logprob_style(",
         new="logprob_ops.absorb_recv(",
     )
-    text = replace_call_site(
-        text,
-        old="TokenizerManager.detokenize_logprob_tokens(",
-        new="logprob_ops._detokenize_logprob_tokens(",
-    )
-    text = replace_call_site(
-        text,
-        old="TokenizerManager.detokenize_top_logprobs_tokens(",
-        new="logprob_ops._detokenize_top_logprobs_tokens(",
-    )
+    # NOTE: detokenize_logprob_tokens / detokenize_top_logprobs_tokens have NO
+    # external callers in TM -- they're only called from within
+    # add_logprob_to_meta_info (which itself was just cut from TM). So no
+    # ``TokenizerManager.detokenize_*(`` references remain after the four method
+    # bodies are removed.
 
     tm.write_text(text)
 

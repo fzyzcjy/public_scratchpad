@@ -310,16 +310,18 @@ def _rewrite_detokenize_top(method_text: str) -> str:
     if old_header not in text:
         raise RuntimeError("detokenize_top_logprobs_tokens signature anchor mismatch")
     text = text.replace(old_header, NEW_DETOKENIZE_TOP_HEADER)
+    if "                    self.detokenize_logprob_tokens(\n" not in text:
+        raise RuntimeError("detokenize_top: intra-method call anchor mismatch")
     text = text.replace(
-        "                self.detokenize_logprob_tokens(\n"
-        "                    token_logprobs_val[i], token_logprobs_idx[i], decode_to_text\n"
-        "                )\n",
-        "                TokenizerManager.detokenize_logprob_tokens(\n"
-        "                    token_logprobs_val[i],\n"
-        "                    token_logprobs_idx[i],\n"
-        "                    decode_to_text=decode_to_text,\n"
-        "                    tokenizer=tokenizer,\n"
-        "                )\n",
+        "                    self.detokenize_logprob_tokens(\n"
+        "                        token_logprobs_val[i], token_logprobs_idx[i], decode_to_text\n"
+        "                    )\n",
+        "                    TokenizerManager.detokenize_logprob_tokens(\n"
+        "                        token_logprobs_val[i],\n"
+        "                        token_logprobs_idx[i],\n"
+        "                        decode_to_text=decode_to_text,\n"
+        "                        tokenizer=tokenizer,\n"
+        "                    )\n",
     )
     return text
 

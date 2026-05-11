@@ -150,6 +150,40 @@ def append_to_file(path: Path, snippet: str, *, separator: str = "\n\n") -> None
     path.write_text(existing + snippet)
 
 
+def rewrite_method_call_site(text: str, *, method_name: str, target_attr: str) -> str:
+    """Robustly rewrite ``self.<method_name>(self.<target_attr>, ...)`` →
+    ``self.<target_attr>.<method_name>(...)`` regardless of how black
+    formatted the call (single-line or multi-line).
+
+    Matches ``self.<method>(\\s*self.<target_attr>,\\s*`` and replaces with
+    ``self.<target_attr>.<method>(``.
+
+    Also handles the zero-arg case (``self.<method>(self.<target_attr>)``) →
+    ``self.<target_attr>.<method>()``.
+
+    Raises ``ValueError`` if no matches found (signals a stale anchor).
+    """
+    import re
+
+    pattern_nargs = (
+        rf"self\.{re.escape(method_name)}\(\s*self\.{re.escape(target_attr)},\s*"
+    )
+    pattern_noargs = (
+        rf"self\.{re.escape(method_name)}\(\s*self\.{re.escape(target_attr)}\s*\)"
+    )
+    new_nargs = f"self.{target_attr}.{method_name}("
+    new_noargs = f"self.{target_attr}.{method_name}()"
+
+    count = len(re.findall(pattern_nargs, text)) + len(re.findall(pattern_noargs, text))
+    if count == 0:
+        raise ValueError(
+            f"no call sites found for self.{method_name}(self.{target_attr}, ...)"
+        )
+    text = re.sub(pattern_noargs, new_noargs, text)
+    text = re.sub(pattern_nargs, new_nargs, text)
+    return text
+
+
 def dedent_method_to_function(method_text: str) -> str:
     """Strip 4 leading spaces from each line — converts ``    def foo`` → ``def foo``."""
     out = []
