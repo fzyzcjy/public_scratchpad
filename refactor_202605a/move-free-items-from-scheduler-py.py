@@ -12,9 +12,9 @@ The items are byte-identical-relocated; no rename, no signature change.
 | 5 | ``is_health_check_generate_req`` | ``managers/utils.py`` (fixes ``tokenizer_manager`` reverse-import) |
 | 6 | ``SenderWrapper`` | ``scheduler_components/output_sender.py`` (new) |
 
-Body bytes preserved; only imports rewritten. PR 2 follow-up handles the
-non-mech cleanups (delete dead ``is_work_request``; rename ``SenderWrapper``
-→ ``SchedulerOutputSender``).
+Body bytes preserved; only imports rewritten. Follow-up commit
+(``cleanup-scheduler-py-free-items``) deletes dead-code
+``is_work_request``.
 """
 
 # /// script
@@ -55,10 +55,8 @@ signature change.
 Caller-site impact: only import-path rewrites. ``scheduler.py`` shrinks
 by ~200 lines net.
 
-A follow-up commit (``cleanup-scheduler-py-free-items``) handles the
-non-mech cleanups (delete dead ``is_work_request``; rename
-``SenderWrapper`` → ``SchedulerOutputSender`` to resolve the namesake
-collision with ``multi_tokenizer_mixin.SenderWrapper``).
+A follow-up commit (``cleanup-scheduler-py-free-items``) deletes the
+dead-code ``is_work_request`` function (zero callers codebase-wide).
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -334,11 +332,7 @@ def _move_sender_wrapper(wt: Path) -> None:
     new_file_text = (
         '"""``SenderWrapper`` — zmq.Socket wrapper for scheduler → tokenizer /\n'
         "detokenizer output channel. Copies ``http_worker_ipc`` from recv_obj\n"
-        "to output when needed (multi-http-worker IPC handoff).\n\n"
-        "Note: there is a separate ``SenderWrapper`` class in\n"
-        "``multi_tokenizer_mixin`` with a different signature. The namesake\n"
-        "collision is resolved by a follow-up commit which renames this one\n"
-        "to ``SchedulerOutputSender``.\n"
+        "to output when needed (multi-http-worker IPC handoff).\n"
         '"""\n\n'
         "from typing import Optional, Union\n\n"
         "import zmq\n\n"
