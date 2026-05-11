@@ -208,7 +208,7 @@ def transform(wt: Path) -> None:
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"
             "                speculative_num_draft_tokens=self.server_args.speculative_num_draft_tokens,\n"
             "                dp_size=self.server_args.dp_size,\n"
-            "                enable_lora=bool(self.server_args.lora_paths),\n"
+            "                enable_lora=self.server_args.enable_lora,\n"
             "                served_model_name=self.server_args.served_model_name,\n"
             "            ),\n"
             "        )\n"

@@ -170,7 +170,7 @@ def transform(wt: Path) -> None:
             "            request_metrics_recorder=self.request_metrics_recorder,\n"
             "            config=ResponseEmitterConfig(\n"
             "                incremental_streaming_output=self.server_args.incremental_streaming_output,\n"
-            "                enable_lora=bool(self.server_args.lora_paths),\n"
+            "                enable_lora=self.server_args.enable_lora,\n"
             "            ),\n"
             "        )\n"
             "\n"

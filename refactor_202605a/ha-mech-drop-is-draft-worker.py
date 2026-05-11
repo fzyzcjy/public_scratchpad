@@ -49,6 +49,7 @@ _FILES_TO_PATCH = [
     "python/sglang/srt/layers/attention/attention_registry.py",
     "python/sglang/srt/layers/attention/hybrid_linear_attn_backend.py",
     "python/sglang/srt/managers/scheduler.py",
+    "python/sglang/srt/model_executor/model_runner.py",
     "python/sglang/srt/model_executor/pool_configurator.py",
     "python/sglang/srt/model_executor/model_runner_kv_cache_mixin.py",
     "python/sglang/srt/speculative/eagle_worker.py",
