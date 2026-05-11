@@ -35,9 +35,11 @@ ORDER: list[str] = [
     "move-spec-decoding-meta-move",
     "define-scheduler-sender",
     # Stage 1 — score handler early
-    "introduce-score-request-handler",
+    "introduce-score-request-handler-prep",
+    "introduce-score-request-handler-move",
     # Stage 2 — inputs
-    "introduce-raw-tokenizer-wrapper",
+    "introduce-raw-tokenizer-wrapper-prep",
+    "introduce-raw-tokenizer-wrapper-move",
     "rtw-move-tokenize-helpers",
     "introduce-request-validator-prep",
     "introduce-request-validator-move",
@@ -53,19 +55,24 @@ ORDER: list[str] = [
     "introduce-request-metrics-recorder-prep",
     "introduce-request-metrics-recorder-move",
     # Stage 4 — control (session first; splits init_request_dispatcher)
-    "introduce-session-controller",
+    "introduce-session-controller-prep",
+    "introduce-session-controller-move",
     "introduce-pause-controller-prep",
     "introduce-pause-controller-move",
     "introduce-weight-disk-update-controller-prep",
     "introduce-weight-disk-update-controller-move",
-    "introduce-lora-controller",
+    "introduce-lora-controller-prep",
+    "introduce-lora-controller-move",
     "introduce-corpus-controller-prep",
     "introduce-corpus-controller-move",
     # Stage 5 — outputs
-    "introduce-output-processor",
-    "introduce-response-emitter",
+    "introduce-output-processor-prep",
+    "introduce-output-processor-move",
+    "introduce-response-emitter-prep",
+    "introduce-response-emitter-move",
     # Stage 6 — _handle_batch_request 切段
-    "extract-handle-batch-request-wait-yield",
+    "extract-handle-batch-request-wait-yield-prep",
+    "extract-handle-batch-request-wait-yield-move",
     # Stage 7 — MM 分支抽出 (deferred — script TBD; non-canonical complexity per plan §V2.6)
     # "mmp-extract-tokenize-branch",
 ]

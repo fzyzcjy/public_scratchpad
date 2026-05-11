@@ -65,15 +65,11 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        self.use_ngram_embedding = (\n"
-            "            model_runner.ngram_embedding_manager.use_ngram_embedding\n"
+            "            model_runner.ngram_embedding_manager.enabled\n"
             "        )\n"
             "        if self.use_ngram_embedding:\n"
-            "            self.ngram_embedding_n = (\n"
-            "                model_runner.ngram_embedding_manager.ngram_embedding_n\n"
-            "            )\n"
-            "            self.ngram_embedding_k = (\n"
-            "                model_runner.ngram_embedding_manager.ngram_embedding_k\n"
-            "            )\n"
+            "            self.ngram_embedding_n = model_runner.ngram_embedding_manager.n\n"
+            "            self.ngram_embedding_k = model_runner.ngram_embedding_manager.k\n"
         ),
     )
 
@@ -88,7 +84,7 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "            ne_token_table=(\n"
-            "                model_runner.ngram_embedding_manager.token_table\n"
+            "                model_runner.ngram_embedding_manager.table\n"
             "                if self.use_ngram_embedding\n"
             "                else None\n"
             "            ),\n"
@@ -103,7 +99,7 @@ def transform(wt: Path) -> None:
     fbi_text = replace_call_site(
         fbi_text,
         old="        if model_runner.use_ngram_embedding:\n",
-        new="        if model_runner.ngram_embedding_manager.use_ngram_embedding:\n",
+        new="        if model_runner.ngram_embedding_manager.enabled:\n",
     )
     fbi.write_text(fbi_text)
 
