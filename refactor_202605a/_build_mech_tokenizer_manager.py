@@ -34,6 +34,7 @@ ORDER: list[str] = [
     "move-spec-decoding-meta-prep",
     "move-spec-decoding-meta-move",
     "define-scheduler-sender",
+    "move-init-request-dispatcher-call",
     # Stage 1 — score handler early
     "introduce-score-request-handler-prep",
     "introduce-score-request-handler-move",

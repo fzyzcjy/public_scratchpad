@@ -129,7 +129,7 @@ def transform(wt: Path) -> None:
         f = Path(fpath)
         t = f.read_text()
         t_new = _re.sub(
-            r"\b([\w\.]+?)\.create_abort_task\(\1\.response_emitter,\s*",
+            r"(?<![\w.])([\w][\w.]*)\.create_abort_task\(\1\.response_emitter,\s*",
             r"\1.response_emitter.create_abort_task(",
             t,
         )

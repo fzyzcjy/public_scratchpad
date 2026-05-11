@@ -54,29 +54,21 @@ def transform(wt: Path) -> None:
     text = text.replace(sentinel, "\n" + method_text.rstrip() + "\n\n" + sentinel, 1)
     wu.write_text(text)
 
-    # Lenient regex tolerates pre-commit line joins/splits.
-    for path in (tw, ew):
-        text = path.read_text()
-        text = re.sub(
-            r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
-            "",
-            text,
-            flags=re.MULTILINE,
-        )
-        path.write_text(text)
-
+    # Collapse paired ``local_import + qualified_call`` blocks.
     text = tw.read_text()
     text = re.sub(
-        r"ModelRunner\.update_weights_from_ipc\(\s*self\.model_runner\.weight_updater,\s*recv_req\s*\)",
-        "self.model_runner.weight_updater.update_weights_from_ipc(recv_req)",
+        r"[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n"
+        r"([ \t]*)success, message = ModelRunner\.update_weights_from_ipc\(\s*self\.model_runner\.weight_updater,\s*recv_req\s*\)",
+        r"\1success, message = self.model_runner.weight_updater.update_weights_from_ipc(recv_req)",
         text,
     )
     tw.write_text(text)
 
     text = ew.read_text()
     text = re.sub(
-        r"ModelRunner\.update_weights_from_ipc\(\s*self\._draft_worker\.draft_runner\.weight_updater,\s*",
-        "self._draft_worker.draft_runner.weight_updater.update_weights_from_ipc(",
+        r"[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n"
+        r"([ \t]*)success, message = ModelRunner\.update_weights_from_ipc\(\s*self\._draft_worker\.draft_runner\.weight_updater,\s*",
+        r"\1success, message = self._draft_worker.draft_runner.weight_updater.update_weights_from_ipc(",
         text,
     )
     ew.write_text(text)

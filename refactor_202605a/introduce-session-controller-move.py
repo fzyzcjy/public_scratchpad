@@ -194,10 +194,8 @@ def transform(wt: Path) -> None:
             "        )\n"
         ),
         new=(
-            "        session_id = (\n"
-            "            await _global_state.tokenizer_manager.session_controller.open_session(\n"
-            "                obj, request\n"
-            "            )\n"
+            "        session_id = await _global_state.tokenizer_manager.session_controller.open_session(\n"
+            "            obj, request\n"
             "        )\n"
         ),
     )

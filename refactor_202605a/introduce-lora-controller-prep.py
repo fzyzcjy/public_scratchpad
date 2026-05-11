@@ -232,6 +232,13 @@ def transform(wt: Path) -> None:
         old="            await self._validate_and_resolve_lora(obj)\n",
         new="            await TokenizerManager._validate_and_resolve_lora(self.lora_controller, obj)\n",
     )
+    # External readers of LoraController fields (outside the 6 retyped methods) in TM:
+    # both call sites read self.lora_registry.release(state.obj.lora_id) inside
+    # _wait_one_response / handle_loop. Rewire to self.lora_controller.lora_registry.
+    text = text.replace(
+        "self.lora_registry.release(state.obj.lora_id)",
+        "self.lora_controller.lora_registry.release(state.obj.lora_id)",
+    )
 
     tm.write_text(text)
 
@@ -273,6 +280,11 @@ def transform(wt: Path) -> None:
                 f"{prefix}.{method}(",
                 f"TokenizerManager.{method}({prefix}.lora_controller, ",
             )
+        # External read of lora_registry in http_server's /v1/models lister.
+        ep_text = ep_text.replace(
+            f"{prefix}.lora_registry",
+            f"{prefix}.lora_controller.lora_registry",
+        )
         ep.write_text(ep_text)
 
 

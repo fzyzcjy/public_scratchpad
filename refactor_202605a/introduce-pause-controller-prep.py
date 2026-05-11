@@ -287,21 +287,21 @@ def transform(wt: Path) -> None:
         f = Path(fpath)
         t = f.read_text()
         original = t
-        t = re.sub(
-            r"\btokenizer_manager\.abort_request\(",
-            "TokenizerManager.abort_request(tokenizer_manager.pause_controller, ",
-            t,
-        )
-        t = re.sub(
-            r"\btokenizer_manager\.pause_generation\(",
-            "TokenizerManager.pause_generation(tokenizer_manager.pause_controller, ",
-            t,
-        )
-        t = re.sub(
-            r"\btokenizer_manager\.continue_generation\(",
-            "TokenizerManager.continue_generation(tokenizer_manager.pause_controller, ",
-            t,
-        )
+        # Capture the `<prefix>.tokenizer_manager.<method>(` form so the rewrite
+        # keeps the prefix intact: <prefix>.tokenizer_manager.<method>(args)
+        # -> TokenizerManager.<method>(<prefix>.tokenizer_manager.pause_controller, args)
+        for method in ("abort_request", "pause_generation", "continue_generation"):
+            t = re.sub(
+                rf"(\b[\w.]+\.)tokenizer_manager\.{method}\(",
+                lambda m, _meth=method: f"TokenizerManager.{_meth}({m.group(1)}tokenizer_manager.pause_controller, ",
+                t,
+            )
+            # Bare `tokenizer_manager.<method>(` form (no prefix).
+            t = re.sub(
+                rf"(?<![\w.])tokenizer_manager\.{method}\(",
+                f"TokenizerManager.{method}(tokenizer_manager.pause_controller, ",
+                t,
+            )
         if t != original:
             # Make sure TokenizerManager is imported.
             if "from sglang.srt.managers.tokenizer_manager import" not in t:

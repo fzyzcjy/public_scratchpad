@@ -60,6 +60,17 @@ METHODS = [
 def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace(f"self: \"{target_class}\"", "self")
+    # Sibling-dispatch strip: inside the moved body, `self.<m>(self.output_streamer, ...)`
+    # was the prep-form for cross-class @staticmethod calls. After the body lands
+    # on SchedulerOutputStreamer, ``self`` already IS the streamer — drop the
+    # extra `self.output_streamer,` positional arg.
+    import re
+    text = re.sub(
+        r"self\.(\w+)\(\s*self\.output_streamer\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 

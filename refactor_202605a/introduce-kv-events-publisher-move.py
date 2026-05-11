@@ -48,6 +48,13 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace(f"self: \"{target_class}\"", "self")
+    import re
+    text = re.sub(
+        r"self\.(\w+)\(\s*self\.kv_events_publisher\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 

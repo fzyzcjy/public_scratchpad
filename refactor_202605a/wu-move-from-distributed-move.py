@@ -74,17 +74,12 @@ def transform(wt: Path) -> None:
     wu.write_text(text)
     append_to_file(wu, uwd.rstrip() + "\n\n" + bucketed.rstrip() + "\n", separator="\n")
 
-    # External caller: drop local import + collapse to instance form.
+    # External caller: collapse paired ``local_import + qualified_call``.
     text = tw.read_text()
     text = re.sub(
-        r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
-        "",
-        text,
-        flags=re.MULTILINE,
-    )
-    text = re.sub(
-        r"ModelRunner\.update_weights_from_distributed\(\s*self\.model_runner\.weight_updater,\s*",
-        "self.model_runner.weight_updater.update_weights_from_distributed(",
+        r"[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n"
+        r"([ \t]*)success, message = ModelRunner\.update_weights_from_distributed\(\s*self\.model_runner\.weight_updater,\s*",
+        r"\1success, message = self.model_runner.weight_updater.update_weights_from_distributed(",
         text,
     )
     tw.write_text(text)

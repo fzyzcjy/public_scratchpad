@@ -113,6 +113,7 @@ def transform(wt: Path) -> None:
         ")\n"
     )
 
+    import re as _re
     for path, methods in (
         (engine, ("score_request",)),
         (serving_score, ("score_request",)),
@@ -120,11 +121,20 @@ def transform(wt: Path) -> None:
     ):
         ftext = path.read_text()
         for method in methods:
+            # Handle both single-line and multi-line (black-wrapped) forms.
             ftext = ftext.replace(
                 f"TokenizerManagerScoreMixin.{method}(self.tokenizer_manager.score_request_handler, ",
                 f"self.tokenizer_manager.score_request_handler.{method}(",
             )
-        ftext = replace_call_site(ftext, old=mixin_import, new="")
+            # Multi-line: `TokenizerManagerScoreMixin.<m>(\n    self.tokenizer_manager.score_request_handler,\n    X`
+            ftext = _re.sub(
+                rf"TokenizerManagerScoreMixin\.{_re.escape(method)}\(\s*\n(\s*)self\.tokenizer_manager\.score_request_handler,\s*\n\1",
+                lambda m, _meth=method: f"self.tokenizer_manager.score_request_handler.{_meth}(\n{m.group(1)}",
+                ftext,
+            )
+        # Drop mixin import (might not exist if no callers needed it).
+        if mixin_import in ftext:
+            ftext = ftext.replace(mixin_import, "")
         path.write_text(ftext)
 
     # ScoreResult import in engine_score_mixin.py already points at the new

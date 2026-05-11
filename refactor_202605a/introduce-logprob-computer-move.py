@@ -61,6 +61,13 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     """Drop @staticmethod and the ``self: "TargetClass"`` annotation."""
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace(f"self: \"{target_class}\"", "self")
+    import re
+    text = re.sub(
+        r"self\.(\w+)\(\s*self\.logprob_computer\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 

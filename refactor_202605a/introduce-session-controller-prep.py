@@ -171,64 +171,12 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Restructure init_request_dispatcher: pull dispatcher creation + init_communicators
-    # earlier so owner-class ctors can find them. Strip AbortReq /
-    # OpenSessionReqOutput / UpdateWeightFromDiskReqOutput entries from the early
-    # dispatcher — they get re-registered post-construction by their owner classes
-    # (SessionController registers OpenSessionReqOutput in __post_init__).
+    # Drop the OpenSessionReqOutput entry from init_request_dispatcher body
+    # (SessionController.__post_init__ registers it via lambda forwarder).
     text = replace_call_site(
         text,
-        old=(
-            "    def init_request_dispatcher(self):\n"
-            "        self._result_dispatcher = TypeBasedDispatcher(\n"
-            "            [\n"
-            "                (AbortReq, self._handle_abort_req),\n"
-            "                (OpenSessionReqOutput, self._handle_open_session_req_output),\n"
-            "                (\n"
-            "                    UpdateWeightFromDiskReqOutput,\n"
-            "                    self._handle_update_weights_from_disk_req_output,\n"
-            "                ),\n"
-            "                (FreezeGCReq, lambda x: None),\n"
-            "                # For handling case when scheduler skips detokenizer and forwards back to the tokenizer manager, we ignore it.\n"
-            "                (HealthCheckOutput, lambda x: None),\n"
-            "                (ActiveRanksOutput, self.update_active_ranks),\n"
-            "            ]\n"
-            "        )\n"
-            "        self.init_communicators(self.server_args)\n"
-            "\n"
-            "        self.sampling_params_class = SamplingParams\n"
-            "        self.signal_handler_class = SignalHandler\n"
-        ),
-        new=(
-            "    def init_request_dispatcher(self):\n"
-            "        self.sampling_params_class = SamplingParams\n"
-            "        self.signal_handler_class = SignalHandler\n"
-        ),
-    )
-    text = replace_call_site(
-        text,
-        old="        self.init_metric_collector_watchdog()\n",
-        new=(
-            "        self.init_metric_collector_watchdog()\n"
-            "\n"
-            "        # Result dispatcher (created early so controllers can register handlers in __post_init__)\n"
-            "        self._result_dispatcher = TypeBasedDispatcher(\n"
-            "            [\n"
-            "                (AbortReq, self._handle_abort_req),\n"
-            "                (\n"
-            "                    UpdateWeightFromDiskReqOutput,\n"
-            "                    self._handle_update_weights_from_disk_req_output,\n"
-            "                ),\n"
-            "                (FreezeGCReq, lambda x: None),\n"
-            "                # For handling case when scheduler skips detokenizer and forwards back to the tokenizer manager, we ignore it.\n"
-            "                (HealthCheckOutput, lambda x: None),\n"
-            "                (ActiveRanksOutput, self.update_active_ranks),\n"
-            "            ]\n"
-            "        )\n"
-            "\n"
-            "        # Communicators (RPC fan-out) -- needed by owner-class ctors below.\n"
-            "        self.init_communicators(self.server_args)\n"
-        ),
+        old="                (OpenSessionReqOutput, self._handle_open_session_req_output),\n",
+        new="",
     )
 
     text = insert_after(
@@ -288,11 +236,15 @@ def transform(wt: Path) -> None:
         new_header=NEW_OPEN_HEADER,
     )
     # SessionController is referenced as a forward-ref string in annotations, so
-    # the mixin needs a TYPE_CHECKING import to satisfy static checkers.
-    mixin_text = insert_after(
+    # the mixin needs a TYPE_CHECKING import to satisfy static checkers. Insert
+    # in alphabetical order (session_controller < tokenizer_manager).
+    mixin_text = replace_call_site(
         mixin_text,
-        anchor="    from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
-        addition="    from sglang.srt.managers.session_controller import SessionController\n",
+        old="    from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
+        new=(
+            "    from sglang.srt.managers.session_controller import SessionController\n"
+            "    from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
+        ),
     )
     control_mixin.write_text(mixin_text)
 

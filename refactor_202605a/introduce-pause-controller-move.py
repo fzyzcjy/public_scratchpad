@@ -137,14 +137,27 @@ def transform(wt: Path) -> None:
     # Entrypoints: TokenizerManager.<m>(tokenizer_manager.pause_controller, ...) -> tokenizer_manager.pause_controller.<m>(...).
     import glob
 
+    import re as _re
     for fpath in glob.glob(str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True):
         f = Path(fpath)
         t = f.read_text()
         original = t
         for m in ("abort_request", "pause_generation", "continue_generation"):
+            # Bare form: TokenizerManager.<m>(tokenizer_manager.pause_controller, ...)
             t = t.replace(
                 f"TokenizerManager.{m}(tokenizer_manager.pause_controller, ",
                 f"tokenizer_manager.pause_controller.{m}(",
+            )
+            # Prefixed form: TokenizerManager.<m>(<prefix>.tokenizer_manager.pause_controller, ...)
+            t = _re.sub(
+                rf"TokenizerManager\.{_re.escape(m)}\(\s*\n?(\s*)([\w.]+)\.tokenizer_manager\.pause_controller,\s*",
+                lambda mat, _meth=m: f"{mat.group(2)}.tokenizer_manager.pause_controller.{_meth}(\n{mat.group(1)}",
+                t,
+            )
+            t = _re.sub(
+                rf"TokenizerManager\.{_re.escape(m)}\(([\w.]+)\.tokenizer_manager\.pause_controller, ",
+                lambda mat, _meth=m: f"{mat.group(1)}.tokenizer_manager.pause_controller.{_meth}(",
+                t,
             )
         if t != original:
             # Drop the now-unused import injected by prep (if it was added by prep).
