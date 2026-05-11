@@ -473,6 +473,58 @@ def transform(wt: Path) -> None:
     ordered = sorted(METHODS_TO_FLIP, key=lambda m: method_lineno.get(m, 0), reverse=True)
     for name in ordered:
         text = _typeflip_method(text, method_name=name)
+
+    # 2.5 Strip the duplicate ``SchedulerMetricsCollector`` construction from
+    # ``init_metrics``. Scheduler.__init__ now builds + owns the collector
+    # (option b) and forwards it via the reporter ctor kwarg; if init_metrics
+    # also constructs, the second SchedulerMetricsCollector(...) re-registers
+    # Prometheus metrics and crashes with ``Duplicated timeseries``.
+    text = replace_call_site(
+        text,
+        old=(
+            "        if self.enable_metrics:\n"
+            "            engine_type = DisaggregationMode.to_engine_type(\n"
+            "                self.server_args.disaggregation_mode\n"
+            "            )\n"
+            "\n"
+            "            labels = {\n"
+            "                \"model_name\": self.server_args.served_model_name,\n"
+            "                \"engine_type\": engine_type,\n"
+            "                \"tp_rank\": tp_rank,\n"
+            "                \"pp_rank\": pp_rank,\n"
+            "                \"moe_ep_rank\": self.ps.moe_ep_rank,\n"
+            "            }\n"
+            "            if self.enable_priority_scheduling:\n"
+            "                labels[\"priority\"] = \"\"\n"
+            "            if dp_rank is not None:\n"
+            "                labels[\"dp_rank\"] = dp_rank\n"
+            "            if self.server_args.extra_metric_labels:\n"
+            "                labels.update(self.server_args.extra_metric_labels)\n"
+            "            self.metrics_collector = SchedulerMetricsCollector(\n"
+            "                labels=labels,\n"
+            "                enable_lora=self.enable_lora,\n"
+            "                enable_hierarchical_cache=self.enable_hierarchical_cache,\n"
+            "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
+            "                server_args=self.server_args,\n"
+            "            )\n"
+            "            self.enable_mfu_metrics = self.server_args.enable_mfu_metrics\n"
+        ),
+        new=(
+            "        if self.enable_metrics:\n"
+            "            # metrics_collector is constructed in Scheduler.__init__\n"
+            "            # (option b ownership) and passed via ctor kwarg; do not\n"
+            "            # re-construct here (would re-register Prometheus metrics).\n"
+            "            self.enable_mfu_metrics = self.server_args.enable_mfu_metrics\n"
+        ),
+    )
+    # SchedulerMetricsCollector is no longer used in the mixin (the construction
+    # block above was the only usage). Drop just that name from the grouped
+    # import (other names in the same block are still used).
+    text = replace_call_site(
+        text,
+        old="    SchedulerMetricsCollector,\n",
+        new="",
+    )
     src.write_text(text)
 
     # 3. Scheduler: import + ctor instantiation + early-fields block +
