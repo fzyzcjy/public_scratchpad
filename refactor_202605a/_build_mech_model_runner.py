@@ -73,6 +73,8 @@ ORDER: list[str] = [
     "extract-autotune-helpers-move",
     "extract-kernel-warmup-prep",
     "extract-kernel-warmup-move",
+    "extract-dummy-run-prep",
+    "extract-dummy-run-move",
     "extract-lora-moe-buffers-prep",
     "extract-lora-moe-buffers-move",
     "extract-flashinfer-allreduce-workspace-prep",
