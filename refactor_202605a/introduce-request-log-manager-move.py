@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines
+from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-request-log-manager-move"
@@ -72,13 +72,20 @@ def transform(wt: Path) -> None:
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
         cut_blocks[n] = cut_lines(tm, s, e)
 
-    # Strip @staticmethod + restore plain self for the 4 methods we keep.
+    # Strip @staticmethod + restore plain self for the 4 methods we keep,
+    # then flip intra-class qualifier on cross-method calls.
     kept = []
     for n in ("dump_requests", "record_request_for_crash_dump", "_dump_data_to_file", "dump_requests_before_crash"):
         body = cut_blocks[n]
         body = body.replace("    @staticmethod\n", "", 1)
         body = body.replace('self: "RequestLogManager", ', "self, ")
         body = body.replace('self: "RequestLogManager",\n', "self,\n")
+        body = rewrite_intra_class_calls(
+            body,
+            source_classes=["TokenizerManager"],
+            target_class="RequestLogManager",
+            methods=list(method_names),
+        )
         kept.append(body.rstrip())
 
     rlm_text = rlm.read_text()
@@ -90,24 +97,27 @@ def transform(wt: Path) -> None:
 
     # Caller prefix replacement in TM:
     # TokenizerManager.<m>(self.request_log_manager, ...) → self.request_log_manager.<m>(...)
+    # Use regex to absorb both single-line and black-wrapped multi-line forms.
+    import re as _re
+
     text = tm.read_text()
-    text = text.replace(
-        "TokenizerManager.dump_requests(self.request_log_manager, state, out_dict)",
-        "self.request_log_manager.dump_requests(state, out_dict)",
-    )
-    text = text.replace(
-        "TokenizerManager.record_request_for_crash_dump(self.request_log_manager, state, out_dict)",
-        "self.request_log_manager.record_request_for_crash_dump(state, out_dict)",
-    )
-    text = text.replace(
-        "TokenizerManager.dump_requests_before_crash(\n"
-        "                self.request_log_manager,\n"
-        "                rid_to_state=self.rid_to_state,\n"
-        "            )",
-        "self.request_log_manager.dump_requests_before_crash(\n"
-        "                rid_to_state=self.rid_to_state,\n"
-        "            )",
-    )
+
+    def _rewrite_call(text: str, method: str) -> str:
+        # Match TokenizerManager.<method>(\s* self.request_log_manager ,\s* ARGS )
+        # where ARGS may span multiple lines (no nested parens in our call sites).
+        pat = _re.compile(
+            rf"TokenizerManager\.{_re.escape(method)}"
+            rf"\(\s*self\.request_log_manager\s*,\s*([^()]*?)\s*\)",
+            _re.DOTALL,
+        )
+        return pat.sub(
+            lambda m: f"self.request_log_manager.{method}({_re.sub(r'\\s+', ' ', m.group(1)).strip()})",
+            text,
+        )
+
+    text = _rewrite_call(text, "dump_requests")
+    text = _rewrite_call(text, "record_request_for_crash_dump")
+    text = _rewrite_call(text, "dump_requests_before_crash")
     tm.write_text(text)
 
     multi = wt / "python/sglang/srt/managers/multi_tokenizer_mixin.py"

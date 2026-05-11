@@ -83,10 +83,15 @@ def transform(wt: Path) -> None:
         1,
     )
     # Intra-class call: TokenizerManager._should_dispatch_to_encoder(self, obj)
-    #                 → self.should_dispatch_to_encoder(obj)
-    handle_text = handle_text.replace(
-        "TokenizerManager._should_dispatch_to_encoder(self, obj)",
+    #                 → self.should_dispatch_to_encoder(obj).
+    # Regex tolerates the black-wrapped multi-line variant where ``self, obj``
+    # ends up on its own line.
+    import re as _re
+
+    handle_text = _re.sub(
+        r"TokenizerManager\._should_dispatch_to_encoder\(\s*self,\s*obj\s*\)",
         "self.should_dispatch_to_encoder(obj)",
+        handle_text,
     )
 
     mp_text = mp.read_text()

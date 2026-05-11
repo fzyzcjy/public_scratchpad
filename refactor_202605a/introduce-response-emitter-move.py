@@ -42,6 +42,7 @@ import fastapi
 from fastapi import BackgroundTasks
 
 from sglang.srt.environ import envs
+from sglang.srt.managers import logprob_ops
 from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput
 
 logger = logging.getLogger(__name__)

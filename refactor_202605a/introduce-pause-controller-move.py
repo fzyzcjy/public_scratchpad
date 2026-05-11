@@ -17,7 +17,12 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, replace_call_site
+from _helpers import (
+    cut_lines,
+    find_method_lines,
+    replace_call_site,
+    rewrite_intra_class_calls,
+)
 from _runner import run_pr
 
 ID = "introduce-pause-controller-move"
@@ -75,11 +80,17 @@ def transform(wt: Path) -> None:
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
         cut_blocks[n] = cut_lines(tm, s, e)
 
-    # Strip @staticmethod + restore plain self. Body is otherwise byte-identical.
+    # Strip @staticmethod + restore plain self; flip intra-class call qualifier.
     def strip_staticmethod_and_self_type(block: str) -> str:
         block = block.replace("    @staticmethod\n", "", 1)
         block = block.replace('self: "PauseController", ', "self, ")
         block = block.replace('self: "PauseController"', "self")
+        block = rewrite_intra_class_calls(
+            block,
+            source_classes=["TokenizerManager"],
+            target_class="PauseController",
+            methods=list(method_names),
+        )
         return block
 
     bodies = [strip_staticmethod_and_self_type(cut_blocks[n]) for n in method_names]
@@ -160,12 +171,20 @@ def transform(wt: Path) -> None:
                 t,
             )
         if t != original:
-            # Drop the now-unused import injected by prep (if it was added by prep).
-            t = t.replace(
+            # Drop the prep-injected import only if no other reference to
+            # ``TokenizerManager`` remains in this file (e.g. as a type
+            # annotation on a constructor parameter). Otherwise we'd reintroduce
+            # an F821 in lint.
+            t_after = t.replace(
                 "from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
                 "",
                 1,
             )
+            if "TokenizerManager" in t_after:
+                # Still referenced — keep the import.
+                t = t
+            else:
+                t = t_after
             f.write_text(t)
 
 

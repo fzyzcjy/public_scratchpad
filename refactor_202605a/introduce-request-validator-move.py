@@ -125,25 +125,44 @@ def transform(wt: Path) -> None:
     )
 
     # Caller prefix replacement: TokenizerManager.<method>(self.request_validator, ...)
-    #                            -> self.request_validator.<new_name>(...)
+    #                            -> self.request_validator.<new_name>(...).
+    # Use regex to absorb both single-line and black-wrapped multi-line forms.
+    import re as _re
+
     text = tm.read_text()
-    text = text.replace(
-        "        TokenizerManager._validate_one_request(self.request_validator, obj, input_ids)",
-        "        self.request_validator.validate_one(obj=obj, input_ids=input_ids)",
+
+    def _flatten(args_text: str) -> str:
+        # Collapse leading/trailing whitespace and internal newlines+indent so we
+        # can pattern-match positional args reliably.
+        return _re.sub(r"\s+", " ", args_text).strip()
+
+    def _sub_call(text: str, method: str, replacer):
+        pat = _re.compile(
+            rf"TokenizerManager\.{_re.escape(method)}\(\s*self\.request_validator,\s*(.*?)\)",
+            _re.DOTALL,
+        )
+        return pat.sub(lambda m: replacer(_flatten(m.group(1))), text)
+
+    def _validate_one_repl(args: str) -> str:
+        # args like "obj, input_ids" or "obj[i], input_ids_list[i]"
+        a, b = [x.strip() for x in args.split(",")]
+        return f"self.request_validator.validate_one(obj={a}, input_ids={b})"
+
+    text = _sub_call(text, "_validate_one_request", _validate_one_repl)
+    text = _sub_call(
+        text,
+        "_validate_mm_limits",
+        lambda args: f"self.request_validator._validate_mm_limits({args})",
     )
-    text = text.replace(
-        "            TokenizerManager._validate_one_request(self.request_validator, obj[i], input_ids_list[i])",
-        "            self.request_validator.validate_one(obj=obj[i], input_ids=input_ids_list[i])",
-    )
-    text = text.replace(
-        "                TokenizerManager._validate_mm_limits(self.request_validator, obj)",
-        "                self.request_validator._validate_mm_limits(obj)",
-    )
-    text = text.replace(
-        "        TokenizerManager._validate_batch_tokenization_constraints(self.request_validator, batch_size, obj)",
-        "        self.request_validator.validate_batch_tokenization_constraints(\n"
-        "            batch_size=batch_size, obj=obj\n"
-        "        )",
+    text = _sub_call(
+        text,
+        "_validate_batch_tokenization_constraints",
+        lambda args: (
+            "self.request_validator.validate_batch_tokenization_constraints(\n"
+            f"            batch_size={args.split(',')[0].strip()}, "
+            f"obj={args.split(',')[1].strip()}\n"
+            "        )"
+        ),
     )
     tm.write_text(text)
 

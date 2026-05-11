@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines
+from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-request-preparer-move"
@@ -76,13 +76,11 @@ def transform(wt: Path) -> None:
     def strip_prep(body: str) -> str:
         body = body.replace("    @staticmethod\n", "", 1)
         body = body.replace('self: "RequestPreparer",', "self,")
-        body = body.replace(
-            "TokenizerManager._batch_has_text(self, ",
-            "self._batch_has_text(",
-        )
-        body = body.replace(
-            "TokenizerManager._tokenize_one_request(self, ",
-            "self._tokenize_one_request(",
+        body = rewrite_intra_class_calls(
+            body,
+            source_classes=["TokenizerManager"],
+            target_class="RequestPreparer",
+            methods=list(method_names),
         )
         return body
 
