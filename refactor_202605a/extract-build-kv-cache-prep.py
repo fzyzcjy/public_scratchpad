@@ -32,8 +32,6 @@ In Scheduler, ``init_cache_with_memory_pool(self)`` becomes
 ``@staticmethod build_kv_cache(*, kwargs...) -> KVCacheBuildResult``. The
 body rewrite is identical to the final free-function form:
 
-- Strip 2 tail blocks (hisparse_coordinator ref-grab + decode_offload_manager
-  construction) from the body — they'll move to the caller.
 - 22+ ``self.X`` reads converted to bare kwarg / local names.
 - 9 ``self.X = Y`` writes converted to local-var writes.
 - 3 None-initializers added for conditional fields.
@@ -41,8 +39,9 @@ body rewrite is identical to the final free-function form:
 
 Caller in ``Scheduler.__init__`` rewritten: the
 ``self.init_cache_with_memory_pool()`` call is replaced by an inlined
-``result = Scheduler.build_kv_cache(...)`` + 9 writebacks + the moved tail
-blocks (hisparse + decode_offload).
+``result = Scheduler.build_kv_cache(...)`` + 9 writebacks. (The
+``hisparse_coordinator`` + ``decode_offload_manager`` tail blocks already
+live in ``Scheduler.__init__`` after the ``-pre-prep`` block-move commit.)
 
 ``KVCacheBuildResult`` dataclass + needed imports are appended to
 ``scheduler_components/kv_cache.py`` (file already exists from earlier
@@ -54,32 +53,6 @@ happens in ``extract-build-kv-cache-move``.
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
-
-
-# Tail block to strip from method body (stays in Scheduler under prep, moves
-# to caller — at this point the original tail's ``self.X`` reads are still
-# valid because the method is in Scheduler).
-TAIL_BLOCK_TO_STRIP = """\
-        if self.enable_hisparse:
-            # Coordinator was created inside ModelRunner.initialize() before CUDA graph capture
-            self.hisparse_coordinator = self.tp_worker.model_runner.hisparse_coordinator
-            self.hisparse_coordinator.set_decode_producer_stream(self.forward_stream)
-
-        if (
-            server_args.disaggregation_mode == "decode"
-            and server_args.disaggregation_decode_enable_offload_kvcache
-        ):
-            self.decode_offload_manager = DecodeKVCacheOffloadManager(
-                req_to_token_pool=self.req_to_token_pool,
-                token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
-                tp_group=params.tp_cache_group,
-                tree_cache=self.tree_cache,
-                server_args=self.server_args,
-            )
-        else:
-            self.decode_offload_manager = None
-
-"""
 
 
 NEW_SIGNATURE = (
@@ -129,29 +102,6 @@ INLINE_CALLER_REPLACEMENT = """\
         self.token_to_kv_pool_allocator = result.token_to_kv_pool_allocator
         self.disable_radix_cache = result.disable_radix_cache
         self.tree_cache = result.tree_cache
-
-        if self.enable_hisparse:
-            # Coordinator was created inside ModelRunner.initialize() before CUDA graph capture
-            self.hisparse_coordinator = self.tp_worker.model_runner.hisparse_coordinator
-            self.hisparse_coordinator.set_decode_producer_stream(self.forward_stream)
-
-        if (
-            self.server_args.disaggregation_mode == "decode"
-            and self.server_args.disaggregation_decode_enable_offload_kvcache
-        ):
-            self.decode_offload_manager = DecodeKVCacheOffloadManager(
-                req_to_token_pool=self.req_to_token_pool,
-                token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
-                tp_group=(
-                    self.attn_tp_cpu_group
-                    if self.server_args.enable_dp_attention
-                    else self.tp_cpu_group
-                ),
-                tree_cache=self.tree_cache,
-                server_args=self.server_args,
-            )
-        else:
-            self.decode_offload_manager = None
 """
 
 
@@ -190,13 +140,10 @@ class KVCacheBuildResult:
 
 def _rewrite_method_body(method_text: str) -> str:
     """Convert in-place: signature + body rewrites. Stays inside Scheduler
-    (with class-level indent + @staticmethod)."""
+    (with class-level indent + @staticmethod). The hisparse + decode_offload
+    tail blocks were already hoisted out to ``Scheduler.__init__`` by the
+    ``-pre-prep`` commit, so the body shape at this point is missing them."""
     text = method_text
-
-    # Strip the hisparse + decode_offload tail.
-    if TAIL_BLOCK_TO_STRIP not in text:
-        raise RuntimeError("tail block anchor mismatch — method shape changed")
-    text = text.replace(TAIL_BLOCK_TO_STRIP, "")
 
     # Replace signature.
     text = text.replace(

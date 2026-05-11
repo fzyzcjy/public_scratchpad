@@ -74,6 +74,17 @@ signatures, kwarg adds, ``self`` retype to InvariantChecker, ownership
 migration of counter fields, simplification of ``_check_req_pool`` /
 ``_check_pool_invariant`` / ``self_check_during_busy``). The prep installs
 the new bodies verbatim; the move just deletes orphan code.
+
+Block-move audit (2026-05-11): the audit flagged ownership migration of
+``count_req_pool_leak_warnings`` / ``count_token_pool_leak_warnings`` /
+``count_kv_pool_leak_warnings`` from ``Scheduler`` to
+``SchedulerInvariantChecker.__init__`` as a "block-move candidate" that
+might be extractable into a ``-pre-prep`` commit. On review, this is not
+separable: the migration target (``SchedulerInvariantChecker.__init__``)
+does not exist before this commit — building that class is precisely
+what this prep does. The counter-field migration is structurally
+intrinsic to introducing the class and cannot be hoisted into an earlier
+commit. No ``introduce-invariant-checker-pre-prep`` is created.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -475,7 +486,7 @@ def transform(wt: Path) -> None:
     # watchdog free function).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    PoolStats,\n    SchedulerPoolStatsObserver,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.invariant_checker import (\n"
             "    SchedulerInvariantChecker,\n"

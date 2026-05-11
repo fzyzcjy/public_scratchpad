@@ -44,6 +44,15 @@ Inplace prep for the ``introduce-scheduler-request-receiver`` mech move.
   mlx / multiplex mixins) rewritten to
   ``self.recv_requests(self.request_receiver, last_forward_mode=...)``.
 
+Note on the C4 block-move audit (``2026-05-11-mech-scheduler-block-move-
+audit.md``): the ``last_forward_mode`` block-move is intentionally **not**
+extracted into a separate ``-pre-prep`` commit. Hoisting the block out to
+callers without simultaneously turning ``last_forward_mode`` into a kwarg
+on ``recv_requests`` would leave the method body referencing an undefined
+name, producing a runtime ``NameError`` mid-chain. The hoist and the
+signature redesign (R4 kwarg add) are semantically inseparable here, so
+both stay in this prep commit.
+
 The 3 methods stay inside Scheduler in this commit; physical cut + paste
 to ``SchedulerRequestReceiver`` body happens in
 ``introduce-scheduler-request-receiver-move``.

@@ -208,6 +208,9 @@ def transform(wt: Path) -> None:
         single_line_sig = f"    def {name}(self: Scheduler, "
         single_line_no_args = f"    def {name}(self: Scheduler)"
         multi_line_sig = f"    def {name}(\n        self: Scheduler,"
+        bare_self_args = f"    def {name}(self, "
+        bare_self_no_args = f"    def {name}(self)"
+        bare_self_multi = f"    def {name}(\n        self,"
 
         if single_line_sig in method_text:
             new_method = method_text.replace(
@@ -224,6 +227,24 @@ def transform(wt: Path) -> None:
         elif multi_line_sig in method_text:
             new_method = method_text.replace(
                 multi_line_sig,
+                f"    @staticmethod\n    def {name}(\n        self: \"SchedulerOutputStreamer\",",
+                1,
+            )
+        elif bare_self_args in method_text:
+            new_method = method_text.replace(
+                bare_self_args,
+                f"    @staticmethod\n    def {name}(self: \"SchedulerOutputStreamer\", ",
+                1,
+            )
+        elif bare_self_no_args in method_text:
+            new_method = method_text.replace(
+                bare_self_no_args,
+                f"    @staticmethod\n    def {name}(self: \"SchedulerOutputStreamer\")",
+                1,
+            )
+        elif bare_self_multi in method_text:
+            new_method = method_text.replace(
+                bare_self_multi,
                 f"    @staticmethod\n    def {name}(\n        self: \"SchedulerOutputStreamer\",",
                 1,
             )

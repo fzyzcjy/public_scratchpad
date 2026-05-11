@@ -60,6 +60,15 @@ Inplace prep for the ``migrate-profiler-mixin`` mech move.
 The 6 methods stay inside ``SchedulerProfilerMixin`` in this commit;
 physical cut + paste to ``SchedulerProfilerManager`` body happens in
 ``migrate-profiler-mixin-move``.
+
+Note on the C6 block-move audit (``2026-05-11-mech-scheduler-block-move-
+audit.md``): the ``init_profiler`` body-inline block-move is intentionally
+**not** extracted into a separate ``-pre-prep`` commit. The target of the
+inline is the ``SchedulerProfilerManager`` ctor, but the target class
+itself is *created* by this prep commit — there is no
+``SchedulerProfilerManager`` to inline into until the class skeleton is
+built. Building the skeleton and inlining the body are intrinsically the
+same step, so both stay in this prep commit.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

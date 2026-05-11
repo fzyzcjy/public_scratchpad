@@ -88,20 +88,18 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # C15+C16's prep+move. We list them explicitly to match the original
 # single-shot script and avoid AST drift.
 METHODS = [
-    # The names below mirror the residual mixin contents after C15+C16
-    # have moved out logprob (9) + streamer (6) methods. Source order
-    # preserved.
-    "process_batch_result",
-    "process_batch_result_prefill",
-    "process_batch_result_decode",
-    "process_batch_result_idle",
+    # Source order, residual mixin contents after C15+C16 processed.
     "process_batch_result_prebuilt",
-    "_process_batch_result_disagg_prefill",
-    "_process_batch_result_disagg_decode",
-    "_release_finished_req_kv_caches",
     "maybe_collect_routed_experts",
     "maybe_collect_indexer_topk",
     "maybe_collect_customized_info",
+    "process_batch_result_prefill",
+    "_resolve_spec_overlap_token_ids",
+    "process_batch_result_idle",
+    "process_batch_result_decode",
+    "_handle_finished_req",
+    "_maybe_update_reasoning_tokens",
+    "_mamba_prefix_cache_update",
 ]
 
 

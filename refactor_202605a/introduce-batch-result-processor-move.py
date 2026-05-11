@@ -58,17 +58,17 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # Methods listed in source order (with privacy-flipped names that prep
 # wrote).
 METHODS = [
-    "process_batch_result",
-    "process_batch_result_prefill",
-    "process_batch_result_decode",
-    "process_batch_result_idle",
     "process_batch_result_prebuilt",
-    "_process_batch_result_disagg_prefill",
-    "_process_batch_result_disagg_decode",
-    "_release_finished_req_kv_caches",
-    "_maybe_collect_routed_experts",   # was maybe_collect_routed_experts
-    "_maybe_collect_indexer_topk",     # was maybe_collect_indexer_topk
-    "_maybe_collect_customized_info",  # was maybe_collect_customized_info
+    "_maybe_collect_routed_experts",   # prep flipped privacy
+    "_maybe_collect_indexer_topk",     # prep flipped privacy
+    "_maybe_collect_customized_info",  # prep flipped privacy
+    "process_batch_result_prefill",
+    "_resolve_spec_overlap_token_ids",
+    "process_batch_result_idle",
+    "process_batch_result_decode",
+    "_handle_finished_req",
+    "_maybe_update_reasoning_tokens",
+    "_mamba_prefix_cache_update",
 ]
 
 
@@ -144,11 +144,10 @@ def transform(wt: Path) -> None:
         dllm,
     ]
     callsite_methods = [
-        "process_batch_result",
+        "process_batch_result_prebuilt",
         "process_batch_result_prefill",
         "process_batch_result_decode",
         "process_batch_result_idle",
-        "process_batch_result_prebuilt",
     ]
     for f in callers:
         ftext = f.read_text()

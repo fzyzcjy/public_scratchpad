@@ -47,6 +47,16 @@ Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 The 3 methods stay inside ``SchedulerMetricsMixin`` in this commit;
 physical cut + paste to ``SchedulerKvEventsPublisher`` body happens in
 ``introduce-kv-events-publisher-move``.
+
+Block-move audit (2026-05-11): the audit flagged inlining the
+``init_kv_events`` body into ``SchedulerKvEventsPublisher.__init__`` as
+a "block-move candidate" that might be extractable into a ``-pre-prep``
+commit. On review, this is not separable: the destination
+(``SchedulerKvEventsPublisher.__init__``) does not exist before this
+commit — building the class skeleton + ctor is precisely what this prep
+does. The ctor inlining is structurally intrinsic to introducing the
+class and cannot be hoisted into an earlier commit. No
+``introduce-kv-events-publisher-pre-prep`` is created.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

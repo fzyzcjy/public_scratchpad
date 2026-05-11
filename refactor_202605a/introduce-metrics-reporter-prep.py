@@ -74,6 +74,18 @@ cut + paste.
 The 14 remaining mixin methods + ``PrefillStats`` stay inside the file
 in this commit; physical cut + paste to the target file (and deletion
 of the metrics mixin) happens in ``introduce-metrics-reporter-move``.
+
+Block-move audit (2026-05-11): the audit flagged two "block-move
+candidates" that might be extractable into ``-pre-prep`` commits:
+(1) inlining the ``init_metrics`` body into
+``SchedulerMetricsReporter.__init__``, and (2) ownership migration of
+``num_retracted_reqs`` / ``num_paused_reqs`` from ``Scheduler`` to the
+reporter. On review, neither is separable: both move TO
+``SchedulerMetricsReporter``, which does not exist before this commit —
+building the class + ctor is precisely what this prep does. Both
+block-moves are structurally intrinsic to introducing the class and
+cannot be hoisted into an earlier commit. No
+``introduce-metrics-reporter-pre-prep1`` / ``-pre-prep2`` are created.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

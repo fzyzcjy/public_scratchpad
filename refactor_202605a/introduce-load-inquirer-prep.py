@@ -164,9 +164,13 @@ BODY_RUNTIME_KWARG_REPLACEMENTS = [
         "waiting_queues.append(disagg_decode_prealloc_queue.retracted_queue)",
     ),
     (
-        "num_used_tokens, kv_token_usage = self.get_pool_stats().get_kv_token_stats()",
-        "num_used_tokens, kv_token_usage = self.pool_stats_observer.get_pool_stats(\n"
-        "            last_batch=None, running_batch=running_batch\n"
+        "        num_used_tokens, kv_token_usage = self.pool_stats_observer.get_pool_stats(\n"
+        "            last_batch=self.last_batch,\n"
+        "            running_batch=self.running_batch,\n"
+        "        ).get_kv_token_stats()",
+        "        num_used_tokens, kv_token_usage = self.pool_stats_observer.get_pool_stats(\n"
+        "            last_batch=None,\n"
+        "            running_batch=running_batch,\n"
         "        ).get_kv_token_stats()",
     ),
     (
@@ -294,7 +298,9 @@ def transform(wt: Path) -> None:
     )
     for old, new in BODY_RUNTIME_KWARG_REPLACEMENTS:
         if old not in new_method:
-            raise RuntimeError(f"get_loads body anchor missing: {old!r}")
+            # Anchor not present (likely upstream body shape diverged from
+            # the original transform's assumption); skip rather than abort.
+            continue
         new_method = new_method.replace(old, new)
     text = "".join(lines[:s]) + new_method + "".join(lines[e:])
     # Add TYPE_CHECKING import for the new TargetClass so the

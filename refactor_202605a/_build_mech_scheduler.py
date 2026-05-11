@@ -42,6 +42,7 @@ ORDER: list[str] = [
     "extract-get-draft-kv-pool-move",
     "extract-maybe-register-hicache-draft-prep",
     "extract-maybe-register-hicache-draft-move",
+    "extract-build-kv-cache-pre-prep",
     "extract-build-kv-cache-prep",
     "extract-build-kv-cache-move",
     "introduce-scheduler-request-receiver-prep",
