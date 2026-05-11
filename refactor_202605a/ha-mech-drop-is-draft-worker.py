@@ -100,6 +100,11 @@ def transform(wt: Path) -> None:
         if relpath == "python/sglang/srt/configs/hybrid_arch.py":
             continue
         path = wt / relpath
+        # File may not exist on the current chain (e.g. the mixin file was
+        # deleted by ``kvc-drop-mixin-inheritance``). Skip silently in that
+        # case — there can be no callers to rewrite if the file is gone.
+        if not path.exists():
+            continue
         path.write_text(_drop_call_kwarg(path.read_text()))
 
 
