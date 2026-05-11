@@ -263,6 +263,14 @@ def transform(wt: Path) -> None:
         ),
     )
 
+    # Remove the UpdateWeightFromDiskReqOutput dispatcher entry from TM;
+    # WeightDiskUpdateController.__post_init__ registers it via lambda forwarder.
+    text = replace_call_site(
+        text,
+        old="                (\n                    UpdateWeightFromDiskReqOutput,\n                    self._handle_update_weights_from_disk_req_output,\n                ),\n",
+        new="",
+    )
+
     # ---- TM: convert 4 methods to @staticmethod with self: "WeightDiskUpdateController" typing ----
     for name in (
         "update_weights_from_disk",

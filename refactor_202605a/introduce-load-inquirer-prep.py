@@ -386,24 +386,11 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
-    text = insert_after(
+    # Insert load_inquirer ctor BEFORE ``self.is_initializing = False`` (stable anchor).
+    text = replace_call_site(
         text,
-        anchor=(
-            "        self.pool_stats_observer = SchedulerPoolStatsObserver(\n"
-            "            tree_cache=self.tree_cache,\n"
-            "            token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,\n"
-            "            req_to_token_pool=self.req_to_token_pool,\n"
-            "            session_controller=self.session_controller,\n"
-            "            hisparse_coordinator=self.hisparse_coordinator,\n"
-            "            is_hybrid_swa=self.is_hybrid_swa,\n"
-            "            is_hybrid_ssm=self.is_hybrid_ssm,\n"
-            "            enable_hisparse=self.enable_hisparse,\n"
-            "            full_tokens_per_layer=self.full_tokens_per_layer,\n"
-            "            swa_tokens_per_layer=self.swa_tokens_per_layer,\n"
-            "            max_total_num_tokens=self.max_total_num_tokens,\n"
-            "        )\n\n"
-        ),
-        addition=SCHEDULER_INIT_INSERT,
+        old="        self.is_initializing = False\n",
+        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
     )
     # RPC dispatch tuple — bind static method to self.load_inquirer via lambda.
     text = replace_call_site(

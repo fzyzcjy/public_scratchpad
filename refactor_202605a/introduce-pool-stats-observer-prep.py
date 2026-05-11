@@ -2,21 +2,24 @@
 """Inplace prep for ``introduce-pool-stats-observer``: create the empty
 ``SchedulerPoolStatsObserver`` class skeleton (+ move ``PoolStats`` dataclass)
 into ``scheduler_components/pool_stats_observer.py``. Instantiate in
-``Scheduler.__init__``. Convert the 12 stats methods in the runtime_checker
-mixin to ``@staticmethod`` with ``self: "SchedulerPoolStatsObserver"`` type
-annotation; do the 7 privacy flips (drop leading ``_``); add per-call
-``last_batch`` / ``running_batch`` kwargs (R4 kwarg add — pragmatic deviation).
+``Scheduler.__init__`` with Callable getter injection for runtime-mutable
+``last_batch`` / ``running_batch`` state. Convert the 12 stats methods in
+the runtime_checker mixin to ``@staticmethod`` with
+``self: "SchedulerPoolStatsObserver"`` type annotation; do the 7 privacy
+flips (drop leading ``_``); rewrite body reads
+``self.last_batch`` / ``self.running_batch`` →
+``self.get_last_batch()`` / ``self.get_running_batch()``.
 
 Internal sibling calls inside method bodies (e.g.
-``self.active_pool_idxs(...)`` / ``self._get_swa_token_info(...)``) are written
-as **class-qualified** calls ``SchedulerRuntimeCheckerMixin.<method>(self, ...)``
+``self.active_pool_idxs()`` / ``self._get_swa_token_info()``) are written
+as **class-qualified** calls ``SchedulerRuntimeCheckerMixin.<method>(self)``
 during prep because: while the @staticmethods physically live on
 ``SchedulerRuntimeCheckerMixin`` but receive a ``SchedulerPoolStatsObserver``
-instance as ``self`` (via the type-flip), unqualified ``self.foo(...)`` lookup
-on a ``SchedulerPoolStatsObserver`` would fail at runtime. The move commit
-strips the ``SchedulerRuntimeCheckerMixin.`` prefix and the explicit ``self``
-positional once the methods are physically on the new class. This is a
-pragmatic body-bytes deviation, documented here.
+instance as ``self`` (via the type-flip), unqualified ``self.foo(...)``
+lookup on a ``SchedulerPoolStatsObserver`` would fail at runtime. The move
+commit strips the ``SchedulerRuntimeCheckerMixin.`` prefix and the
+explicit ``self`` positional once the methods are physically on the new
+class. This is a pragmatic body-bytes deviation, documented here.
 
 Bodies otherwise byte-identical wrt the post-move state (modulo the
 ``@staticmethod`` decorator drop, the ``self: "SchedulerPoolStatsObserver"``
@@ -44,10 +47,13 @@ Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 - Create ``scheduler_components/pool_stats_observer.py`` containing the
   ``PoolStats`` dataclass (relocated verbatim from
   ``scheduler_runtime_checker_mixin.py``) + an empty
-  ``SchedulerPoolStatsObserver`` class skeleton (5 collaborators + 6 configs,
-  no methods yet).
-- Instantiate ``self.pool_stats_observer = SchedulerPoolStatsObserver(...)`` in
-  ``Scheduler.__init__`` just before ``self.is_initializing = False``.
+  ``SchedulerPoolStatsObserver`` class skeleton (5 collaborators + 6 configs
+  + 2 Callable getters, no methods yet).
+- Instantiate ``self.pool_stats_observer = SchedulerPoolStatsObserver(...)``
+  in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
+  Runtime-mutable ``last_batch`` / ``running_batch`` are injected as
+  ``get_last_batch`` / ``get_running_batch`` Callable getters
+  (CLAUDE.md §4 form).
 - Mixin file imports ``PoolStats`` from the new module (mixin still defines
   the 12 stats methods until the move commit).
 - 7 privacy flips (drop leading ``_``): ``_streaming_session_count`` /
@@ -55,28 +61,20 @@ Inplace prep for the ``introduce-pool-stats-observer`` mech move.
   4 ``_get_*_token_info`` keep their existing names.
 - 12 methods on ``SchedulerRuntimeCheckerMixin`` retyped to ``@staticmethod``
   with ``self: "SchedulerPoolStatsObserver"`` type annotation.
-- Per-call ``last_batch`` / ``running_batch`` kwargs (R4 kwarg add — pragmatic
-  deviation) added to: ``active_pool_idxs`` / ``session_held_tokens`` /
-  ``session_held_full_tokens`` / ``session_held_swa_tokens`` /
-  ``session_held_mamba_slots`` / ``get_pool_stats``.
-  ``session_held_req_count`` and ``streaming_session_count`` need no per-call
-  kwargs. The 4 ``_get_*_token_info`` private helpers also take no per-call
-  kwargs (they read only ctor fields).
-- Sibling calls inside the 12 prep-form @staticmethods use the qualified form
-  ``SchedulerRuntimeCheckerMixin.<method>(self, ...)`` because the
-  methods physically live on the mixin during prep but receive a
+- Body reads of ``self.last_batch`` / ``self.running_batch`` are rewritten
+  to ``self.get_last_batch()`` / ``self.get_running_batch()`` Callable
+  getter calls. No per-call ``last_batch`` / ``running_batch`` kwargs.
+- Sibling calls inside the 12 prep-form @staticmethods use the qualified
+  form ``SchedulerRuntimeCheckerMixin.<method>(self)`` because the methods
+  physically live on the mixin during prep but receive a
   ``SchedulerPoolStatsObserver`` as ``self``. The move commit strips the
   ``SchedulerRuntimeCheckerMixin.`` prefix and the explicit ``self``
   positional. This is a pragmatic body-bytes deviation, documented here.
-- Callers updated to ``self.<method>(self.pool_stats_observer, ...)`` form
-  (mixin-internal MRO dispatch routes through the @staticmethod):
-  - ``scheduler.py``: 5 callsites (1 ``run_batch`` + 4
-    ``_maybe_log_idle_metrics`` / ``on_idle``).
-  - ``scheduler_runtime_checker_mixin.py``: 7 internal callsites in
-    ``_check_*_pool`` methods + ``create_scheduler_watchdog``.
-  - ``observability/scheduler_metrics_mixin.py``: 5 callsites.
-  - ``test/registered/unit/managers/test_scheduler_pause_generation.py``:
-    update import of ``PoolStats`` to the new module.
+- Callers updated to ``self.<method>(self.pool_stats_observer)`` form
+  (mixin-internal MRO dispatch routes through the @staticmethod). No
+  caller-side ``last_batch`` / ``running_batch`` kwargs.
+- ``test/registered/unit/managers/test_scheduler_pause_generation.py``:
+  update import of ``PoolStats`` to the new module.
 
 The 12 methods stay inside ``SchedulerRuntimeCheckerMixin`` in this commit;
 physical cut + paste into ``SchedulerPoolStatsObserver`` body happens in
@@ -88,13 +86,14 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 # Target file: PoolStats dataclass moves verbatim (cut + paste). Class
-# skeleton: ctor + fields only. The methods land here in the move commit.
+# skeleton: ctor + fields + 2 Callable getters. The methods land here in
+# the move commit.
 TARGET_FILE_HEADER = '''\
 from __future__ import annotations  # noqa: F401
 
 import dataclasses  # noqa: F401
 from dataclasses import dataclass  # noqa: F401
-from typing import List, Optional, Tuple  # noqa: F401
+from typing import Callable, List, Optional, Tuple  # noqa: F401
 
 
 # ``SchedulerStats`` is referenced only for the ``update_scheduler_stats``
@@ -125,6 +124,8 @@ class SchedulerPoolStatsObserver:
         full_tokens_per_layer,
         swa_tokens_per_layer,
         max_total_num_tokens: int,
+        get_last_batch: Callable,
+        get_running_batch: Callable,
     ) -> None:
         self.tree_cache = tree_cache
         self.token_to_kv_pool_allocator = token_to_kv_pool_allocator
@@ -137,6 +138,8 @@ class SchedulerPoolStatsObserver:
         self.full_tokens_per_layer = full_tokens_per_layer
         self.swa_tokens_per_layer = swa_tokens_per_layer
         self.max_total_num_tokens = max_total_num_tokens
+        self.get_last_batch = get_last_batch
+        self.get_running_batch = get_running_batch
 '''
 
 
@@ -153,6 +156,8 @@ SCHEDULER_INIT_INSERT = """\
             full_tokens_per_layer=self.full_tokens_per_layer,
             swa_tokens_per_layer=self.swa_tokens_per_layer,
             max_total_num_tokens=self.max_total_num_tokens,
+            get_last_batch=lambda: self.last_batch,
+            get_running_batch=lambda: self.running_batch,
         )
 
 """
@@ -160,9 +165,11 @@ SCHEDULER_INIT_INSERT = """\
 
 # Each entry: (old_method_name, new_method_block).
 # The new block already has @staticmethod, the type-flipped ``self:
-# "SchedulerPoolStatsObserver"`` annotation, post-flip name, per-call kwargs,
-# and body rewrites: sibling calls use the qualified
-# ``SchedulerRuntimeCheckerMixin.<flipped_name>(self, ...)`` form so the
+# "SchedulerPoolStatsObserver"`` annotation, post-flip name, and body
+# rewrites: ``self.last_batch`` / ``self.running_batch`` reads are
+# rewritten as ``self.get_last_batch()`` / ``self.get_running_batch()``
+# Callable getter calls; sibling calls use the qualified
+# ``SchedulerRuntimeCheckerMixin.<flipped_name>(self)`` form so the
 # runtime lookup resolves correctly while the methods still live there.
 PREP_METHOD_BLOCKS = {
     "_streaming_session_count": '''\
@@ -177,14 +184,14 @@ PREP_METHOD_BLOCKS = {
 ''',
     "_active_pool_idxs": '''\
     @staticmethod
-    def active_pool_idxs(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> set:
+    def active_pool_idxs(self: "SchedulerPoolStatsObserver") -> set:
         """Pool idxs currently owned by reqs in last_batch / running_batch.
 
         Used to decide which session slots' KV is owned by batch reqs
         (and thus counted via uncached_size, not session_held).
         """
         idxs = set()
-        for batch in [last_batch, running_batch]:
+        for batch in [self.get_last_batch(), self.get_running_batch()]:
             if batch is None or batch.is_empty():
                 continue
             for req in batch.reqs:
@@ -195,25 +202,25 @@ PREP_METHOD_BLOCKS = {
 ''',
     "_session_held_tokens": '''\
     @staticmethod
-    def session_held_tokens(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> int:
+    def session_held_tokens(self: "SchedulerPoolStatsObserver") -> int:
         return self.tree_cache.session_held_tokens(
-            SchedulerRuntimeCheckerMixin.active_pool_idxs(self, last_batch=last_batch, running_batch=running_batch)
+            SchedulerRuntimeCheckerMixin.active_pool_idxs(self)
         )
 
 ''',
     "_session_held_full_tokens": '''\
     @staticmethod
-    def session_held_full_tokens(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> int:
+    def session_held_full_tokens(self: "SchedulerPoolStatsObserver") -> int:
         return self.tree_cache.session_held_full_tokens(
-            SchedulerRuntimeCheckerMixin.active_pool_idxs(self, last_batch=last_batch, running_batch=running_batch)
+            SchedulerRuntimeCheckerMixin.active_pool_idxs(self)
         )
 
 ''',
     "_session_held_swa_tokens": '''\
     @staticmethod
-    def session_held_swa_tokens(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> int:
+    def session_held_swa_tokens(self: "SchedulerPoolStatsObserver") -> int:
         return self.tree_cache.session_held_swa_tokens(
-            SchedulerRuntimeCheckerMixin.active_pool_idxs(self, last_batch=last_batch, running_batch=running_batch)
+            SchedulerRuntimeCheckerMixin.active_pool_idxs(self)
         )
 
 ''',
@@ -225,15 +232,15 @@ PREP_METHOD_BLOCKS = {
 ''',
     "_session_held_mamba_slots": '''\
     @staticmethod
-    def session_held_mamba_slots(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> int:
+    def session_held_mamba_slots(self: "SchedulerPoolStatsObserver") -> int:
         return self.tree_cache.session_held_mamba_slots(
-            SchedulerRuntimeCheckerMixin.active_pool_idxs(self, last_batch=last_batch, running_batch=running_batch)
+            SchedulerRuntimeCheckerMixin.active_pool_idxs(self)
         )
 
 ''',
     "get_pool_stats": '''\
     @staticmethod
-    def get_pool_stats(self: "SchedulerPoolStatsObserver", *, last_batch, running_batch) -> PoolStats:
+    def get_pool_stats(self: "SchedulerPoolStatsObserver") -> PoolStats:
         if self.is_hybrid_swa:
             pool_stats = SchedulerRuntimeCheckerMixin._get_swa_token_info(self)
         elif self.is_hybrid_ssm:
@@ -452,16 +459,12 @@ def transform(wt: Path) -> None:
         "            max_pool_usage = self.get_pool_stats().get_max_pool_usage()\n",
         "            max_pool_usage = self.get_pool_stats(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            ).get_max_pool_usage()\n",
     )
     text = text.replace(
         "        self.get_pool_stats().update_scheduler_stats(self.stats)\n",
         "        self.get_pool_stats(\n"
         "            self.pool_stats_observer,\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
         "        ).update_scheduler_stats(self.stats)\n",
     )
     text = text.replace(
@@ -474,8 +477,6 @@ def transform(wt: Path) -> None:
         "        self.stats.streaming_session_held_tokens = self._session_held_tokens()\n",
         "        self.stats.streaming_session_held_tokens = self.session_held_tokens(\n"
         "            self.pool_stats_observer,\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
         "        )\n",
     )
     text = text.replace(
@@ -483,8 +484,6 @@ def transform(wt: Path) -> None:
         "            has_leak, messages = self._check_all_pools(\n"
         "                self.get_pool_stats(\n"
         "                    self.pool_stats_observer,\n"
-        "                    last_batch=self.last_batch,\n"
-        "                    running_batch=self.running_batch,\n"
         "                )\n"
         "            )\n",
     )
@@ -498,8 +497,6 @@ def transform(wt: Path) -> None:
         "        ps = self.get_pool_stats()\n",
         "        ps = self.get_pool_stats(\n"
         "            self.pool_stats_observer,\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
         "        )\n",
     )
     text = text.replace(
@@ -512,32 +509,24 @@ def transform(wt: Path) -> None:
         "            session_held = self._session_held_full_tokens()\n",
         "            session_held = self.session_held_full_tokens(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            )\n",
     )
     text = text.replace(
         "            session_held = self._session_held_tokens()\n",
         "            session_held = self.session_held_tokens(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            )\n",
     )
     text = text.replace(
         "            self._session_held_swa_tokens(),\n",
         "            self.session_held_swa_tokens(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            ),\n",
     )
     text = text.replace(
         "            self._session_held_mamba_slots(),\n",
         "            self.session_held_mamba_slots(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            ),\n",
     )
     # create_scheduler_watchdog dump_info: scheduler.get_pool_stats().
@@ -546,8 +535,6 @@ def transform(wt: Path) -> None:
         "        _, messages = scheduler._check_all_pools(\n"
         "            scheduler.get_pool_stats(\n"
         "                scheduler.pool_stats_observer,\n"
-        "                last_batch=scheduler.last_batch,\n"
-        "                running_batch=scheduler.running_batch,\n"
         "            )\n"
         "        )\n",
     )
@@ -559,16 +546,12 @@ def transform(wt: Path) -> None:
         "        pool_stats = self.get_pool_stats()\n",
         "        pool_stats = self.get_pool_stats(\n"
         "            self.pool_stats_observer,\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
         "        )\n",
     )
     text = text.replace(
         "        num_used_tokens, kv_token_usage = self.get_pool_stats().get_kv_token_stats()\n",
         "        num_used_tokens, kv_token_usage = self.get_pool_stats(\n"
         "            self.pool_stats_observer,\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
         "        ).get_kv_token_stats()\n",
     )
     text = text.replace(
@@ -581,8 +564,6 @@ def transform(wt: Path) -> None:
         "            self.stats.streaming_session_held_tokens = self._session_held_tokens()\n",
         "            self.stats.streaming_session_held_tokens = self.session_held_tokens(\n"
         "                self.pool_stats_observer,\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
         "            )\n",
     )
     metrics_mixin.write_text(text)

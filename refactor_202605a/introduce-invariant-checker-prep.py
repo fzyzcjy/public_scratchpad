@@ -1,24 +1,33 @@
 #!/usr/bin/env python3
-"""Inplace prep for ``introduce-invariant-checker``: build the new
-``SchedulerInvariantChecker`` class file with the full (post-refactor)
-class body in place, instantiate in ``Scheduler.__init__``, drop the
-``SchedulerRuntimeCheckerMixin`` from Scheduler's inheritance list, move
-``create_scheduler_watchdog`` verbatim into ``scheduler.py``, and rewrite
-all callers to dispatch through ``self.invariant_checker.<method>(...)``.
+"""Inplace prep for ``introduce-invariant-checker``: build the
+``SchedulerInvariantChecker`` class skeleton (ctor with Callable getter
+injection for runtime-mutable Scheduler state + 2 mutable counter fields),
+instantiate on Scheduler, type-flip 10 check methods in
+``SchedulerRuntimeCheckerMixin`` to ``@staticmethod`` with
+``self: "SchedulerInvariantChecker"``, rewrite body reads of
+``self.last_batch`` / ``self.running_batch`` /
+``self.pool_stats_observer.get_pool_stats(...)`` through the Callable
+getters, and rewrite callers to the sister staticmethod-on-mixin form
+(``self.foo(self.invariant_checker, args)``).
 
-The 10 check methods on ``SchedulerRuntimeCheckerMixin`` are left in place
-in this commit (now orphaned — no caller references them). They (and the
-empty mixin file) are deleted in ``introduce-invariant-checker-move``.
+Body bytes byte-identical wrt the post-move state (modulo decorator +
+``self: SchedulerInvariantChecker`` → bare ``self`` simplification in the
+move commit, and sibling-call ``SchedulerRuntimeCheckerMixin.<m>(self,...)``
+→ ``self.<m>(...)`` strip in the move commit). The 10 methods physically
+stay in the mixin during prep; cut+paste happens in
+``introduce-invariant-checker-move``.
 
-Pragmatic deviation from byte-identical body move (per
-``MECH_COMMIT_SPLIT.md``): C10 is a 1:N split tail-commit whose new class
-body is hand-rewritten (different signatures, kwarg-only conversion,
-ownership migration of ``count_*_leak_warnings`` fields, ``self.last_batch``
-/ ``self.running_batch`` reads → per-call kwargs, etc.). The prep installs
-the new class verbatim with the post-move bodies; the move discards the
-orphan mixin methods + mixin file rather than cutting+pasting bodies. This
-captures the same intent as Template B but with the body-byte invariant
-relaxed for hand-rewritten 1:N tails.
+Pragmatic deviation: per the
+``MECH_COMMIT_SPLIT.md`` Callable-getter-injection section, runtime-mutable
+state (``last_batch`` / ``running_batch``) and the
+``pool_stats_observer.get_pool_stats(...)`` derived view are injected as
+``Callable[[], T]`` getters in the ctor (not per-call kwargs). The
+``pool_stats_observer`` itself remains a static ctor field so the
+session_held_*_tokens calls inside ``_check_full_pool`` / ``_check_swa_pool``
+/ ``_check_mamba_pool`` stay readable. The 2 ``count_*_leak_warnings``
+counter fields are fresh-initialised here (they had no static definition on
+``Scheduler`` previously — ``raise_error_or_warn`` creates them dynamically
+via ``setattr``).
 """
 
 # /// script
@@ -31,67 +40,78 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_function_lines, insert_after, replace_call_site
+from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-prep"
-SUBJECT = "Build SchedulerInvariantChecker + caller rewrites; orphan mixin methods (prep for move)"
+SUBJECT = "Build SchedulerInvariantChecker skeleton + @staticmethod prep (prep for move)"
 BODY = """\
-Inplace prep for the ``introduce-invariant-checker`` mech move (split #2 of
-``SchedulerRuntimeCheckerMixin``).
+Inplace prep for the ``introduce-invariant-checker`` mech move.
 
-- Create ``scheduler_components/invariant_checker.py`` with
-  ``SchedulerInvariantChecker`` (10 check methods, hand-rewritten with
-  kwarg-only signatures + per-call ``last_batch`` / ``running_batch`` kwargs
-  + ownership migration of ``count_req_pool_leak_warnings`` /
-  ``count_memory_leak_warnings`` into explicit ``__init__`` fields).
-- Instantiate ``self.invariant_checker = SchedulerInvariantChecker(...)`` in
-  ``Scheduler.__init__`` just after the sister
-  ``self.pool_stats_observer = ...`` line.
-- Cut ``create_scheduler_watchdog`` verbatim from the mixin file; insert it
-  before ``class Scheduler(`` in ``scheduler.py``. Update its
-  ``scheduler._check_all_pools(...)`` callsite to dispatch through
-  ``scheduler.invariant_checker._check_all_pools(ps=..., last_batch=...,
-  running_batch=...)``.
-- Drop ``SchedulerRuntimeCheckerMixin`` from Scheduler's inheritance list.
-- Drop the ``from sglang.srt.managers.scheduler_runtime_checker_mixin import ...``
-  line; add ``from sglang.srt.managers.scheduler_components.invariant_checker
-  import SchedulerInvariantChecker`` + ``from sglang.srt.utils.watchdog import
-  WatchdogRaw``.
-- Rewrite the 5 Scheduler callsites onto ``self.invariant_checker.*``:
-  ``_check_all_pools`` / ``_report_leak`` / ``_check_req_pool`` /
-  ``_check_tree_cache`` (in ``on_idle`` / ``_maybe_log_idle_metrics``,
-  moved here in C8); ``self_check_during_busy`` (in ``run_batch``).
+- Create ``scheduler_components/invariant_checker.py`` with an empty
+  ``SchedulerInvariantChecker`` class skeleton (ctor only; no methods
+  yet). Ctor takes 12 static fields (collaborators + configs +
+  ``pool_stats_observer``) + 3 Callable getters
+  (``get_last_batch`` / ``get_running_batch`` / ``get_pool_stats``) +
+  initialises 2 mutable counter fields ``count_req_pool_leak_warnings``
+  / ``count_memory_leak_warnings`` to 0.
+- Instantiate ``self.invariant_checker = SchedulerInvariantChecker(...)``
+  in ``Scheduler.__init__`` just after ``self.pool_stats_observer`` so
+  the sister composition dep resolves. ``get_pool_stats`` is wrapped via
+  ``lambda`` so the bound observer call captures the current
+  ``last_batch`` / ``running_batch`` at invocation time.
+- In ``SchedulerRuntimeCheckerMixin``, convert 9 instance methods (the
+  10th, ``_check_pool_invariant``, is already a stateless
+  ``@staticmethod``) to ``@staticmethod`` with
+  ``self: "SchedulerInvariantChecker"`` type annotation. Body reads of
+  runtime-mutable ``Scheduler`` state are rewritten through the Callable
+  getters: ``self.last_batch`` → ``self.get_last_batch()``,
+  ``self.running_batch`` → ``self.get_running_batch()``, and
+  ``self.pool_stats_observer.get_pool_stats(last_batch=...,
+  running_batch=...)`` → ``self.get_pool_stats()``.
+- Callers rewritten to the sister staticmethod-on-mixin form
+  ``self.<method>(self.invariant_checker, ...)`` (mirrors
+  ``introduce-load-inquirer-prep``'s pattern; the move commit reduces
+  this to ``self.invariant_checker.<method>(...)``). 5 callsites in
+  ``scheduler.py``: ``_check_all_pools`` / ``_report_leak`` /
+  ``_check_req_pool`` / ``_check_tree_cache`` (in ``on_idle`` /
+  ``_maybe_log_idle_metrics``); ``self_check_during_busy`` (in
+  ``run_batch``, appears twice — direct + overlap variant). 1 callsite
+  in the ``create_scheduler_watchdog`` free function (moved into
+  ``scheduler.py`` in the pre-prep commit).
 
-The 10 check methods physically remain on ``SchedulerRuntimeCheckerMixin``
-in this commit — orphaned, no caller refers to them — together with the
-mixin file. The move commit drops the orphaned methods and deletes the
-mixin file.
-
-Pragmatic deviation from Template B's byte-identical-body invariant:
-``SchedulerInvariantChecker``'s method bodies are hand-rewritten (different
-signatures, kwarg adds, ``self`` retype to InvariantChecker, ownership
-migration of counter fields, simplification of ``_check_req_pool`` /
-``_check_pool_invariant`` / ``self_check_during_busy``). The prep installs
-the new bodies verbatim; the move just deletes orphan code.
-
-Block-move audit (2026-05-11): the audit flagged ownership migration of
-``count_req_pool_leak_warnings`` / ``count_token_pool_leak_warnings`` /
-``count_kv_pool_leak_warnings`` from ``Scheduler`` to
-``SchedulerInvariantChecker.__init__`` as a "block-move candidate" that
-might be extractable into a ``-pre-prep`` commit. On review, this is not
-separable: the migration target (``SchedulerInvariantChecker.__init__``)
-does not exist before this commit — building that class is precisely
-what this prep does. The counter-field migration is structurally
-intrinsic to introducing the class and cannot be hoisted into an earlier
-commit. No ``introduce-invariant-checker-pre-prep`` is created.
+The 10 methods stay inside ``SchedulerRuntimeCheckerMixin`` in this
+commit; physical cut + paste into ``SchedulerInvariantChecker`` body
+happens in ``introduce-invariant-checker-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-NEW_CLASS_BODY = '''\
+TARGET_FILE_HEADER = '''\
+from __future__ import annotations  # noqa: F401
+
+import logging  # noqa: F401
+import warnings  # noqa: F401
+from typing import Callable, List, Optional, Tuple, TYPE_CHECKING  # noqa: F401
+
+from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
+from sglang.srt.environ import envs  # noqa: F401
+from sglang.srt.managers.scheduler_components.pool_stats_observer import (  # noqa: F401
+    PoolStats,
+    SchedulerPoolStatsObserver,
+)
+from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401
+
+
+logger = logging.getLogger(__name__)
+
+
+'''
+
+
+SKELETON_CLASS = '''\
 class SchedulerInvariantChecker:
     """KV pool / req pool / tree_cache memory invariant checks.
     Composition target on Scheduler (``self.invariant_checker``)."""
@@ -110,7 +130,10 @@ class SchedulerInvariantChecker:
         tree_cache,
         token_to_kv_pool_allocator,
         req_to_token_pool,
-        pool_stats_observer,
+        pool_stats_observer: SchedulerPoolStatsObserver,
+        get_last_batch: Callable,
+        get_running_batch: Callable,
+        get_pool_stats: Callable,
     ) -> None:
         self.is_hybrid_swa = is_hybrid_swa
         self.is_hybrid_ssm = is_hybrid_ssm
@@ -124,279 +147,11 @@ class SchedulerInvariantChecker:
         self.token_to_kv_pool_allocator = token_to_kv_pool_allocator
         self.req_to_token_pool = req_to_token_pool
         self.pool_stats_observer = pool_stats_observer
+        self.get_last_batch = get_last_batch
+        self.get_running_batch = get_running_batch
+        self.get_pool_stats = get_pool_stats
         self.count_req_pool_leak_warnings: int = 0
         self.count_memory_leak_warnings: int = 0
-
-    @staticmethod
-    def _check_pool_invariant(
-        *,
-        pool_name: str,
-        available: int,
-        evictable: int,
-        protected: int,
-        session_held: int,
-        total: int,
-        uncached: int = 0,
-    ) -> Tuple[bool, str]:
-        """Check that available + evictable + protected + session_held + uncached == total."""
-        accounted = available + evictable + protected + session_held + uncached
-        if accounted != total:
-            msg = (
-                f"{pool_name} pool size mismatch: "
-                f"available={available}, evictable={evictable}, "
-                f"protected={protected}, session_held={session_held}, "
-                f"uncached={uncached}, total={total}, accounted={accounted}, "
-                f"diff={total - accounted}"
-            )
-            return True, msg
-        return False, ""
-
-    def _check_full_pool(
-        self,
-        *,
-        ps: PoolStats,
-        last_batch,
-        running_batch,
-        uncached: int = 0,
-    ) -> Tuple[bool, str]:
-        if self.is_hybrid_swa:
-            available = ps.full_available_size
-            evictable = ps.full_evictable_size
-            protected = self.tree_cache.full_protected_size()
-            session_held = self.pool_stats_observer.session_held_full_tokens(
-                last_batch=last_batch, running_batch=running_batch
-            )
-            total = self.full_tokens_per_layer
-        elif self.is_hybrid_ssm and self.tree_cache.supports_mamba():
-            available = ps.full_available_size
-            evictable = ps.full_evictable_size
-            protected = self.tree_cache.full_protected_size()
-            session_held = self.pool_stats_observer.session_held_tokens(
-                last_batch=last_batch, running_batch=running_batch
-            )
-            total = self.token_to_kv_pool_allocator.size
-        else:
-            available = ps.full_available_size
-            evictable = ps.full_evictable_size
-            protected = self.tree_cache.protected_size()
-            session_held = self.pool_stats_observer.session_held_tokens(
-                last_batch=last_batch, running_batch=running_batch
-            )
-            total = self.max_total_num_tokens
-        return self._check_pool_invariant(
-            pool_name="full",
-            available=available,
-            evictable=evictable,
-            protected=protected,
-            session_held=session_held,
-            total=total,
-            uncached=uncached,
-        )
-
-    def _check_swa_pool(
-        self,
-        *,
-        ps: PoolStats,
-        last_batch,
-        running_batch,
-        uncached: int = 0,
-    ) -> Tuple[bool, str]:
-        available = ps.swa_available_size
-        evictable = ps.swa_evictable_size
-        protected = self.tree_cache.swa_protected_size()
-        session_held = self.pool_stats_observer.session_held_swa_tokens(
-            last_batch=last_batch, running_batch=running_batch
-        )
-        total = self.swa_tokens_per_layer
-        return self._check_pool_invariant(
-            pool_name="swa",
-            available=available,
-            evictable=evictable,
-            protected=protected,
-            session_held=session_held,
-            total=total,
-            uncached=uncached,
-        )
-
-    def _check_mamba_pool(
-        self, *, ps: PoolStats, last_batch, running_batch
-    ) -> Tuple[bool, str]:
-        is_mamba_radix_cache = (
-            self.tree_cache.supports_mamba() and self.tree_cache.is_tree_cache()
-        )
-        if is_mamba_radix_cache:
-            mamba_available = self.req_to_token_pool.mamba_pool.available_size()
-            mamba_evictable = self.tree_cache.mamba_evictable_size()
-            mamba_protected = self.tree_cache.mamba_protected_size()
-            mamba_total = self.req_to_token_pool.mamba_pool.size
-            session_held = self.pool_stats_observer.session_held_mamba_slots(
-                last_batch=last_batch, running_batch=running_batch
-            )
-            return self._check_pool_invariant(
-                pool_name="mamba",
-                available=mamba_available,
-                evictable=mamba_evictable,
-                protected=mamba_protected,
-                session_held=session_held,
-                total=mamba_total,
-            )
-        return False, ""
-
-    def _get_total_uncached_sizes(
-        self, *, last_batch, running_batch
-    ) -> Tuple[int, int]:
-        """Sum uncached tokens for full and SWA pools across all active batches.
-
-        Returns (full_uncached, swa_uncached). For non-SWA models, swa_uncached is 0.
-
-        For full pool: uncached = allocated - cache_protected_len
-        For SWA pool:  uncached = allocated - max(cache_protected_len, swa_evicted_seqlen)
-        """
-        # After decode: running_batch IS last_batch (same object), count once.
-        # After prefill: they differ, both hold uncached tokens.
-        batches = [last_batch]
-        if running_batch not in (None, last_batch) and not running_batch.is_empty():
-            batches.append(running_batch)
-
-        full_uncached = 0
-        swa_uncached = 0
-        for batch in batches:
-            for req in batch.reqs:
-                assert req.kv_committed_freed == req.kv_overallocated_freed
-                if req.kv_committed_freed or req.req_pool_idx is None:
-                    continue
-
-                allocated_len = req.kv_allocated_len
-                if self.page_size > 1:
-                    allocated_len = ceil_align(allocated_len, self.page_size)
-                    assert req.cache_protected_len % self.page_size == 0
-
-                full_uncached += allocated_len - req.cache_protected_len
-                if self.is_hybrid_swa:
-                    swa_uncached += allocated_len - max(
-                        req.cache_protected_len, req.swa_evicted_seqlen
-                    )
-
-        return full_uncached, swa_uncached
-
-    def self_check_during_busy(self, *, last_batch, running_batch) -> None:
-        """Check memory invariants during busy state (hot-path adjacent)."""
-        if last_batch is None:
-            return
-
-        spec_topk = self.server_args.speculative_eagle_topk or 1
-        if spec_topk > 1:
-            warnings.warn(
-                "Runtime memory check (busy) is not supported when speculation topk > 1."
-            )
-            return
-        ps = self.pool_stats_observer.get_pool_stats(
-            last_batch=last_batch, running_batch=running_batch
-        )
-        full_uncached, swa_uncached = self._get_total_uncached_sizes(
-            last_batch=last_batch, running_batch=running_batch
-        )
-        full_leak, full_msg = self._check_full_pool(
-            ps=ps,
-            last_batch=last_batch,
-            running_batch=running_batch,
-            uncached=full_uncached,
-        )
-        if full_leak:
-            self._report_leak("full", full_msg)
-        if self.is_hybrid_swa:
-            swa_leak, swa_msg = self._check_swa_pool(
-                ps=ps,
-                last_batch=last_batch,
-                running_batch=running_batch,
-                uncached=swa_uncached,
-            )
-            if swa_leak:
-                self._report_leak("swa", swa_msg)
-
-    def _check_req_pool(self) -> None:
-        session_req_count = self.pool_stats_observer.session_held_req_count()
-        req_total_size = self.req_to_token_pool.size
-        if len(self.req_to_token_pool.free_slots) + session_req_count != req_total_size:
-            msg = (
-                "req_to_token_pool memory leak detected!"
-                f"available_size={len(self.req_to_token_pool.free_slots)}, "
-                f"session_held={session_req_count}, "
-                f"total_size={self.req_to_token_pool.size}\\n"
-            )
-            raise_error_or_warn(
-                self,
-                envs.SGLANG_ENABLE_STRICT_MEM_CHECK_DURING_IDLE.get(),
-                "count_req_pool_leak_warnings",
-                msg,
-            )
-
-    def _report_leak(self, pool_name: str, token_msg: str) -> None:
-        msg = f"{pool_name} memory leak detected! {token_msg}"
-        raise_error_or_warn(
-            self,
-            envs.SGLANG_ENABLE_STRICT_MEM_CHECK_DURING_IDLE.get(),
-            "count_memory_leak_warnings",
-            msg,
-        )
-
-    def _check_all_pools(
-        self,
-        *,
-        ps: PoolStats,
-        last_batch,
-        running_batch,
-        uncached: int = 0,
-    ) -> Tuple[bool, List[str]]:
-        """Check memory invariant across all pools. Returns (has_leak, messages)."""
-        has_leak = False
-        messages = []
-
-        full_leak, full_msg = self._check_full_pool(
-            ps=ps, last_batch=last_batch, running_batch=running_batch, uncached=uncached
-        )
-        has_leak |= full_leak
-        messages.append(full_msg)
-
-        if self.is_hybrid_swa:
-            swa_leak, swa_msg = self._check_swa_pool(
-                ps=ps, last_batch=last_batch, running_batch=running_batch
-            )
-            has_leak |= swa_leak
-            messages.append(swa_msg)
-
-        if self.is_hybrid_ssm and self.tree_cache.supports_mamba():
-            mamba_leak, mamba_msg = self._check_mamba_pool(
-                ps=ps, last_batch=last_batch, running_batch=running_batch
-            )
-            has_leak |= mamba_leak
-            messages.append(mamba_msg)
-
-        return has_leak, messages
-
-    def _check_tree_cache(self) -> None:
-        if (
-            self.tree_cache.is_tree_cache()
-            and (self.is_hybrid_swa and self.tree_cache.supports_swa())
-            or (self.is_hybrid_ssm and self.tree_cache.supports_mamba())
-        ):
-            self.tree_cache.sanity_check()
-'''
-
-
-TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
-
-import warnings  # noqa: F401
-from typing import List, Tuple  # noqa: F401
-
-from sglang.srt.environ import envs  # noqa: F401
-from sglang.srt.managers.scheduler_components.pool_stats_observer import (  # noqa: F401
-    PoolStats,
-)
-from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401
-
-
 '''
 
 
@@ -414,9 +169,84 @@ SCHEDULER_INIT_INSERT = """\
             token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
             req_to_token_pool=self.req_to_token_pool,
             pool_stats_observer=self.pool_stats_observer,
+            get_last_batch=lambda: self.last_batch,
+            get_running_batch=lambda: self.running_batch,
+            get_pool_stats=lambda: self.pool_stats_observer.get_pool_stats(
+                last_batch=self.last_batch,
+                running_batch=self.running_batch,
+            ),
         )
 
 """
+
+
+# Runtime-mutable Scheduler state references inside method bodies that need
+# to be rewritten through ``self.get_X()`` Callable getters. Each pair is a
+# fragment-level replacement applied to each method body in turn.
+BODY_GETTER_REPLACEMENTS = [
+    # self_check_during_busy: collapse the pool_stats_observer derived view
+    # to the Callable getter.
+    (
+        "        ps = self.pool_stats_observer.get_pool_stats(\n"
+        "            last_batch=self.last_batch,\n"
+        "            running_batch=self.running_batch,\n"
+        "        )\n",
+        "        ps = self.get_pool_stats()\n",
+    ),
+    # _check_full_pool / _check_swa_pool / _check_mamba_pool: rewrite the
+    # session_held_*_tokens kwargs through the getters. The
+    # ``pool_stats_observer`` attribute remains a static ctor field so the
+    # call shape is unchanged otherwise.
+    (
+        "                last_batch=self.last_batch,\n"
+        "                running_batch=self.running_batch,\n",
+        "                last_batch=self.get_last_batch(),\n"
+        "                running_batch=self.get_running_batch(),\n",
+    ),
+    # _get_total_uncached_sizes: rewrite the 3 last_batch / running_batch
+    # reads (one ``batches = [self.last_batch]``, two in the membership /
+    # is_empty test, one ``batches.append(self.running_batch)``).
+    (
+        "        batches = [self.last_batch]\n"
+        "        if (\n"
+        "            self.running_batch not in (None, self.last_batch)\n"
+        "            and not self.running_batch.is_empty()\n"
+        "        ):\n"
+        "            batches.append(self.running_batch)\n",
+        "        batches = [self.get_last_batch()]\n"
+        "        if (\n"
+        "            self.get_running_batch() not in (None, self.get_last_batch())\n"
+        "            and not self.get_running_batch().is_empty()\n"
+        "        ):\n"
+        "            batches.append(self.get_running_batch())\n",
+    ),
+    # self_check_during_busy: ``if self.last_batch is None: return`` head guard.
+    (
+        "        if self.last_batch is None:\n",
+        "        if self.get_last_batch() is None:\n",
+    ),
+]
+
+
+def _type_flip_method(text: str, *, method_name: str, original_sig: str,
+                      new_sig: str) -> str:
+    """Type-flip a SchedulerRuntimeCheckerMixin method to @staticmethod with
+    ``self: "SchedulerInvariantChecker"``. Apply ``BODY_GETTER_REPLACEMENTS``
+    inside the method body (anchors absent from a given method body are
+    skipped — they belong to sibling methods)."""
+    s, e = find_method_lines(
+        text, class_name="SchedulerRuntimeCheckerMixin", method_name=method_name
+    )
+    lines = text.splitlines(keepends=True)
+    method_text = "".join(lines[s:e])
+    if original_sig not in method_text:
+        raise RuntimeError(f"{method_name} signature anchor mismatch")
+    new_method = method_text.replace(original_sig, new_sig)
+    for old, new in BODY_GETTER_REPLACEMENTS:
+        if old not in new_method:
+            continue
+        new_method = new_method.replace(old, new)
+    return "".join(lines[:s]) + new_method + "".join(lines[e:])
 
 
 def transform(wt: Path) -> None:
@@ -424,80 +254,205 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/invariant_checker.py"
 
-    src_text = src.read_text()
-
-    # 1. Cut ``create_scheduler_watchdog`` free function from the mixin file —
-    # move verbatim into scheduler.py with a string forward ref + the
-    # ``invariant_checker`` callsite rewrite.
-    s, e = find_function_lines(src_text, function_name="create_scheduler_watchdog")
-    watchdog_text = "".join(src_text.splitlines(keepends=True)[s:e])
-    # ``Scheduler`` is defined later in scheduler.py, so use a string forward
-    # reference to avoid an ``F821 Undefined name`` lint error.
-    watchdog_text = watchdog_text.replace(
-        "scheduler: Scheduler,", 'scheduler: "Scheduler",'
-    )
-    # The watchdog body uses ``scheduler._check_all_pools(scheduler.get_pool_stats())``
-    # — already rewritten by C9 (the previous commit) to the pool_stats_observer
-    # form. Now also rewrite ``scheduler._check_all_pools(...)`` →
-    # ``scheduler.invariant_checker._check_all_pools(...)`` with the new
-    # kwarg-only signature.
-    watchdog_text = watchdog_text.replace(
-        "scheduler._check_all_pools(\n"
-        "            scheduler.pool_stats_observer.get_pool_stats(\n"
-        "                last_batch=scheduler.last_batch,\n"
-        "                running_batch=scheduler.running_batch,\n"
-        "            )\n"
-        "        )\n",
-        "scheduler.invariant_checker._check_all_pools(\n"
-        "            ps=scheduler.pool_stats_observer.get_pool_stats(\n"
-        "                last_batch=scheduler.last_batch,\n"
-        "                running_batch=scheduler.running_batch,\n"
-        "            ),\n"
-        "            last_batch=scheduler.last_batch,\n"
-        "            running_batch=scheduler.running_batch,\n"
-        "        )\n",
-    )
-    # Remove the watchdog from the mixin file (will go to scheduler.py).
-    cut_lines(src, s, e)
-
-    # 2. Build the new invariant_checker.py file.
+    # 1. Create new target file (skeleton: header + empty class).
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(TARGET_FILE_HEADER + NEW_CLASS_BODY)
+    target.write_text(TARGET_FILE_HEADER + SKELETON_CLASS)
 
-    # 3. Update Scheduler.
+    # 2. Type-flip the 9 instance methods to @staticmethod + retype +
+    #    Callable getter rewrites. ``_check_pool_invariant`` is already a
+    #    stateless @staticmethod and needs no retype.
+    text = src.read_text()
+    text = _type_flip_method(
+        text,
+        method_name="_check_full_pool",
+        original_sig=(
+            "    def _check_full_pool(\n"
+            "        self: Scheduler, ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, str]:"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_full_pool(\n"
+            "        self: \"SchedulerInvariantChecker\", ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, str]:"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_check_swa_pool",
+        original_sig=(
+            "    def _check_swa_pool(\n"
+            "        self: Scheduler, ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, str]:"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_swa_pool(\n"
+            "        self: \"SchedulerInvariantChecker\", ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, str]:"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_check_mamba_pool",
+        original_sig=(
+            "    def _check_mamba_pool(self: Scheduler, ps: PoolStats) -> Tuple[bool, str]:"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_mamba_pool(\n"
+            "        self: \"SchedulerInvariantChecker\", ps: PoolStats\n"
+            "    ) -> Tuple[bool, str]:"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_get_total_uncached_sizes",
+        original_sig=(
+            "    def _get_total_uncached_sizes(self: Scheduler) -> Tuple[int, int]:"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _get_total_uncached_sizes(\n"
+            "        self: \"SchedulerInvariantChecker\",\n"
+            "    ) -> Tuple[int, int]:"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="self_check_during_busy",
+        original_sig=(
+            "    def self_check_during_busy(self: Scheduler):"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def self_check_during_busy(self: \"SchedulerInvariantChecker\"):"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_check_req_pool",
+        original_sig=(
+            "    def _check_req_pool(self: Scheduler):"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_req_pool(self: \"SchedulerInvariantChecker\"):"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_report_leak",
+        original_sig=(
+            "    def _report_leak(self: Scheduler, pool_name: str, token_msg: str):"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _report_leak(\n"
+            "        self: \"SchedulerInvariantChecker\", pool_name: str, token_msg: str\n"
+            "    ):"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_check_all_pools",
+        original_sig=(
+            "    def _check_all_pools(\n"
+            "        self: Scheduler, ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, List[str]]:"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_all_pools(\n"
+            "        self: \"SchedulerInvariantChecker\", ps: PoolStats, uncached: int = 0\n"
+            "    ) -> Tuple[bool, List[str]]:"
+        ),
+    )
+    text = _type_flip_method(
+        text,
+        method_name="_check_tree_cache",
+        original_sig=(
+            "    def _check_tree_cache(self: Scheduler):"
+        ),
+        new_sig=(
+            "    @staticmethod\n"
+            "    def _check_tree_cache(self: \"SchedulerInvariantChecker\"):"
+        ),
+    )
+
+    # Sibling calls inside the prep-form @staticmethods must use the
+    # qualified ``SchedulerRuntimeCheckerMixin.<method>(self, ...)`` form
+    # because, at runtime, ``self`` is a ``SchedulerInvariantChecker``
+    # instance and lacks the (still-mixin-defined) sibling check methods on
+    # its MRO. The move commit strips the qualifier once the methods are
+    # physically on ``SchedulerInvariantChecker``.
+    sibling_qualifier_rewrites = [
+        # self_check_during_busy → _get_total_uncached_sizes / _check_full_pool / _check_swa_pool / _report_leak.
+        (
+            "        full_uncached, swa_uncached = self._get_total_uncached_sizes()\n",
+            "        full_uncached, swa_uncached = SchedulerRuntimeCheckerMixin._get_total_uncached_sizes(self)\n",
+        ),
+        (
+            "        full_leak, full_msg = self._check_full_pool(ps, uncached=full_uncached)\n",
+            "        full_leak, full_msg = SchedulerRuntimeCheckerMixin._check_full_pool(self, ps, uncached=full_uncached)\n",
+        ),
+        (
+            "            swa_leak, swa_msg = self._check_swa_pool(ps, uncached=swa_uncached)\n",
+            "            swa_leak, swa_msg = SchedulerRuntimeCheckerMixin._check_swa_pool(self, ps, uncached=swa_uncached)\n",
+        ),
+        # _check_full_pool / _check_swa_pool / _check_mamba_pool → _check_pool_invariant.
+        (
+            "        return self._check_pool_invariant(\n",
+            "        return SchedulerRuntimeCheckerMixin._check_pool_invariant(\n",
+        ),
+        (
+            "        leak, msg = self._check_pool_invariant(\n",
+            "        leak, msg = SchedulerRuntimeCheckerMixin._check_pool_invariant(\n",
+        ),
+        # _check_all_pools → _check_full_pool / _check_swa_pool / _check_mamba_pool.
+        (
+            "        full_leak, full_msg = self._check_full_pool(ps, uncached=uncached)\n",
+            "        full_leak, full_msg = SchedulerRuntimeCheckerMixin._check_full_pool(self, ps, uncached=uncached)\n",
+        ),
+        (
+            "            swa_leak, swa_msg = self._check_swa_pool(ps)\n",
+            "            swa_leak, swa_msg = SchedulerRuntimeCheckerMixin._check_swa_pool(self, ps)\n",
+        ),
+        (
+            "            mamba_leak, mamba_msg = self._check_mamba_pool(ps)\n",
+            "            mamba_leak, mamba_msg = SchedulerRuntimeCheckerMixin._check_mamba_pool(self, ps)\n",
+        ),
+    ]
+    for old, new in sibling_qualifier_rewrites:
+        if old in text:
+            text = text.replace(old, new)
+
+    # Add TYPE_CHECKING import for the new TargetClass so the
+    # ``self: "SchedulerInvariantChecker"`` annotation resolves under pyflakes.
+    if "from sglang.srt.managers.scheduler_components.invariant_checker import SchedulerInvariantChecker" not in text:
+        text = text.replace(
+            "if TYPE_CHECKING:\n",
+            "if TYPE_CHECKING:\n"
+            "    from sglang.srt.managers.scheduler_components.invariant_checker import SchedulerInvariantChecker\n",
+            1,
+        )
+    src.write_text(text)
+
+    # 3. Scheduler: add import + ctor instantiation.
     text = sched.read_text()
-
-    # Drop the ``from .scheduler_runtime_checker_mixin import ...`` block.
-    # Match both grouped (paren) and single-line forms.
-    import re as _re
-    text = _re.sub(
-        r"from sglang\.srt\.managers\.scheduler_runtime_checker_mixin import \([^)]*\)\n",
-        "",
-        text,
-    )
-    text = _re.sub(
-        r"from sglang\.srt\.managers\.scheduler_runtime_checker_mixin import [^\n]+\n",
-        "",
-        text,
-    )
-
-    # Add new imports — invariant_checker class + WatchdogRaw (for the moved
-    # watchdog free function).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
+        anchor=(
+            "from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n"
+            "    SchedulerPoolStatsObserver,\n"
+            ")\n"
+        ),
         addition=(
             "from sglang.srt.managers.scheduler_components.invariant_checker import (\n"
             "    SchedulerInvariantChecker,\n"
             ")\n"
-            "from sglang.srt.utils.watchdog import WatchdogRaw\n"
         ),
     )
-
-    # Drop ``SchedulerRuntimeCheckerMixin,`` from the inheritance list.
-    text = replace_call_site(text, old="    SchedulerRuntimeCheckerMixin,\n", new="")
-
-    # Insert ctor (after the sister pool_stats_observer ctor for dep resolution).
     text = insert_after(
         text,
         anchor=(
@@ -513,58 +468,57 @@ def transform(wt: Path) -> None:
             "            full_tokens_per_layer=self.full_tokens_per_layer,\n"
             "            swa_tokens_per_layer=self.swa_tokens_per_layer,\n"
             "            max_total_num_tokens=self.max_total_num_tokens,\n"
+            "            get_last_batch=lambda: self.last_batch,\n"
+            "            get_running_batch=lambda: self.running_batch,\n"
             "        )\n\n"
         ),
         addition=SCHEDULER_INIT_INSERT,
     )
 
-    # Insert ``create_scheduler_watchdog`` just BEFORE ``class Scheduler(`` so
-    # it's available at module level.
-    text = replace_call_site(
-        text,
-        old="class Scheduler(\n",
-        new=watchdog_text + "\n\nclass Scheduler(\n",
-    )
+    # 4. Rewrite the 5 Scheduler callsites + 1 watchdog callsite to bind the
+    #    @staticmethod to ``self.invariant_checker`` (mirrors the load-inquirer
+    #    pattern; the move commit reduces to ``self.invariant_checker.<m>(...)``).
 
-    # 4. Rewrite the 4 Scheduler callsites in on_idle / _maybe_log_idle_metrics
-    # (moved to Scheduler main in C8; C9 already pool_stats_observer-wrapped
-    # the get_pool_stats() call inside the _check_all_pools call).
+    # on_idle: _check_all_pools (after C9 Callable injection, get_pool_stats() is no-arg).
     text = text.replace(
         "            has_leak, messages = self._check_all_pools(\n"
-        "                self.pool_stats_observer.get_pool_stats(\n"
-        "                    last_batch=self.last_batch,\n"
-        "                    running_batch=self.running_batch,\n"
-        "                )\n"
+        "                self.pool_stats_observer.get_pool_stats()\n"
         "            )\n",
-        "            has_leak, messages = self.invariant_checker._check_all_pools(\n"
-        "                ps=self.pool_stats_observer.get_pool_stats(\n"
-        "                    last_batch=self.last_batch,\n"
-        "                    running_batch=self.running_batch,\n"
-        "                ),\n"
-        "                last_batch=self.last_batch,\n"
-        "                running_batch=self.running_batch,\n"
+        "            has_leak, messages = self._check_all_pools(\n"
+        "                self.invariant_checker,\n"
+        "                self.pool_stats_observer.get_pool_stats(),\n"
         "            )\n",
     )
+    # on_idle: _report_leak.
     text = text.replace(
         '                self._report_leak("pool", "\\n".join(messages))\n',
-        '                self.invariant_checker._report_leak("pool", "\\n".join(messages))\n',
+        '                self._report_leak(self.invariant_checker, "pool", "\\n".join(messages))\n',
     )
+    # on_idle: _check_req_pool.
     text = text.replace(
         "            self._check_req_pool()\n",
-        "            self.invariant_checker._check_req_pool()\n",
+        "            self._check_req_pool(self.invariant_checker)\n",
     )
+    # on_idle: _check_tree_cache.
     text = text.replace(
         "        self._check_tree_cache()\n",
-        "        self.invariant_checker._check_tree_cache()\n",
+        "        self._check_tree_cache(self.invariant_checker)\n",
     )
-
-    # 5. self_check_during_busy callsite (in run_batch hot path) — appears
-    # twice in scheduler.py (one direct + one inside an overlap branch).
+    # run_batch / event_loop_overlap: self_check_during_busy (appears twice).
     text = text.replace(
         "                self.self_check_during_busy()\n",
-        "                self.invariant_checker.self_check_during_busy(\n"
-        "                    last_batch=self.last_batch, running_batch=self.running_batch\n"
-        "                )\n",
+        "                self.self_check_during_busy(self.invariant_checker)\n",
+    )
+
+    # watchdog dump_info (post C9 Callable injection: get_pool_stats() no-arg).
+    text = text.replace(
+        "        _, messages = scheduler._check_all_pools(\n"
+        "            scheduler.pool_stats_observer.get_pool_stats()\n"
+        "        )\n",
+        "        _, messages = scheduler._check_all_pools(\n"
+        "            scheduler.invariant_checker,\n"
+        "            scheduler.pool_stats_observer.get_pool_stats(),\n"
+        "        )\n",
     )
 
     sched.write_text(text)

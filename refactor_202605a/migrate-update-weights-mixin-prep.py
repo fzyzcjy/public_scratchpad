@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Inplace prep for ``migrate-update-weights-mixin``: create the
-``SchedulerWeightUpdaterManager`` class skeleton at
+"""Inplace prep for ``migrate-update-weights-mixin``: build the
+``SchedulerWeightUpdaterManager`` (@dataclass) skeleton at
 ``scheduler_components/weight_updater.py`` (ctor with 4 collaborator kwargs
-+ 2 Callable kwargs + ``offload_tags``, no methods yet), instantiate in
-``Scheduler.__init__`` BEFORE the existing ``dp_attn_adapter`` ctor and
-BEFORE ``init_request_dispatcher``. Remove ``self.offload_tags = set()``
-from Scheduler. Rewire ``dp_attn_adapter`` ctor's ``offload_tags`` kwarg to
-``self.weight_updater.offload_tags``. Convert the 12 mixin methods to
-``@staticmethod`` with ``self: "SchedulerWeightUpdaterManager"``. Wrap the
-10 RPC dispatch tuple references in lambdas to inject
-``self.weight_updater`` as the staticmethod ``self`` arg.
++ 2 Callable kwargs; ``self.offload_tags`` field migrated in), instantiate
+in ``Scheduler.__init__`` BEFORE ``self.init_request_dispatcher()`` (so
+``self.weight_updater`` exists by the time dispatch lambdas resolve it).
+Delete ``self.offload_tags = set()`` from Scheduler (pre-prep1 relocated it
+near here; this commit migrates ownership to the manager). Rewire
+``dp_attn_adapter`` ctor's ``offload_tags`` kwarg to
+``self.weight_updater.offload_tags``. Convert 13 mixin methods to
+``@staticmethod`` with ``self: "SchedulerWeightUpdaterManager"``. Grow the
+10 pre-prep2 dispatch lambdas with the ``self.weight_updater`` first arg
+so they invoke the staticmethod form.
 
 Method bodies byte-identical wrt the post-move state (modulo decorator +
 the ``def foo(self: SchedulerWeightUpdaterManager, ...)`` →
@@ -34,26 +36,33 @@ SUBJECT = "Build SchedulerWeightUpdaterManager skeleton + @staticmethod prep (pr
 BODY = """\
 Inplace prep for the ``migrate-update-weights-mixin`` mech move.
 
-- Create ``scheduler_components/weight_updater.py`` with an empty
-  ``SchedulerWeightUpdaterManager`` class. Ctor takes 4 collaborator kwargs
-  (``tp_worker`` / ``draft_worker`` / ``tp_cpu_group`` /
-  ``memory_saver_adapter``) + 2 ``Callable`` kwargs (``flush_cache`` /
-  ``is_fully_idle``). Initializes ``self.offload_tags = set()`` (migrated
-  from Scheduler).
+- Create ``scheduler_components/weight_updater.py`` with a
+  ``SchedulerWeightUpdaterManager`` class (skeleton: ctor only, no
+  methods yet). Ctor takes 4 collaborator kwargs (``tp_worker`` /
+  ``draft_worker`` / ``tp_cpu_group`` / ``memory_saver_adapter``) + 2
+  ``Callable`` kwargs (``flush_cache`` / ``is_fully_idle``). Initializes
+  ``self.offload_tags = set()`` (ownership migrated from Scheduler per
+  pre-prep1).
 - Instantiate ``self.weight_updater = SchedulerWeightUpdaterManager(...)``
-  in ``Scheduler.__init__`` BEFORE the existing ``dp_attn_adapter`` ctor
-  and BEFORE ``init_request_dispatcher``, so the field reference for the
-  dp_attn_adapter ``offload_tags`` rewiring resolves.
-- Remove the now-redundant ``self.offload_tags = set()`` from Scheduler.
-- Rewire ``dp_attn_adapter`` ctor's ``offload_tags`` kwarg to
-  ``self.weight_updater.offload_tags``.
-- In the mixin file, convert all 12 methods to ``@staticmethod`` with
-  ``self: "SchedulerWeightUpdaterManager"``. Body bytes unchanged.
-- 10 RPC dispatch callsites in ``init_request_dispatcher`` wrapped in
-  lambdas to inject ``self.weight_updater`` as the staticmethod ``self``
-  arg.
+  in ``Scheduler.__init__`` BEFORE ``self.init_request_dispatcher()``
+  (so the dispatch lambdas can resolve ``self.weight_updater`` lazily).
+- Delete ``self.offload_tags = set()`` from Scheduler (pre-prep1
+  relocated it next to the future ctor; this commit drops the line
+  since ownership now lives on the manager).
+- Rewire ``dp_attn_adapter`` ctor's ``offload_tags`` kwarg from
+  ``self.offload_tags`` to ``self.weight_updater.offload_tags``.
+- In the mixin, type-flip all 13 methods to ``@staticmethod`` with
+  ``self: "SchedulerWeightUpdaterManager"``. Body bytes unchanged
+  (no runtime-mutable Scheduler state is read; the mixin already
+  collaborates only through ``self.tp_worker`` / ``self.draft_worker``
+  / etc., which become the manager's own fields).
+- Grow the 10 pre-prep2 dispatch lambdas: each lambda body gains the
+  ``self.weight_updater`` first arg so it invokes the staticmethod-form
+  mixin method, e.g. ``lambda req: self.update_weights_from_disk(req)``
+  → ``lambda req: self.update_weights_from_disk(self.weight_updater,
+  req)``.
 
-The 12 methods stay inside ``SchedulerUpdateWeightsMixin`` in this commit;
+The 13 methods stay inside ``SchedulerUpdateWeightsMixin`` in this commit;
 physical cut + paste to ``SchedulerWeightUpdaterManager`` body happens in
 ``migrate-update-weights-mixin-move``.
 """
@@ -92,7 +101,7 @@ class SchedulerWeightUpdaterManager:
 '''
 
 
-SCHEDULER_INIT_INSERT_WEIGHT_UPDATER = """\
+SCHEDULER_INIT_INSERT = """\
         self.weight_updater = SchedulerWeightUpdaterManager(
             tp_worker=self.tp_worker,
             draft_worker=self.draft_worker,
@@ -105,96 +114,86 @@ SCHEDULER_INIT_INSERT_WEIGHT_UPDATER = """\
 """
 
 
-# RPC dispatch callsites — 10 (note: ``update_weights_from_distributed`` is the
-# only one with a 2-line tuple form). Each becomes a lambda forwarding
-# ``self.weight_updater`` as the staticmethod ``self`` arg.
+METHOD_NAMES = [
+    "flush_cache_after_weight_update",
+    "update_weights_from_disk",
+    "init_weights_update_group",
+    "destroy_weights_update_group",
+    "update_weights_from_distributed",
+    "update_weights_from_tensor",
+    "update_weights_from_ipc",
+    "get_weights_by_name",
+    "release_memory_occupation",
+    "resume_memory_occupation",
+    "check_weights",
+    "save_remote_model",
+    "save_sharded_model",
+]
+
+
+# 10 pre-prep2 lambdas grow to include ``self.weight_updater`` as the
+# staticmethod ``self`` arg. Each replacement targets the existing lambda
+# body produced by pre-prep2.
 RPC_LAMBDA_PAIRS = [
     (
-        "                (UpdateWeightFromDiskReqInput, self.update_weights_from_disk),\n",
-        "                (\n"
-        "                    UpdateWeightFromDiskReqInput,\n"
+        "                    lambda req: self.update_weights_from_disk(req),\n",
         "                    lambda req: self.update_weights_from_disk(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (InitWeightsUpdateGroupReqInput, self.init_weights_update_group),\n",
-        "                (\n"
-        "                    InitWeightsUpdateGroupReqInput,\n"
+        "                    lambda req: self.init_weights_update_group(req),\n",
         "                    lambda req: self.init_weights_update_group(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (DestroyWeightsUpdateGroupReqInput, self.destroy_weights_update_group),\n",
-        "                (\n"
-        "                    DestroyWeightsUpdateGroupReqInput,\n"
+        "                    lambda req: self.destroy_weights_update_group(req),\n",
         "                    lambda req: self.destroy_weights_update_group(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                    self.update_weights_from_distributed,\n",
+        "                    lambda req: self.update_weights_from_distributed(req),\n",
         "                    lambda req: self.update_weights_from_distributed(\n"
         "                        self.weight_updater, req\n"
         "                    ),\n",
     ),
     (
-        "                (UpdateWeightsFromTensorReqInput, self.update_weights_from_tensor),\n",
-        "                (\n"
-        "                    UpdateWeightsFromTensorReqInput,\n"
+        "                    lambda req: self.update_weights_from_tensor(req),\n",
         "                    lambda req: self.update_weights_from_tensor(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (UpdateWeightsFromIPCReqInput, self.update_weights_from_ipc),\n",
-        "                (\n"
-        "                    UpdateWeightsFromIPCReqInput,\n"
+        "                    lambda req: self.update_weights_from_ipc(req),\n",
         "                    lambda req: self.update_weights_from_ipc(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (GetWeightsByNameReqInput, self.get_weights_by_name),\n",
-        "                (\n"
-        "                    GetWeightsByNameReqInput,\n"
+        "                    lambda req: self.get_weights_by_name(req),\n",
         "                    lambda req: self.get_weights_by_name(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (ReleaseMemoryOccupationReqInput, self.release_memory_occupation),\n",
-        "                (\n"
-        "                    ReleaseMemoryOccupationReqInput,\n"
+        "                    lambda req: self.release_memory_occupation(req),\n",
         "                    lambda req: self.release_memory_occupation(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (ResumeMemoryOccupationReqInput, self.resume_memory_occupation),\n",
-        "                (\n"
-        "                    ResumeMemoryOccupationReqInput,\n"
+        "                    lambda req: self.resume_memory_occupation(req),\n",
         "                    lambda req: self.resume_memory_occupation(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
     (
-        "                (CheckWeightsReqInput, self.check_weights),\n",
-        "                (\n"
-        "                    CheckWeightsReqInput,\n"
+        "                    lambda req: self.check_weights(req),\n",
         "                    lambda req: self.check_weights(\n"
         "                        self.weight_updater, req\n"
-        "                    ),\n"
-        "                ),\n",
+        "                    ),\n",
     ),
 ]
 
@@ -211,51 +210,26 @@ def transform(wt: Path) -> None:
         pkg_init.write_text("")
     target.write_text(WEIGHT_UPDATER_HEADER)
 
-    # 2. In mixin file, convert all 12 methods to @staticmethod inplace.
+    # 2. In mixin file, convert all 13 methods to @staticmethod inplace.
     text = mixin.read_text()
-    method_names = [
-        "flush_cache_after_weight_update",
-        "update_weights_from_disk",
-        "init_weights_update_group",
-        "destroy_weights_update_group",
-        "update_weights_from_distributed",
-        "update_weights_from_tensor",
-        "update_weights_from_ipc",
-        "get_weights_by_name",
-        "release_memory_occupation",
-        "resume_memory_occupation",
-        "check_weights",
-        "save_remote_model",
-        "save_sharded_model",
-    ]
-    for name in method_names:
+    for name in METHOD_NAMES:
         s, e = find_method_lines(
             text, class_name="SchedulerUpdateWeightsMixin", method_name=name
         )
         lines = text.splitlines(keepends=True)
         method_text = "".join(lines[s:e])
-        # Add @staticmethod + type-flip self. Original sigs are mixed:
-        #   - ``def foo(self: Scheduler, recv_req: T):`` (single-line)
-        #   - ``def foo(\n        self: Scheduler, recv_req: T\n    ):`` (multi-line)
-        #   - ``def update_weights_from_distributed(\n        self,\n ...`` (no type)
-        #
-        # We handle each case with a generic replacement: prepend @staticmethod
-        # and switch ``self: Scheduler`` → ``self: "SchedulerWeightUpdaterManager"``.
-        # The ``update_weights_from_distributed`` method has bare ``self``; flip
-        # it via its multi-line signature.
         new_method = method_text.replace(
             "self: Scheduler",
             'self: "SchedulerWeightUpdaterManager"',
         )
-        # Insert @staticmethod before ``    def <name>``.
+        # Prepend @staticmethod.
         new_method = new_method.replace(
             f"    def {name}(",
             f"    @staticmethod\n    def {name}(",
             1,
         )
-        # For ``update_weights_from_distributed`` only, the original signature
-        # was ``def update_weights_from_distributed(\n        self,\n``. After
-        # adding @staticmethod, we also need to type-flip the bare ``self``.
+        # ``update_weights_from_distributed`` uses bare ``self`` (multi-line
+        # signature without type annotation); flip via its specific shape.
         if name == "update_weights_from_distributed":
             new_method = new_method.replace(
                 "    @staticmethod\n    def update_weights_from_distributed(\n        self,\n",
@@ -263,18 +237,19 @@ def transform(wt: Path) -> None:
             )
         text = "".join(lines[:s]) + new_method + "".join(lines[e:])
 
-    # Swap the TYPE_CHECKING Scheduler import for the new TargetClass so the
-    # ``self: "SchedulerWeightUpdaterManager"`` annotation resolves under
-    # pyflakes (otherwise F821).
+    # 3. Swap the TYPE_CHECKING Scheduler import for the new target class
+    #    so the ``self: "SchedulerWeightUpdaterManager"`` annotation resolves
+    #    under pyflakes.
     text = text.replace(
         "if TYPE_CHECKING:\n    from sglang.srt.managers.scheduler import Scheduler\n",
         "if TYPE_CHECKING:\n"
         "    from sglang.srt.managers.scheduler_components.weight_updater import SchedulerWeightUpdaterManager\n",
     )
-
     mixin.write_text(text)
 
-    # 3. In scheduler.py, add import + ctor instantiation + remove offload_tags.
+    # 4. In scheduler.py: add import, instantiate weight_updater, delete the
+    #    relocated ``self.offload_tags = set()`` (ownership migrated to
+    #    manager), rewire dp_attn_adapter's ``offload_tags`` kwarg.
     text = sched.read_text()
     text = insert_after(
         text,
@@ -286,35 +261,28 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Remove ``self.offload_tags = set()`` from Scheduler (was inside
-    # ``init_watch_dog_memory_saver_input_blocker``).
+    # Replace pre-prep1's relocated ``self.offload_tags = set()\n\n`` + the
+    # following ``# Init request dispatcher\n        self.init_request_dispatcher()\n``
+    # with the weight_updater ctor + dispatcher call.
     text = replace_call_site(
         text,
-        old="        self.offload_tags = set()\n",
-        new="",
+        old="        self.offload_tags = set()\n"
+        "\n"
+        "        # Init request dispatcher\n"
+        "        self.init_request_dispatcher()\n",
+        new=SCHEDULER_INIT_INSERT
+        + "        # Init request dispatcher\n"
+        "        self.init_request_dispatcher()\n",
     )
 
-    # Insert weight_updater ctor BEFORE ``self.init_request_dispatcher()`` call.
-    # ``init_request_dispatcher`` registers RPC dispatch tuples that reference
-    # ``self.weight_updater.update_weights_from_disk`` etc., so weight_updater
-    # must exist by that point. Insertion site is also BEFORE the dp_attn_adapter
-    # ctor (which references ``self.weight_updater.offload_tags``).
-    text = replace_call_site(
-        text,
-        old="        self.init_request_dispatcher()\n",
-        new=SCHEDULER_INIT_INSERT_WEIGHT_UPDATER
-        + "        self.init_request_dispatcher()\n",
-    )
-
-    # Rewire dp_attn_adapter's offload_tags arg from self.offload_tags to
-    # self.weight_updater.offload_tags.
+    # Rewire dp_attn_adapter's offload_tags arg.
     text = replace_call_site(
         text,
         old="            offload_tags=self.offload_tags,\n",
         new="            offload_tags=self.weight_updater.offload_tags,\n",
     )
 
-    # 10 RPC dispatch callsites — wrap in lambdas.
+    # 5. 10 pre-prep2 lambdas grow with ``self.weight_updater`` first arg.
     for old, new in RPC_LAMBDA_PAIRS:
         text = replace_call_site(text, old=old, new=new)
 

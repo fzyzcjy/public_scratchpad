@@ -50,13 +50,18 @@ ORDER: list[str] = [
     # Group B — Mixin mech-move (each: prep + move)
     "migrate-dp-attn-mixin-prep",
     "migrate-dp-attn-mixin-move",
+    "migrate-profiler-mixin-pre-rename",
+    "migrate-profiler-mixin-pre-prep",
     "migrate-profiler-mixin-prep",
     "migrate-profiler-mixin-move",
+    "migrate-update-weights-mixin-pre-prep1",
+    "migrate-update-weights-mixin-pre-prep2",
     "migrate-update-weights-mixin-prep",
     "migrate-update-weights-mixin-move",
     "move-on-idle-to-scheduler-main",  # single (doc exception)
     "introduce-pool-stats-observer-prep",
     "introduce-pool-stats-observer-move",
+    "introduce-invariant-checker-pre-prep",
     "introduce-invariant-checker-prep",
     "introduce-invariant-checker-move",
     "introduce-kv-events-publisher-pre-rename",

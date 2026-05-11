@@ -1,30 +1,56 @@
 #!/usr/bin/env python3
 """Inplace prep for ``introduce-metrics-reporter``: build the
-``SchedulerMetricsReporter`` class skeleton (ctor only, NO methods yet),
-instantiate on Scheduler, type-flip all remaining mixin methods to
-``@staticmethod`` with ``self: "SchedulerMetricsReporter"``, perform the
-fancy-reshape body substitutions (Callable getter form for mutable
-Scheduler scalars), and rewrite callers to the sister form.
+``SchedulerMetricsReporter`` class skeleton **at the target path**
+(``managers/scheduler_components/metrics_reporter.py``) with a Callable-
+injection ctor, instantiate on ``Scheduler``, type-flip the 15 mixin
+methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``,
+rewrite body reads of mutable Scheduler scalars through Callable
+getters, qualify internal sibling calls as
+``SchedulerMetricsMixin.<sibling>(self, ...)``, and rewrite Scheduler /
+mixin / disagg / dllm callers into the static-bound sister form
+``self.<method>(self.metrics_reporter, ...)``.
 
-Body bytes are *not* fully byte-identical wrt the post-move state here:
-this is a deliberate, doc-acknowledged deviation. The metrics reporter
-needs Callable injection (``get_running_batch`` / ``get_forward_ct`` /
-``get_running_mbs`` / ``get_last_batch``) because the originals are
-mutable Scheduler scalars; the doc's strict rule pushes this to
-nonmech follow-up but pragmatically we keep it here so the upcoming
-``-move`` commit is a true byte-equal cut + paste.
+After this commit:
+
+  * ``managers/scheduler_components/metrics_reporter.py`` exists with
+    the class skeleton (header imports + ctor).
+  * ``observability/scheduler_metrics_mixin.py`` still hosts
+    ``PrefillStats``, module constants, and the 15 methods (now all
+    ``@staticmethod`` typed for the new class).
+  * Scheduler owns ``self.metrics_reporter`` and routes hot-path callers
+    through it via ``self.<method>(self.metrics_reporter, ...)`` —
+    exactly the form pool-stats-observer-prep / load-inquirer-prep use.
+
+The upcoming ``-move`` commit is then a true byte-equal cut + paste:
+cut the 15 method bodies + PrefillStats + module constants from the
+mixin, paste them into the target class / module, strip
+``@staticmethod`` + typeflip + sibling-call qualifier, drop the mixin
+file, rewrite 3 external import paths, and collapse caller form
+``self.foo(self.metrics_reporter, ...)`` → ``self.metrics_reporter.foo(...)``.
 
 Pragmatic deviations documented:
+
 - Callable injection for 4 mutable scalars (``running_batch`` /
   ``forward_ct`` / ``running_mbs`` / ``last_batch``).
 - Ownership migration: ``num_retracted_reqs`` / ``num_paused_reqs``
-  move from Scheduler-owned to reporter-owned.
-- ``init_metrics`` body is inlined into the reporter ctor.
-- The original ``init_metrics`` callsite is replaced with an inline
-  block that computes ``current_scheduler_metrics_enabled`` /
-  ``enable_kv_cache_events`` / the metrics_collector (because
-  ``init_ipc_channels`` / ``init_cache_with_memory_pool`` /
-  ``init_model_worker`` read those fields before the reporter exists).
+  move from Scheduler-owned to reporter-owned. Neither is separable
+  into a pre-prep commit because both move TO ``SchedulerMetricsReporter``
+  which does not exist before this commit; the prep is precisely where
+  the class is born.
+- ``init_metrics`` body is *not* inlined into the ctor — instead the
+  ctor calls ``SchedulerMetricsMixin.init_metrics(self, tp_rank,
+  pp_rank, dp_rank)`` qualified form; ``install_device_timer_on_runners``
+  immediately after. In ``-move`` the qualified prefix gets stripped to
+  plain ``self.init_metrics(...)`` after the method body lands inside
+  ``SchedulerMetricsReporter``.
+- ``metrics_collector`` ownership routing (option b): the
+  ``SchedulerMetricsCollector`` is still constructed during the
+  inlined-on-Scheduler early-fields block (because ``init_model_worker``
+  reads ``self.metrics_collector`` to call ``emit_constants`` before
+  the reporter exists). The reporter ctor receives the same instance
+  via ``metrics_collector=`` kwarg and re-exposes as
+  ``self.metrics_reporter.metrics_collector``. Post-init Scheduler call
+  sites route through the reporter.
 """
 
 # /// script
@@ -38,84 +64,92 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-metrics-reporter-prep"
-SUBJECT = "Build SchedulerMetricsReporter skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Build SchedulerMetricsReporter skeleton at target path + @staticmethod typeflip (prep for move)"
 BODY = """\
 Inplace prep for the ``introduce-metrics-reporter`` mech move.
 
-- Rewrite the mixin file header so ``SchedulerMetricsMixin`` becomes
-  ``SchedulerMetricsReporter`` with a narrow-kwargs ctor that inlines
-  the original ``init_metrics`` body (the manager owns the state).
-- Add Callable getter injection (``get_running_batch`` /
-  ``get_forward_ct`` / ``get_running_mbs`` / ``get_last_batch``) for
-  mutable Scheduler scalars — body reads are rewritten to call the
-  getters.
-- Privacy flips done in the preceding ``-pre-rename`` commit.
-- Ownership migration: ``num_retracted_reqs`` / ``num_paused_reqs``
-  move to reporter; the single external writer in
-  ``Scheduler.run_batch`` rewires to
-  ``self.metrics_reporter.num_retracted_reqs = ...``.
-- In Scheduler.__init__, replace the ``init_metrics`` call with an
-  inline block computing the 3 early fields read by IPC / cache /
-  model-worker init, then instantiate
-  ``self.metrics_reporter = SchedulerMetricsReporter(...)`` after
-  ``self.kv_events_publisher``.
-- Hot-path callsites updated via sister form
-  (``self.metrics_reporter.<method>(...)``).
+- Create ``managers/scheduler_components/metrics_reporter.py`` with an
+  empty ``SchedulerMetricsReporter`` class skeleton (header imports +
+  ctor only; methods land in the upcoming ``-move`` commit).
+- Ctor stashes deps + Callable getters (``get_running_batch`` /
+  ``get_forward_ct`` / ``get_running_mbs`` / ``get_last_batch``) for the
+  4 mutable Scheduler scalars referenced by reporter methods, then runs
+  the original ``init_metrics`` body via
+  ``SchedulerMetricsMixin.init_metrics(self, tp_rank, pp_rank, dp_rank)``
+  qualified call (and ``install_device_timer_on_runners`` likewise).
+- Instantiate ``self.metrics_reporter = SchedulerMetricsReporter(...)``
+  in ``Scheduler.__init__`` after ``self.kv_events_publisher``.
+- Replace ``self.init_metrics(tp_rank, pp_rank, dp_rank)`` in
+  ``Scheduler.__init__`` with the early-inline block that computes
+  ``enable_metrics`` / ``is_stats_logging_rank`` /
+  ``current_scheduler_metrics_enabled`` / ``enable_kv_cache_events``
+  and builds the ``metrics_collector`` (option b ownership — kept on
+  Scheduler at construction time because ``init_model_worker`` reads
+  it before the reporter exists; the reporter then receives the same
+  instance as a ctor kwarg). Drop the now-redundant
+  ``self.install_device_timer_on_runners()`` call (subsumed by the
+  reporter ctor).
+- Ownership migration: drop ``self.num_retracted_reqs: int = 0`` and
+  ``self.num_paused_reqs: int = 0`` from ``Scheduler`` (now reporter-
+  owned); the single external writer in ``Scheduler.run_batch``
+  rewires to ``self.metrics_reporter.num_retracted_reqs = ...``.
+- In ``SchedulerMetricsMixin`` (still at the old path), convert all
+  15 methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``
+  typed first param. Body reads of mutable Scheduler scalars rewrite to
+  ``self.get_X()`` Callable form. Internal sibling calls rewrite to
+  ``SchedulerMetricsMixin.<sibling>(self, ...)`` qualified form so
+  Python doesn't drop the ``self`` arg on a ``@staticmethod`` lookup.
+- Hot-path Scheduler / mixin / disagg / dllm callers rewrite from
+  ``self.foo(args)`` → ``self.foo(self.metrics_reporter, args)`` —
+  the static-bound sister form. In ``-move`` this collapses to
+  ``self.metrics_reporter.foo(args)`` once the methods are on the
+  reporter class itself.
+- Spec lifetime counters / ``last_gen_throughput`` / ``step_time_dict``
+  Scheduler accessors route through ``self.metrics_reporter.X`` (option
+  b ownership), and the load-inquirer ctor's lambdas for
+  ``get_spec_total_num_accepted_tokens`` / ``get_spec_total_num_forward_ct``
+  switch to ``self.metrics_reporter.spec_total_num_*``.
+- ``metrics_collector`` post-init call sites route through
+  ``self.metrics_reporter.metrics_collector.X(...)``. The early
+  ``emit_constants`` callsite inside ``init_model_worker`` and kwarg
+  passes that hand off the field object are intentionally left alone.
 
-Pragmatic deviation (per doc): Callable injection + ownership migration
-+ signature redesign are kept in this prep commit (not pushed to a
-nonmech follow-up) so the upcoming ``-move`` commit is a true byte-equal
-cut + paste.
-
-The 14 remaining mixin methods + ``PrefillStats`` stay inside the file
-in this commit; physical cut + paste to the target file (and deletion
-of the metrics mixin) happens in ``introduce-metrics-reporter-move``.
-
-Block-move audit (2026-05-11): the audit flagged two "block-move
-candidates" that might be extractable into ``-pre-prep`` commits:
-(1) inlining the ``init_metrics`` body into
-``SchedulerMetricsReporter.__init__``, and (2) ownership migration of
-``num_retracted_reqs`` / ``num_paused_reqs`` from ``Scheduler`` to the
-reporter. On review, neither is separable: both move TO
-``SchedulerMetricsReporter``, which does not exist before this commit —
-building the class + ctor is precisely what this prep does. Both
-block-moves are structurally intrinsic to introducing the class and
-cannot be hoisted into an earlier commit. No
-``introduce-metrics-reporter-pre-prep1`` / ``-pre-prep2`` are created.
-
-``metrics_collector`` ownership routing (option b): the
-``SchedulerMetricsCollector`` is still instantiated inline on
-``Scheduler`` (the early-inline block, before ``init_model_worker``,
-because ``init_model_worker`` reads ``self.metrics_collector`` to call
-``emit_constants``). The reporter ctor receives the same instance via
-its ``metrics_collector=`` kwarg and re-exposes it as
-``self.metrics_reporter.metrics_collector``. Post-init callsites on
-``Scheduler`` route through the reporter
-(``self.metrics_reporter.metrics_collector.X(...)``) so ownership reads
-as reporter-held even though construction stays on Scheduler. Option
-(a) — moving reporter creation earlier and splitting the ctor — was
-considered and rejected: it would require either a two-phase ctor or
-duplicating the engine_type/labels assembly, and buys little because
-the collector itself is conceptually a passive sink. The
-``init_model_worker`` early ``emit_constants`` callsite is the one
-exception that keeps reading ``self.metrics_collector`` directly: it
-fires before the reporter is constructed, so routing it through
-``self.metrics_reporter`` would ``AttributeError`` at runtime. Kwarg
-passes (``metrics_collector=self.metrics_collector`` in the request
-receiver, batch result processor, etc.) also keep the direct form —
-they pass the field object, not a method call, and rewriting them buys
-nothing.
+The 15 methods + ``PrefillStats`` + module constants stay inside the
+mixin file in this commit; physical cut + paste to the target class /
+module and ``SchedulerMetricsMixin`` retirement happen in
+``introduce-metrics-reporter-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-NEW_CTOR_AND_INIT_PROLOGUE = '''\
+TARGET_FILE_HEADER = '''\
+from __future__ import annotations  # noqa: F401
+
+import logging  # noqa: F401
+from typing import TYPE_CHECKING, Callable, Optional  # noqa: F401
+
+from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
+from sglang.srt.observability.scheduler_metrics_mixin import (  # noqa: F401
+    SchedulerMetricsMixin,
+)
+
+if TYPE_CHECKING:
+    from sglang.srt.managers.scheduler import Scheduler  # noqa: F401
+
+
+logger = logging.getLogger(__name__)
+
+
+'''
+
+
+NEW_CLASS_SKELETON = '''\
 class SchedulerMetricsReporter:
     """Prometheus / Stats hot-path. Composition target on Scheduler
     (``self.metrics_reporter``)."""
@@ -153,10 +187,10 @@ class SchedulerMetricsReporter:
         disagg_decode_transfer_queue,
         kv_events_publisher,
         pool_stats_observer,
-        get_running_batch,
-        get_forward_ct,
-        get_running_mbs,
-        get_last_batch,
+        get_running_batch: Callable,
+        get_forward_ct: Callable,
+        get_running_mbs: Callable,
+        get_last_batch: Callable,
     ) -> None:
         # Owned counters (ownership migration from Scheduler).
         self.num_retracted_reqs: int = 0
@@ -191,9 +225,15 @@ class SchedulerMetricsReporter:
         self.get_forward_ct = get_forward_ct
         self.get_running_mbs = get_running_mbs
         self.get_last_batch = get_last_batch
-        # Run the original init_metrics body inline.
-        self.init_metrics(tp_rank, pp_rank, dp_rank)
-
+        # Run the original init_metrics body via the qualified staticmethod
+        # form — methods still live on SchedulerMetricsMixin during prep;
+        # the upcoming ``-move`` commit cuts + pastes them into this class
+        # and the qualified prefix collapses to ``self.init_metrics(...)``.
+        SchedulerMetricsMixin.init_metrics(self, tp_rank, pp_rank, dp_rank)
+        # ``install_device_timer_on_runners`` was originally called from
+        # Scheduler.__init__ right after init_model_worker; we invoke it
+        # here so callers don't need a separate hook.
+        SchedulerMetricsMixin.install_device_timer_on_runners(self)
 '''
 
 
@@ -298,212 +338,276 @@ INLINE_CURRENT_METRICS_ENABLED = (
 )
 
 
+# Methods to type-flip (15 total: 14 normal + init_metrics which is invoked
+# by ctor via SchedulerMetricsMixin.init_metrics(self, ...)).
+METHODS_TO_FLIP = [
+    "init_metrics",
+    "install_device_timer_on_runners",
+    "update_spec_metrics",
+    "_init_estimated_perf_constants",
+    "_estimate_prefill_perf",
+    "_estimate_decode_perf",
+    "reset_metrics",
+    "report_prefill_stats",
+    "report_decode_stats",
+    "log_batch_result_stats",
+    "_log_hicache_stats",
+    "_update_lora_metrics",
+    "_calculate_utilization",
+    "update_device_timer",
+    "reset_device_timer_window",
+]
+
+
+# Sibling calls inside method bodies: ``self.<sibling>(...)`` →
+# ``SchedulerMetricsMixin.<sibling>(self, ...)``. The set is derived from a
+# grep of internal cross-method calls (see plan note).
+SIBLING_CALLS = [
+    "_init_estimated_perf_constants",
+    "_estimate_prefill_perf",
+    "_estimate_decode_perf",
+    "_log_hicache_stats",
+    "_update_lora_metrics",
+    "_calculate_utilization",
+]
+
+
+# Body Callable-getter substitutions for mutable scheduler scalars.
+BODY_GETTER_REPLACEMENTS = [
+    ("self.running_batch", "self.get_running_batch()"),
+    ("self.forward_ct", "self.get_forward_ct()"),
+    ("self.running_mbs", "self.get_running_mbs()"),
+    ("self.last_batch", "self.get_last_batch()"),
+]
+
+
+def _qualify_sibling_calls(method_text: str) -> str:
+    """Rewrite ``self.<sibling>(...)`` → ``SchedulerMetricsMixin.<sibling>(self, ...)``
+    for each known intra-class sibling call. Tolerates the zero-arg form
+    (``self.foo()`` → ``SchedulerMetricsMixin.foo(self)``)."""
+    text = method_text
+    for name in SIBLING_CALLS:
+        # n-arg form: self.foo(a, b) → SchedulerMetricsMixin.foo(self, a, b)
+        text = re.sub(
+            rf"self\.{re.escape(name)}\(\s*(?!\))",
+            f"SchedulerMetricsMixin.{name}(self, ",
+            text,
+        )
+        # Zero-arg form: self.foo() → SchedulerMetricsMixin.foo(self)
+        text = re.sub(
+            rf"self\.{re.escape(name)}\(\s*\)",
+            f"SchedulerMetricsMixin.{name}(self)",
+            text,
+        )
+    return text
+
+
+def _typeflip_method(text: str, *, method_name: str) -> str:
+    """Type-flip a SchedulerMetricsMixin method to @staticmethod with
+    ``self: "SchedulerMetricsReporter"``. Apply body getter substitutions
+    and qualify sibling calls."""
+    s, e = find_method_lines(
+        text, class_name="SchedulerMetricsMixin", method_name=method_name
+    )
+    lines = text.splitlines(keepends=True)
+    method_text = "".join(lines[s:e])
+    # Replace the existing ``self: Scheduler`` annotation with
+    # ``self: "SchedulerMetricsReporter"`` and prepend the decorator.
+    new_method = method_text.replace("self: Scheduler", 'self: "SchedulerMetricsReporter"')
+    # If the original method had bare ``self`` (no Scheduler annotation),
+    # add the new annotation. We expect every method in this mixin to use
+    # ``self: Scheduler`` per the existing convention, so this is a no-op
+    # fallback.
+    # Prepend @staticmethod decorator.
+    if not new_method.lstrip().startswith("@staticmethod"):
+        new_method = "    @staticmethod\n" + new_method
+    # Body callable-getter substitutions.
+    for old, new in BODY_GETTER_REPLACEMENTS:
+        new_method = new_method.replace(old, new)
+    # Some replacements over-fire (e.g. ``self.forward_ct_decode`` becomes
+    # ``self.get_forward_ct()_decode``); undo those.
+    new_method = new_method.replace("self.get_forward_ct()_decode", "self.forward_ct_decode")
+    # Qualify sibling calls.
+    new_method = _qualify_sibling_calls(new_method)
+    return "".join(lines[:s]) + new_method + "".join(lines[e:])
+
+
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     output_mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
-    pre = wt / "python/sglang/srt/disaggregation/prefill.py"
+    prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     dllm = wt / "python/sglang/srt/dllm/mixin/scheduler.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/metrics_reporter.py"
 
-    # 1. Rewrite the mixin file header into the reporter class.
+    # 1. Create new target file at the final destination path with skeleton.
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(TARGET_FILE_HEADER + NEW_CLASS_SKELETON)
+
+    # 2. In the mixin file, type-flip each of the 15 methods to @staticmethod
+    #    with self: "SchedulerMetricsReporter". Iterate bottom-up so earlier
+    #    line ranges are not invalidated by later edits.
     text = src.read_text()
-    text = text.replace("self: Scheduler", "self")
-    text = text.replace(
-        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult, Scheduler\n",
-        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult\n",
-    )
-    text = text.replace(
-        "from sglang.srt.managers.scheduler import ScheduleBatch\n",
-        "from sglang.srt.managers.schedule_batch import ScheduleBatch\n",
-    )
-    if "class SchedulerMetricsMixin:\n" not in text:
-        raise RuntimeError("Metrics class header anchor mismatch")
-    text = text.replace("class SchedulerMetricsMixin:\n", NEW_CTOR_AND_INIT_PROLOGUE)
-
-    # Callable getter substitutions.
-    text = text.replace("self.running_batch", "self.get_running_batch()")
-    text = text.replace("self.forward_ct", "self.get_forward_ct()")
-    text = text.replace("self.running_mbs", "self.get_running_mbs()")
-    text = text.replace("self.last_batch", "self.get_last_batch()")
-    text = text.replace(
-        "self.get_forward_ct()_decode", "self.forward_ct_decode"
-    )
-
-    # Strip the engine_type / metrics_collector creation block from init_metrics
-    # (now built on the Scheduler side and passed as a kwarg).
-    text = re.sub(
-        r"            engine_type = DisaggregationMode\.to_engine_type\(\n"
-        r"(?:[^\n]*\n)+?"
-        r"            self\.metrics_collector = SchedulerMetricsCollector\(\n"
-        r"(?:[^\n]*\n)+?"
-        r"            \)\n",
-        "",
-        text,
-    )
+    # AST traversal: locate each method, type-flip in place. find_method_lines
+    # re-parses each time so iteration order doesn't matter, but bottom-up is
+    # safer when in-place edits change byte counts.
+    import ast
+    tree = ast.parse(text)
+    method_lineno = {}
+    for cls in ast.walk(tree):
+        if isinstance(cls, ast.ClassDef) and cls.name == "SchedulerMetricsMixin":
+            for node in cls.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    method_lineno[node.name] = node.lineno
+            break
+    ordered = sorted(METHODS_TO_FLIP, key=lambda m: method_lineno.get(m, 0), reverse=True)
+    for name in ordered:
+        text = _typeflip_method(text, method_name=name)
     src.write_text(text)
 
-    # 2. Update Scheduler.
+    # 3. Scheduler: import + ctor instantiation + early-fields block +
+    #    drop num_retracted/num_paused init + caller rewrites.
     text = sched.read_text()
-    # Drop any stale ``SchedulerMetricsMixin`` import block.
-    text = re.sub(
-        r"from sglang\.srt\.observability\.scheduler_metrics_mixin import \([^)]*\)\n",
-        "",
-        text,
-    )
-    text = re.sub(
-        r"from sglang\.srt\.observability\.scheduler_metrics_mixin import [^\n]+\n",
-        "",
-        text,
-    )
-    # Add the reporter + collector imports.
+    # Add the SchedulerMetricsReporter + SchedulerMetricsCollector imports
+    # alongside the existing scheduler_components imports.
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.scheduler_components.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
         addition=(
-            "from sglang.srt.observability.scheduler_metrics_mixin import (\n"
-            "    RECORD_STEP_TIME,\n"
-            "    PrefillStats,\n"
+            "from sglang.srt.managers.scheduler_components.metrics_reporter import (\n"
             "    SchedulerMetricsReporter,\n"
             ")\n"
             "from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector\n"
         ),
     )
-    text = replace_call_site(text, old="    SchedulerMetricsMixin,\n", new="")
-    # Replace init_metrics callsite with the inline early-fields block.
-    text = text.replace(
-        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
-        INLINE_CURRENT_METRICS_ENABLED,
-    )
-    # Insert the reporter ctor after the kv_events_publisher ctor.
-    text = insert_after(
+    # Replace init_metrics call with the inline early-fields block.
+    text = replace_call_site(
         text,
-        anchor=(
-            "        self.kv_events_publisher = SchedulerKvEventsPublisher(\n"
-            "            kv_events_config=self.server_args.kv_events_config,\n"
-            "            attn_tp_rank=self.ps.attn_tp_rank,\n"
-            "            attn_cp_rank=self.ps.attn_cp_rank,\n"
-            "            attn_dp_rank=self.ps.attn_dp_rank,\n"
-            "            dp_rank=self.ps.dp_rank,\n"
-            "            tree_cache=self.tree_cache,\n"
-            "            send_metrics_from_scheduler=self.send_metrics_from_scheduler,\n"
-            "            max_running_requests=self.max_running_requests,\n"
-            "            max_total_num_tokens=self.max_total_num_tokens,\n"
-            "        )\n\n"
-        ),
-        addition=SCHEDULER_INIT_INSERT,
+        old="        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
+        new=INLINE_CURRENT_METRICS_ENABLED,
+    )
+    # Insert reporter ctor BEFORE ``self.is_initializing = False`` (stable anchor).
+    text = replace_call_site(
+        text,
+        old="        self.is_initializing = False\n",
+        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
     )
     # Drop owned counter init lines (now reporter-owned).
-    text = text.replace("        self.num_retracted_reqs: int = 0\n", "")
-    text = text.replace("        self.num_paused_reqs: int = 0\n", "")
-    # ``install_device_timer_on_runners`` Scheduler callsite — drop; the
-    # reporter ctor calls it inline post-init_metrics.
-    text = text.replace(
-        "        self.install_device_timer_on_runners()\n",
-        "",
+    text = replace_call_site(text, old="        self.num_retracted_reqs: int = 0\n", new="")
+    text = replace_call_site(text, old="        self.num_paused_reqs: int = 0\n", new="")
+    # Drop the separate install_device_timer_on_runners call (now run from
+    # reporter ctor).
+    text = replace_call_site(
+        text,
+        old="        self.install_device_timer_on_runners()\n",
+        new="",
     )
-    # Hot-path callsites — route through sister.
-    text = text.replace(
-        "        self.log_batch_result_stats(batch, result)\n",
-        "        self.metrics_reporter.log_batch_result_stats(batch, result)\n",
+    # Load-inquirer ctor lambdas: route spec accumulator getters through
+    # the reporter (ownership migration).
+    text = replace_call_site(
+        text,
+        old="            get_spec_total_num_accepted_tokens=lambda: self.spec_total_num_accepted_tokens,\n"
+        "            get_spec_total_num_forward_ct=lambda: self.spec_total_num_forward_ct,\n",
+        new="            get_spec_total_num_accepted_tokens=lambda: self.metrics_reporter.spec_total_num_accepted_tokens,\n"
+        "            get_spec_total_num_forward_ct=lambda: self.metrics_reporter.spec_total_num_forward_ct,\n",
     )
-    text = text.replace(
-        "        self.update_device_timer()\n",
-        "        self.metrics_reporter.update_device_timer()\n",
+    # Hot-path callsites — static-bound sister form (pool-stats-observer pattern).
+    text = replace_call_site(
+        text,
+        old="        self.log_batch_result_stats(batch, result)\n",
+        new="        self.log_batch_result_stats(self.metrics_reporter, batch, result)\n",
     )
-    text = text.replace(
-        "            self.reset_metrics()\n",
-        "            self.metrics_reporter.reset_metrics()\n",
+    text = replace_call_site(
+        text,
+        old="        self.update_device_timer()\n",
+        new="        self.update_device_timer(self.metrics_reporter)\n",
     )
-    text = text.replace(
-        "        self.reset_device_timer_window()\n",
-        "        self.metrics_reporter.reset_device_timer_window()\n",
+    text = replace_call_site(
+        text,
+        old="            self.reset_metrics()\n",
+        new="            self.reset_metrics(self.metrics_reporter)\n",
     )
-    # Spec lifetime counters now reporter-owned.
-    text = text.replace(
-        "self.spec_total_num_accepted_tokens",
-        "self.metrics_reporter.spec_total_num_accepted_tokens",
+    text = replace_call_site(
+        text,
+        old="        self.reset_device_timer_window()\n",
+        new="        self.reset_device_timer_window(self.metrics_reporter)\n",
     )
-    text = text.replace(
-        "self.spec_total_num_forward_ct",
-        "self.metrics_reporter.spec_total_num_forward_ct",
+    # Spec lifetime counters now reporter-owned (post-init reads from Scheduler).
+    text = replace_call_site(
+        text, old="self.spec_total_num_accepted_tokens",
+        new="self.metrics_reporter.spec_total_num_accepted_tokens",
     )
-    text = text.replace(
-        'ret["last_gen_throughput"] = self.last_gen_throughput',
-        'ret["last_gen_throughput"] = self.metrics_reporter.last_gen_throughput',
+    text = replace_call_site(
+        text, old="self.spec_total_num_forward_ct",
+        new="self.metrics_reporter.spec_total_num_forward_ct",
     )
-    text = text.replace(
-        'ret["step_time_dict"] = self.step_time_dict',
-        'ret["step_time_dict"] = self.metrics_reporter.step_time_dict',
+    text = replace_call_site(
+        text, old='ret["last_gen_throughput"] = self.last_gen_throughput',
+        new='ret["last_gen_throughput"] = self.metrics_reporter.last_gen_throughput',
     )
-    text = text.replace(
-        "            self.num_retracted_reqs = len(retracted_reqs)\n",
-        "            self.metrics_reporter.num_retracted_reqs = len(retracted_reqs)\n",
+    text = replace_call_site(
+        text, old='ret["step_time_dict"] = self.step_time_dict',
+        new='ret["step_time_dict"] = self.metrics_reporter.step_time_dict',
     )
-    # Route post-init metrics_collector method calls through the reporter so
-    # ownership reads as reporter-held (option b). The early emit_constants
-    # callsite inside ``init_model_worker`` is intentionally NOT rewritten:
-    # it fires before ``self.metrics_reporter`` is constructed and would
-    # AttributeError at runtime. Kwarg passes
-    # (``metrics_collector=self.metrics_collector``) are also left alone —
-    # they hand off the field object, not a method call.
-    text = text.replace(
-        "                self.metrics_collector.increment_retracted_reqs(\n",
-        "                self.metrics_reporter.metrics_collector.increment_retracted_reqs(\n",
+    text = replace_call_site(
+        text,
+        old="            self.num_retracted_reqs = len(retracted_reqs)\n",
+        new="            self.metrics_reporter.num_retracted_reqs = len(retracted_reqs)\n",
     )
-    text = text.replace(
-        "            or time.perf_counter() <= self.metrics_collector.last_log_time + 30\n",
-        "            or time.perf_counter() <= self.metrics_reporter.metrics_collector.last_log_time + 30\n",
+    # Route post-init metrics_collector method calls through the reporter
+    # (option b ownership). The early emit_constants callsite inside
+    # init_model_worker and kwarg passes are intentionally left alone.
+    text = replace_call_site(
+        text,
+        old="                self.metrics_collector.increment_retracted_reqs(\n",
+        new="                self.metrics_reporter.metrics_collector.increment_retracted_reqs(\n",
     )
-    text = text.replace(
-        "        self.metrics_collector.log_stats(self.stats)\n",
-        "        self.metrics_reporter.metrics_collector.log_stats(self.stats)\n",
+    text = replace_call_site(
+        text,
+        old="            or time.perf_counter() <= self.metrics_collector.last_log_time + 30\n",
+        new="            or time.perf_counter() <= self.metrics_reporter.metrics_collector.last_log_time + 30\n",
     )
-    # Patch the reporter ctor body in the mixin file to call
-    # install_device_timer_on_runners after init_metrics.
+    text = replace_call_site(
+        text,
+        old="        self.metrics_collector.log_stats(self.stats)\n",
+        new="        self.metrics_reporter.metrics_collector.log_stats(self.stats)\n",
+    )
     sched.write_text(text)
 
-    text = src.read_text()
-    text = text.replace(
-        "        # Run the original init_metrics body inline.\n"
-        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
-        "        # Run the original init_metrics body inline.\n"
-        "        self.init_metrics(tp_rank, pp_rank, dp_rank)\n"
-        "        # ``install_device_timer_on_runners`` was originally called\n"
-        "        # from Scheduler.__init__ right after init_model_worker; we\n"
-        "        # invoke it here so callers don't need a separate hook.\n"
-        "        self.install_device_timer_on_runners()\n",
-    )
-    src.write_text(text)
-
-    # 3. Output processor mixin callsites.
+    # 4. Output processor mixin callsites — static-bound sister form.
     text = output_mixin.read_text()
-    text = text.replace(
-        "        self.report_prefill_stats(",
-        "        self.metrics_reporter.report_prefill_stats(",
+    text = re.sub(
+        r"(        )self\.report_prefill_stats\(",
+        r"\1self.report_prefill_stats(self.metrics_reporter, ",
+        text,
     )
-    text = text.replace(
-        "            self.update_spec_metrics(",
-        "            self.metrics_reporter.update_spec_metrics(",
+    text = re.sub(
+        r"(            )self\.update_spec_metrics\(",
+        r"\1self.update_spec_metrics(self.metrics_reporter, ",
+        text,
     )
-    text = text.replace(
-        "        self.report_decode_stats(",
-        "        self.metrics_reporter.report_decode_stats(",
+    text = re.sub(
+        r"(        )self\.report_decode_stats\(",
+        r"\1self.report_decode_stats(self.metrics_reporter, ",
+        text,
     )
     output_mixin.write_text(text)
 
-    # 4. Disaggregation prefill.
-    text = pre.read_text()
-    text = text.replace(
-        "        self.report_prefill_stats(",
-        "        self.metrics_reporter.report_prefill_stats(",
+    # 5. Disaggregation prefill.
+    text = prefill.read_text()
+    text = re.sub(
+        r"(        )self\.report_prefill_stats\(",
+        r"\1self.report_prefill_stats(self.metrics_reporter, ",
+        text,
     )
-    pre.write_text(text)
+    prefill.write_text(text)
 
-    # 5. dllm mixin.
+    # 6. dllm mixin.
     text = dllm.read_text()
-    text = text.replace(
-        "        self.report_prefill_stats(",
-        "        self.metrics_reporter.report_prefill_stats(",
+    text = re.sub(
+        r"(        )self\.report_prefill_stats\(",
+        r"\1self.report_prefill_stats(self.metrics_reporter, ",
+        text,
     )
     dllm.write_text(text)
 

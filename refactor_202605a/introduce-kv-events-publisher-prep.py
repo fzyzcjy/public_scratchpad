@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Inplace prep for ``introduce-kv-events-publisher``: build the
-``SchedulerKvEventsPublisher`` class skeleton (ctor + ``KvMetrics``
-dataclass, NO methods yet), instantiate on Scheduler, type-flip 3 mixin
-methods to ``@staticmethod`` with ``self: "SchedulerKvEventsPublisher"``,
-rewrite callers to the sister form.
+``SchedulerKvEventsPublisher`` class skeleton (ctor with Callable getter
+injection for ``stats`` + ``KvMetrics`` dataclass, NO methods yet),
+instantiate on Scheduler, type-flip 3 mixin methods to ``@staticmethod``
+with ``self: "SchedulerKvEventsPublisher"``, rewrite ``emit_kv_metrics``
+body reads of ``self.stats.X`` to ``self.get_stats().X`` Callable-getter
+form, rewrite callers to the sister form.
 
 Body bytes byte-identical wrt the post-move state (modulo decorator +
 ``self: SchedulerKvEventsPublisher`` → bare ``self`` signature
@@ -11,7 +13,9 @@ simplification in the move commit).
 
 Privacy flips (``_emit_kv_metrics`` → ``emit_kv_metrics`` /
 ``_publish_kv_events`` → ``publish_kv_events``) were done in the
-preceding ``-pre-rename`` commit; method bodies otherwise unchanged.
+preceding ``-pre-rename`` commit; method bodies otherwise unchanged
+apart from the ``self.stats`` → ``self.get_stats()`` getter rewrite in
+``emit_kv_metrics``.
 """
 
 # /// script
@@ -34,13 +38,17 @@ Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 
 - Create ``scheduler_components/kv_events_publisher.py`` with an empty
   ``SchedulerKvEventsPublisher`` class skeleton (ctor + ``KvMetrics``
-  dataclass moved here; no methods yet).
+  dataclass moved here; no methods yet). Ctor adds ``get_stats:
+  Callable[[], SchedulerStats]`` for runtime-mutable scheduler stats
+  (CLAUDE.md §4 form).
 - Instantiate ``self.kv_events_publisher = SchedulerKvEventsPublisher(...)``
-  in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
+  in ``Scheduler.__init__`` just before ``self.is_initializing = False``,
+  passing ``get_stats=lambda: self.stats``.
 - In ``SchedulerMetricsMixin``, convert 3 methods (``init_kv_events`` /
   ``emit_kv_metrics`` / ``publish_kv_events``) to ``@staticmethod`` with
-  ``self: "SchedulerKvEventsPublisher"`` type annotation. Body bytes
-  unchanged.
+  ``self: "SchedulerKvEventsPublisher"`` type annotation.
+- ``emit_kv_metrics`` body rewrites ``self.stats.X`` reads as
+  ``self.get_stats().X`` Callable-getter calls. Otherwise unchanged.
 - Callers (2 in metrics mixin, 1 in scheduler.py ``on_idle``) rewritten
   to ``self.<method>(self.kv_events_publisher, ...)``.
 
@@ -70,7 +78,7 @@ from __future__ import annotations  # noqa: F401
 import dataclasses  # noqa: F401
 import time  # noqa: F401
 from dataclasses import dataclass  # noqa: F401
-from typing import Optional  # noqa: F401
+from typing import Callable, Optional  # noqa: F401
 
 from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch  # noqa: F401
 
@@ -100,6 +108,7 @@ class SchedulerKvEventsPublisher:
         send_metrics_from_scheduler,
         max_running_requests: int,
         max_total_num_tokens: int,
+        get_stats: Callable,
     ) -> None:
         self.tree_cache = tree_cache
         self.send_metrics_from_scheduler = send_metrics_from_scheduler
@@ -109,6 +118,7 @@ class SchedulerKvEventsPublisher:
         self.attn_dp_rank = attn_dp_rank
         self.max_running_requests = max_running_requests
         self.max_total_num_tokens = max_total_num_tokens
+        self.get_stats = get_stats
         self.enable_kv_cache_events = bool(
             kv_events_config and attn_tp_rank == 0 and attn_cp_rank == 0
         )
@@ -130,9 +140,38 @@ SCHEDULER_INIT_INSERT = '''\
             send_metrics_from_scheduler=self.send_metrics_from_scheduler,
             max_running_requests=self.max_running_requests,
             max_total_num_tokens=self.max_total_num_tokens,
+            get_stats=lambda: self.stats,
         )
 
 '''
+
+
+# Body rewrites applied inside ``emit_kv_metrics`` so that, after the move,
+# the method reads runtime-mutable scheduler ``stats`` through the
+# Callable getter instead of referencing the (no-longer-present)
+# ``self.stats`` attribute. Each anchor is unique within the method body.
+EMIT_KV_METRICS_BODY_REWRITES = [
+    (
+        "kv_metrics.request_active_slots = self.stats.num_running_reqs.total",
+        "kv_metrics.request_active_slots = self.get_stats().num_running_reqs.total",
+    ),
+    (
+        "self.stats.token_usage * self.max_total_num_tokens",
+        "self.get_stats().token_usage * self.max_total_num_tokens",
+    ),
+    (
+        "kv_metrics.num_requests_waiting = self.stats.num_queue_reqs.total",
+        "kv_metrics.num_requests_waiting = self.get_stats().num_queue_reqs.total",
+    ),
+    (
+        "kv_metrics.gpu_cache_usage_perc = self.stats.token_usage",
+        "kv_metrics.gpu_cache_usage_perc = self.get_stats().token_usage",
+    ),
+    (
+        "kv_metrics.gpu_prefix_cache_hit_rate = self.stats.cache_hit_rate",
+        "kv_metrics.gpu_prefix_cache_hit_rate = self.get_stats().cache_hit_rate",
+    ),
+]
 
 
 def _add_static_decorator_and_typeflip(text: str, *, class_name: str,
@@ -166,6 +205,27 @@ def _add_static_decorator_and_typeflip(text: str, *, class_name: str,
         1,
     )
     return "".join(lines[:s]) + new_method + "".join(lines[e:])
+
+
+def _rewrite_emit_kv_metrics_body(text: str) -> str:
+    """Rewrite ``self.stats.X`` reads inside ``emit_kv_metrics`` to
+    ``self.get_stats().X`` Callable-getter form. Each anchor is unique
+    inside the method body.
+    """
+    s, e = find_method_lines(
+        text,
+        class_name="SchedulerMetricsMixin",
+        method_name="emit_kv_metrics",
+    )
+    lines = text.splitlines(keepends=True)
+    method_text = "".join(lines[s:e])
+    for old, new in EMIT_KV_METRICS_BODY_REWRITES:
+        if old not in method_text:
+            raise RuntimeError(
+                f"emit_kv_metrics body rewrite anchor not found: {old!r}"
+            )
+        method_text = method_text.replace(old, new, 1)
+    return "".join(lines[:s]) + method_text + "".join(lines[e:])
 
 
 def transform(wt: Path) -> None:
@@ -212,7 +272,12 @@ def transform(wt: Path) -> None:
         original_self_sig="self: Scheduler",
     )
 
-    # 4. Mixin internal callsites: route through sister.
+    # 4. Rewrite ``emit_kv_metrics`` body reads to Callable-getter form so
+    #    the method survives the move into ``SchedulerKvEventsPublisher``
+    #    (which has no ``stats`` attribute, only ``get_stats: Callable``).
+    text = _rewrite_emit_kv_metrics_body(text)
+
+    # 5. Mixin internal callsites: route through sister.
     text = text.replace(
         "            self.emit_kv_metrics()\n",
         "            self.emit_kv_metrics(self.kv_events_publisher)\n",
@@ -239,7 +304,7 @@ def transform(wt: Path) -> None:
         )
     src.write_text(text)
 
-    # 5. Scheduler: import + ctor + on_idle callsite.
+    # 6. Scheduler: import + ctor + on_idle callsite.
     text = sched.read_text()
     text = insert_after(
         text,
