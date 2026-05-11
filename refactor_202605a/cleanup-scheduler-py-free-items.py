@@ -44,9 +44,9 @@ Caller-site impact:
 - ``is_work_request``: pure deletion, no callers to update.
 - ``SchedulerOutputSender``: 4 callsites in ``scheduler.py`` + 1 import.
 """
-AREA = "mech_scheduler_followup"
-BASE = "tom_refactor_202605a/followup/mech_scheduler_followup_a"
-AREA_BRANCH = f"tom_refactor_202605a/followup/{AREA}_b"
+AREA = "mech_scheduler"
+BASE = "tom_refactor_202605a/primary/mech_preflight"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def transform(wt: Path) -> None:

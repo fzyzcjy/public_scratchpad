@@ -81,6 +81,10 @@ ORDER: list[str] = [
     "introduce-output-streamer-move",
     "introduce-batch-result-processor-prep",
     "introduce-batch-result-processor-move",
+    # Tail follow-ups: relocate residual module-level free items out of
+    # scheduler.py (mech move + non-mech cleanup).
+    "move-free-items-from-scheduler-py",
+    "cleanup-scheduler-py-free-items",
 ]
 
 

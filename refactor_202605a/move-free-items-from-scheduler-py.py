@@ -60,9 +60,9 @@ non-mech cleanups (delete dead ``is_work_request``; rename
 ``SenderWrapper`` → ``SchedulerOutputSender`` to resolve the namesake
 collision with ``multi_tokenizer_mixin.SenderWrapper``).
 """
-AREA = "mech_scheduler_followup"
-BASE = "tom_refactor_202605a/primary/mech_scheduler"
-AREA_BRANCH = f"tom_refactor_202605a/followup/{AREA}_a"
+AREA = "mech_scheduler"
+BASE = "tom_refactor_202605a/primary/mech_preflight"
+AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def _move_embedding_batch_result(wt: Path) -> None:
