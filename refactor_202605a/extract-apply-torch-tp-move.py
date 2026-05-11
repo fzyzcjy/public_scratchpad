@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Cut `apply_torch_tp` from ModelRunner; paste as a free function in
-`layers/model_parallel.py`. Update sole caller and add an import.
+"""Move stage for extract-apply-torch-tp (MECH_COMMIT_SPLIT §"二段式"):
 
-Usage:
-    uv run --python 3.12 extract-apply-torch-tp.py run
-    uv run --python 3.12 extract-apply-torch-tp.py verify
+Pure cut+paste of the staticmethod prep'd in ``extract-apply-torch-tp-prep``
+into ``layers/model_parallel.py``. Body byte-equivalent. Call-site rewrite is
+a prefix strip.
 """
 
 # /// script
@@ -27,11 +26,11 @@ from _helpers import (
 )
 from _runner import run_pr
 
-ID = "extract-apply-torch-tp"
-SUBJECT = "Extract apply_torch_tp to free function in layers.model_parallel"
+ID = "extract-apply-torch-tp-move"
+SUBJECT = "Move apply_torch_tp to layers.model_parallel (cut+paste)"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-init-cublas"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-apply-torch-tp-prep"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
@@ -43,24 +42,9 @@ def transform(wt: Path) -> None:
         mr.read_text(), class_name="ModelRunner", method_name="apply_torch_tp"
     )
     method_text = cut_lines(mr, start, end)
-    function_text = (
-        dedent_method_to_function(method_text)
-        .replace(
-            "def apply_torch_tp(self):\n",
-            "def apply_torch_tp(\n    *,\n    model: nn.Module,\n    device: str,\n    tp_size: int,\n):\n",
-        )
-        .replace("self.tp_size", "tp_size")
-        .replace("self.device", "device")
-        .replace("self.model", "model")
-        # Same-file self-import: the original method's body has
-        # `from sglang.srt.layers.model_parallel import tensor_parallel` as a
-        # local import. After moving INTO that module, the import is a no-op
-        # self-reference — drop it.
-        .replace(
-            "    from sglang.srt.layers.model_parallel import tensor_parallel\n\n",
-            "",
-        )
-    )
+    lines = method_text.splitlines(keepends=True)
+    assert lines[0].strip() == "@staticmethod", f"first line not @staticmethod: {lines[0]!r}"
+    function_text = dedent_method_to_function("".join(lines[1:]))
 
     mp_text = mp.read_text()
     if "logger = logging.getLogger(__name__)" not in mp_text:
@@ -78,10 +62,12 @@ def transform(wt: Path) -> None:
     append_to_file(mp, function_text)
 
     text = mr.read_text()
+    # Pre-commit may line-wrap the long call; strip the class qualifier
+    # uniformly regardless of formatting.
     text = replace_call_site(
         text,
-        old="self.apply_torch_tp()",
-        new="apply_torch_tp(model=self.model, device=self.device, tp_size=self.tp_size)",
+        old="ModelRunner.apply_torch_tp(",
+        new="apply_torch_tp(",
     )
     text = insert_after(
         text,
@@ -89,6 +75,7 @@ def transform(wt: Path) -> None:
         addition="from sglang.srt.layers.model_parallel import apply_torch_tp\n",
     )
     mr.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(

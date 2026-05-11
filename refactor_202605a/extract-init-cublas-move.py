@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Cut `init_cublas` method from ModelRunner; paste as a free function in
-`utils/common.py`. Update the sole caller and add an import.
+"""Move stage for extract-init-cublas (MECH_COMMIT_SPLIT §"二段式"):
+
+Pure cut+paste of the staticmethod prep'd in ``extract-init-cublas-prep``
+into ``utils/common.py``. Body byte-equivalent. Call-site rewrite is a
+prefix strip (``ModelRunner.init_cublas()`` → ``init_cublas()``).
 
 Usage:
-    uv run --python 3.12 extract-init-cublas.py run     # build + push to upstream
-    uv run --python 3.12 extract-init-cublas.py verify  # diff against upstream
-    uv run --python 3.12 extract-init-cublas.py apply <wt>  # apply on existing worktree
+    uv run --python 3.12 extract-init-cublas-move.py run
+    uv run --python 3.12 extract-init-cublas-move.py verify
 """
 
 # /// script
@@ -28,11 +30,11 @@ from _helpers import (
 )
 from _runner import run_pr
 
-ID = "extract-init-cublas"
-SUBJECT = "Extract init_cublas to free function in utils.common"
+ID = "extract-init-cublas-move"
+SUBJECT = "Move init_cublas to utils.common (cut+paste)"
 BODY = ""
 AREA = "mech_model_runner"
-BASE = "tom_refactor_202605a/primary/mech_preflight"
+BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-init-cublas-prep"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
@@ -44,17 +46,20 @@ def transform(wt: Path) -> None:
         mr.read_text(), class_name="ModelRunner", method_name="init_cublas"
     )
     method_text = cut_lines(mr, start, end)
-    function_text = dedent_method_to_function(method_text).replace(
-        "def init_cublas(self):", "def init_cublas():"
-    )
+    # Strip the ``    @staticmethod\n`` decorator line; the rest is the
+    # function body at 4-space indent — dedent to module level.
+    lines = method_text.splitlines(keepends=True)
+    assert lines[0].strip() == "@staticmethod", f"first line not @staticmethod: {lines[0]!r}"
+    function_text = dedent_method_to_function("".join(lines[1:]))
     append_to_file(common, function_text)
 
     text = mr.read_text()
-    text = replace_call_site(text, old="self.init_cublas()", new="init_cublas()")
+    text = replace_call_site(text, old="ModelRunner.init_cublas()", new="init_cublas()")
     text = add_to_grouped_import(
         text, anchor_name="init_custom_process_group", new_line="    init_cublas,"
     )
     mr.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(
