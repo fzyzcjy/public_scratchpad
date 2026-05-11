@@ -125,6 +125,13 @@ def _global_subs(body: str) -> str:
     body = body.replace(
         "hybrid_gdn_config(self.model_config)", "self.hybrid_gdn_config"
     )
+    # Privacy flip propagation: ``_profile_available_bytes`` body calls
+    # ``self.handle_max_mamba_cache(...)``. Method def was renamed to
+    # ``_handle_max_mamba_cache`` — the in-body caller needs the same flip.
+    body = body.replace(
+        "self.handle_max_mamba_cache(",
+        "self._handle_max_mamba_cache(",
+    )
     return body
 
 
