@@ -150,34 +150,69 @@ def transform(wt: Path) -> None:
     )
     control_mixin.write_text(mixin_text)
 
-    # Caller prefix replacement at entrypoints.
+    # Caller prefix replacement at entrypoints. Pre-image is the black-clean
+    # multi-line form that the prep commit wrote.
     engine_text = engine.read_text()
-    engine_text = engine_text.replace(
-        "TokenizerManager.open_session(\n"
-        "                self.tokenizer_manager.session_controller, obj, None\n"
-        "            )",
-        "self.tokenizer_manager.session_controller.open_session(obj, None)",
+    engine_text = replace_call_site(
+        engine_text,
+        old=(
+            "        return self.loop.run_until_complete(\n"
+            "            TokenizerManager.open_session(\n"
+            "                self.tokenizer_manager.session_controller, obj, None\n"
+            "            )\n"
+            "        )\n"
+        ),
+        new=(
+            "        return self.loop.run_until_complete(\n"
+            "            self.tokenizer_manager.session_controller.open_session(obj, None)\n"
+            "        )\n"
+        ),
     )
-    engine_text = engine_text.replace(
-        "TokenizerManager.close_session(\n"
-        "                self.tokenizer_manager.session_controller, obj, None\n"
-        "            )",
-        "self.tokenizer_manager.session_controller.close_session(obj, None)",
+    engine_text = replace_call_site(
+        engine_text,
+        old=(
+            "        self.loop.run_until_complete(\n"
+            "            TokenizerManager.close_session(\n"
+            "                self.tokenizer_manager.session_controller, obj, None\n"
+            "            )\n"
+            "        )\n"
+        ),
+        new=(
+            "        self.loop.run_until_complete(\n"
+            "            self.tokenizer_manager.session_controller.close_session(obj, None)\n"
+            "        )\n"
+        ),
     )
     engine.write_text(engine_text)
 
     http_text = http_server.read_text()
-    http_text = http_text.replace(
-        "await TokenizerManager.open_session(\n"
-        "            _global_state.tokenizer_manager.session_controller, obj, request\n"
-        "        )",
-        "await _global_state.tokenizer_manager.session_controller.open_session(obj, request)",
+    http_text = replace_call_site(
+        http_text,
+        old=(
+            "        session_id = await TokenizerManager.open_session(\n"
+            "            _global_state.tokenizer_manager.session_controller, obj, request\n"
+            "        )\n"
+        ),
+        new=(
+            "        session_id = (\n"
+            "            await _global_state.tokenizer_manager.session_controller.open_session(\n"
+            "                obj, request\n"
+            "            )\n"
+            "        )\n"
+        ),
     )
-    http_text = http_text.replace(
-        "await TokenizerManager.close_session(\n"
-        "            _global_state.tokenizer_manager.session_controller, obj, request\n"
-        "        )",
-        "await _global_state.tokenizer_manager.session_controller.close_session(obj, request)",
+    http_text = replace_call_site(
+        http_text,
+        old=(
+            "        await TokenizerManager.close_session(\n"
+            "            _global_state.tokenizer_manager.session_controller, obj, request\n"
+            "        )\n"
+        ),
+        new=(
+            "        await _global_state.tokenizer_manager.session_controller.close_session(\n"
+            "            obj, request\n"
+            "        )\n"
+        ),
     )
     http_server.write_text(http_text)
 

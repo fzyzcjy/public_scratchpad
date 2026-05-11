@@ -170,23 +170,6 @@ def transform(wt: Path) -> None:
             )
         ep.write_text(ep_text)
 
-    # ---- Migrate remaining self.lora_* field reads in TM to self.lora_controller.* ----
-    # These are in non-moved methods (generate_request, handle_loop, http_server.lora_registry).
-    text = tm.read_text()
-    import re
-    text = re.sub(r"\bself\.lora_registry\b", "self.lora_controller.lora_registry", text)
-    text = re.sub(r"\bself\.lora_update_lock\b", "self.lora_controller.lora_update_lock", text)
-    text = re.sub(r"\bself\.lora_ref_cache\b", "self.lora_controller.lora_ref_cache", text)
-    tm.write_text(text)
-
-    http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
-    text = http_server.read_text()
-    text = re.sub(
-        r"\btokenizer_manager\.lora_registry\b",
-        "tokenizer_manager.lora_controller.lora_registry",
-        text,
-    )
-    http_server.write_text(text)
 
 
 if __name__ == "__main__":

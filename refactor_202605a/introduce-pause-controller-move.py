@@ -102,7 +102,9 @@ def transform(wt: Path) -> None:
             "        from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
             "\n"
             "        # TypeBasedDispatcher has no public register(); poke private _mapping.\n"
-            "        self.dispatcher._mapping[AbortReq] = lambda x: TokenizerManager._handle_abort_req(self, x)\n"
+            "        self.dispatcher._mapping[AbortReq] = (\n"
+            "            lambda x: TokenizerManager._handle_abort_req(self, x)\n"
+            "        )\n"
         ),
         new=(
             "    def __post_init__(self) -> None:\n"

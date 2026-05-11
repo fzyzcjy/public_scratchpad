@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move weight-disk-update methods to WeightDiskUpdateController."""
+"""Move (pure cut/paste): WeightDiskUpdateController methods relocate from TM + ControlMixin to target class."""
 
 # /// script
 # requires-python = ">=3.10"
@@ -15,15 +15,21 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-move"
-SUBJECT = "Move weight-disk-update methods to WeightDiskUpdateController"
+SUBJECT = "Move WeightDiskUpdateController methods: pure cut/paste + caller prefix replacement"
 BODY = """\
-Cut 4 methods from TokenizerManager + 1 from TokenizerControlMixin.
-Paste into WeightDiskUpdateController. Add __post_init__ (registers
-UpdateWeightFromDiskReqOutput on dispatcher). Body rewrites:
-self.server_args.dp_size -> self.config.dp_size.
-
-External entrypoint callers (engine.py, http_server.py) rewired through
-``tokenizer_manager.weight_disk_update_controller``.
+Pure physical move per MECH_COMMIT_SPLIT. Cut 4 @staticmethod methods
+(``update_weights_from_disk``, ``_update_model_path_info``,
+``_wait_for_model_update_from_disk``, ``_handle_update_weights_from_disk_req_output``)
+from TokenizerManager and 1 @staticmethod method
+(``_update_weight_version_if_provided``) from TokenizerControlMixin; paste
+into WeightDiskUpdateController (drop @staticmethod, replace
+``self: "WeightDiskUpdateController"`` → plain ``self``). Flip the
+``__post_init__`` dispatcher entry from the lambda forwarder + late-TM-import
+to a direct method reference. Caller prefix replacement:
+``TokenizerManager.<method>(self.weight_disk_update_controller, ...)`` →
+``self.weight_disk_update_controller.<method>(...)`` (TM + mixin sibling
+methods + entrypoints); ditto for the
+``TokenizerControlMixin._update_weight_version_if_provided`` call sites.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -33,28 +39,22 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 EXTRA_IMPORTS = '''import asyncio
 import logging
 from contextlib import nullcontext
-from typing import Tuple, Union
+from typing import Tuple
 
 import fastapi
 
-from sglang.srt.managers.io_struct import (
-    UpdateWeightFromDiskReqInput,
-    UpdateWeightFromDiskReqOutput,
-)
+from sglang.srt.managers.io_struct import UpdateWeightFromDiskReqInput
 
 logger = logging.getLogger(__name__)
 '''
 
 
-POST_INIT = '''
-    def __post_init__(self) -> None:
-        if self.config.checkpoint_engine_wait_weights_before_ready:
-            self.initial_weights_loaded = False
-        # TypeBasedDispatcher has no public register(); poke private _mapping.
-        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (
-            self._handle_update_weights_from_disk_req_output
-        )
-'''
+def _strip_static_prefix(body: str) -> str:
+    """Remove @staticmethod decorator and replace self: "WeightDiskUpdateController" → plain self."""
+    body = body.replace("    @staticmethod\n", "", 1)
+    body = body.replace('self: "WeightDiskUpdateController",', "self,")
+    body = body.replace('self: "WeightDiskUpdateController"\n', "self\n")
+    return body
 
 
 def transform(wt: Path) -> None:
@@ -62,74 +62,91 @@ def transform(wt: Path) -> None:
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     wd = wt / "python/sglang/srt/managers/weight_disk_update_controller.py"
 
-    # Cut bottom-up from facade.
-    method_names = (
+    # Cut 4 methods from TM, bottom-up (highest start line first).
+    tm_methods = (
         "update_weights_from_disk",
         "_update_model_path_info",
         "_wait_for_model_update_from_disk",
         "_handle_update_weights_from_disk_req_output",
     )
     name_to_range = {}
-    for n in method_names:
+    for n in tm_methods:
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
-        name_to_range[n] = (s, e)
-    cut_blocks = {}
-    for n in sorted(method_names, key=lambda nn: -name_to_range[nn][0]):
+        name_to_range[n] = s
+    cut_blocks_tm = {}
+    for n in sorted(tm_methods, key=lambda nn: -name_to_range[nn]):
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
-        cut_blocks[n] = cut_lines(tm, s, e)
+        cut_blocks_tm[n] = cut_lines(tm, s, e)
 
-    # Cut _update_weight_version_if_provided from control_mixin.
+    # Cut _update_weight_version_if_provided from TokenizerControlMixin.
     s, e = find_method_lines(
         control_mixin.read_text(),
         class_name="TokenizerControlMixin",
         method_name="_update_weight_version_if_provided",
     )
-    update_version_text = cut_lines(control_mixin, s, e)
-    update_version_text = update_version_text.replace(
-        "def _update_weight_version_if_provided(\n        self: TokenizerManager, weight_version: Optional[str]\n    ) -> None:",
-        "def _update_weight_version_if_provided(\n        self, weight_version: Optional[str]\n    ) -> None:",
-    )
+    cut_block_mixin = cut_lines(control_mixin, s, e)
 
-    def rewrite(body: str) -> str:
-        body = body.replace("self.server_args.dp_size", "self.config.dp_size")
-        body = body.replace("self.served_model_name = ", "self.server_args.served_model_name = ")
-        body = body.replace("self.model_path = model_path", "self.server_args.model_path = model_path")
-        return body
-
-    rewritten = {n: rewrite(cut_blocks[n]) for n in method_names}
-    bodies = [rewritten[n] for n in method_names]
-    bodies.append(update_version_text)
-    methods_text = POST_INIT + "\n" + "\n\n".join(b.rstrip() for b in bodies) + "\n"
+    # Assemble in canonical order. Body bytes unchanged except @staticmethod stripped + self typing.
+    bodies = [
+        _strip_static_prefix(cut_blocks_tm["update_weights_from_disk"]),
+        _strip_static_prefix(cut_blocks_tm["_update_model_path_info"]),
+        _strip_static_prefix(cut_blocks_tm["_wait_for_model_update_from_disk"]),
+        _strip_static_prefix(cut_blocks_tm["_handle_update_weights_from_disk_req_output"]),
+        _strip_static_prefix(cut_block_mixin),
+    ]
 
     wd_text = wd.read_text()
     wd_text = wd_text.replace(
         "from dataclasses import dataclass, field\n",
         "from dataclasses import dataclass, field\n\n" + EXTRA_IMPORTS,
     )
-    wd.write_text(wd_text.rstrip() + "\n" + methods_text)
 
-    # Rewire stale _update_weight_version_if_provided refs in tokenizer_control_mixin.
+    # Flip __post_init__ dispatcher entry: lambda forwarder + late TM import →
+    # direct method reference (now an instance method on this class).
+    wd_text = wd_text.replace(
+        "        # Lambda forwarder: until the move commit relocates the @staticmethod\n"
+        "        # body onto this class, the actual handler lives on TokenizerManager.\n"
+        "        # Late import avoids the TokenizerManager <-> WeightDiskUpdateController\n"
+        "        # import cycle. Move-time flips this to a direct method reference.\n"
+        "        from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
+        "        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (\n"
+        "            lambda x: TokenizerManager._handle_update_weights_from_disk_req_output(self, x)\n"
+        "        )\n",
+        "        # TypeBasedDispatcher has no public register(); poke private _mapping.\n"
+        "        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (\n"
+        "            self._handle_update_weights_from_disk_req_output\n"
+        "        )\n",
+    )
+
+    wd.write_text(wd_text.rstrip() + "\n\n" + "\n".join(b.rstrip() + "\n" for b in bodies))
+
+    # ---- Caller prefix replacement: TM facade + sibling mixin callers ----
+    # TokenizerManager.<method>(self.weight_disk_update_controller, ... ) →
+    # self.weight_disk_update_controller.<method>(...).
+    # The only remaining TM-internal call site is in update_weights_from_disk (now
+    # cut), so TM has no residual class-qualified calls; mixin holds the 3 sibling
+    # callers of _update_weight_version_if_provided.
     text = control_mixin.read_text()
     text = text.replace(
-        "self._update_weight_version_if_provided(",
+        "TokenizerControlMixin._update_weight_version_if_provided(self.weight_disk_update_controller, ",
         "self.weight_disk_update_controller._update_weight_version_if_provided(",
     )
     control_mixin.write_text(text)
 
-    # External entrypoints.
+    # ---- Caller prefix replacement in entrypoints ----
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
 
     text = engine.read_text()
     text = text.replace(
-        "self.tokenizer_manager.update_weights_from_disk(",
+        "TokenizerManager.update_weights_from_disk(self.tokenizer_manager.weight_disk_update_controller, ",
         "self.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
     )
     engine.write_text(text)
 
     text = http_server.read_text()
     text = text.replace(
-        "_global_state.tokenizer_manager.update_weights_from_disk(",
+        "TokenizerManager.update_weights_from_disk(_global_state.tokenizer_manager.weight_disk_update_controller, ",
         "_global_state.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
     )
     http_server.write_text(text)
