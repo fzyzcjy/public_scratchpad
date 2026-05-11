@@ -125,6 +125,19 @@ def _global_subs(body: str) -> str:
     body = body.replace(
         "hybrid_gdn_config(self.model_config)", "self.hybrid_gdn_config"
     )
+    # The migrated body lives on KVCacheConfigurator dataclass, which
+    # carries ``server_args`` but NOT the redundant duplicate fields below.
+    # Rewrite reads to go through ``server_args`` (per server-args
+    # consolidation rule). Order: longer/more-specific first so
+    # ``mem_fraction_static`` isn't half-rewritten by anything shorter.
+    for name in (
+        "mem_fraction_static",
+        "enable_hisparse",
+        "page_size",
+        "pp_size",
+        "dp_size",
+    ):
+        body = body.replace(f"self.{name}", f"self.server_args.{name}")
     # Privacy flip propagation: ``_profile_available_bytes`` body calls
     # ``self.handle_max_mamba_cache(...)``. Method def was renamed to
     # ``_handle_max_mamba_cache`` — the in-body caller needs the same flip.

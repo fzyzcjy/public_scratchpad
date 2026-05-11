@@ -88,23 +88,14 @@ class KVCacheConfigurator:
     attribute writes on ``self``.
     """
 
-    # deployment env
+    # deployment env (runtime, not in server_args)
     device: str
     gpu_id: int
-    mem_fraction_static: float
-    page_size: int
-    # parallel rank / size
-    tp_rank: int
-    tp_size: int
-    pp_size: int
-    dp_size: int
-    attention_tp_size: int
-    # model / dtype
+    # model / dtype (resolved objects, not in server_args)
     model_config: ModelConfig
     server_args: ServerArgs
-    dtype: torch.dtype
     kv_cache_dtype: torch.dtype
-    # speculative decoding
+    # speculative decoding (runtime / derived, not in server_args)
     spec_algorithm: SpeculativeAlgorithm
     is_draft_worker: bool
     # DFLASH-only: target's `cell_size` is scaled to include draft KV cache.
@@ -114,11 +105,10 @@ class KVCacheConfigurator:
     # otherwise the target KV pool oversizes by 1+ GB on 32GB GPUs and
     # OOMs at cuda graph capture (see debug_journal 2026-05-11-kvc-...).
     dflash_draft_num_layers: Optional[int]
-    # arch flags
+    # arch flags (derived, not direct server_args fields)
     is_hybrid_swa: bool
     is_hybrid_swa_compress: bool
     use_mla_backend: bool
-    enable_hisparse: bool
     mambaish_config: Optional[Any]
     hybrid_gdn_config: Optional[Any]
     # PP slice
@@ -137,21 +127,17 @@ class KVCacheConfigurator:
 
 
 # Constructor block inserted in ModelRunner.initialize() above the
-# init_memory_pool call. 27 kwargs per ch3.2.
+# init_memory_pool call. Fields that are pure ``server_args`` reads
+# (mem_fraction_static / page_size / tp_size / pp_size / dp_size /
+# enable_hisparse) are not stored separately — body reads via
+# ``self.server_args.X``. Fields that were dead (tp_rank /
+# attention_tp_size / dtype) are dropped outright.
 _CTOR_INSERT = '''\
         self.kv_cache_configurator = KVCacheConfigurator(
             device=self.device,
             gpu_id=self.gpu_id,
-            mem_fraction_static=self.mem_fraction_static,
-            page_size=self.page_size,
-            tp_rank=self.tp_rank,
-            tp_size=self.tp_size,
-            pp_size=self.pp_size,
-            dp_size=self.dp_size,
-            attention_tp_size=get_attention_tp_size(),
             model_config=self.model_config,
             server_args=self.server_args,
-            dtype=self.dtype,
             kv_cache_dtype=self.kv_cache_dtype,
             spec_algorithm=self.spec_algorithm,
             is_draft_worker=self.is_draft_worker,
@@ -159,7 +145,6 @@ _CTOR_INSERT = '''\
             is_hybrid_swa=self.is_hybrid_swa,
             is_hybrid_swa_compress=self.is_hybrid_swa_compress,
             use_mla_backend=self.use_mla_backend,
-            enable_hisparse=self.enable_hisparse,
             mambaish_config=mambaish_config(self.model_config),
             hybrid_gdn_config=hybrid_gdn_config(self.model_config),
             start_layer=self.start_layer,
@@ -207,14 +192,6 @@ def transform(wt: Path) -> None:
                 ")\n"
             ),
         )
-    if "from sglang.srt.layers.dp_attention import get_attention_tp_size" not in text:
-        # ``attention_tp_size=get_attention_tp_size()`` is used in the ctor.
-        text = insert_after(
-            text,
-            anchor="from sglang.srt.configs.device_config import DeviceConfig\n",
-            addition="from sglang.srt.layers.dp_attention import get_attention_tp_size\n",
-        )
-
     # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
     # lives in its own ``init_kv_cache_configurator`` helper method.
     text = replace_call_site(
@@ -241,6 +218,16 @@ def transform(wt: Path) -> None:
     )
 
     mr.write_text(text)
+
+    # 3) pool_configurator reads ``mr.enable_hisparse`` — switch to
+    # ``mr.server_args.enable_hisparse`` since the new ``mr`` (now
+    # ``KVCacheConfigurator``) drops the redundant ``enable_hisparse``
+    # field; reading via ``server_args`` works for both ModelRunner
+    # (preflight callers) and KVCacheConfigurator.
+    pc = wt / "python/sglang/srt/model_executor/model_runner_components/pool_configurator.py"
+    pc_text = pc.read_text()
+    pc_text = pc_text.replace("mr.enable_hisparse", "mr.server_args.enable_hisparse")
+    pc.write_text(pc_text)
 
 
 if __name__ == "__main__":

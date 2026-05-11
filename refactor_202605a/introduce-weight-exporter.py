@@ -67,11 +67,10 @@ logger = logging.getLogger(__name__)
 
 # Mutable ``_weights_send_group`` dict prevents ``frozen=True``; explicit
 # Rule-5 exception per the dataclass-defaults sprint-wide rule.
+# tp_rank / tp_size / gpu_id read via ``self._mr`` (consistent with
+# WeightUpdater) — no redundant storage.
 @dataclass(slots=True, kw_only=True)
 class WeightExporter:
-    tp_rank: int
-    tp_size: int
-    gpu_id: int
     _mr: Any  # ModelRunner — kept untyped to avoid TYPE_CHECKING import here
     _weights_send_group: dict = field(default_factory=dict)
 
@@ -98,10 +97,13 @@ def transform(wt: Path) -> None:
         class_name="ModelRunner",
         method_name="init_weights_send_group_for_remote_instance",
     )
-    # Body has no ModelRunner-only field references that need rewriting --
-    # ``self.tp_rank`` / ``self.tp_size`` / ``self.gpu_id`` /
-    # ``self._weights_send_group`` are all WeightExporter fields.
     init_text = cut_lines(mr, s, e)
+
+    # Route ``tp_rank`` / ``tp_size`` / ``gpu_id`` through ``self._mr`` --
+    # WeightExporter no longer stores them locally (mirror of WeightUpdater).
+    for body_field in ("tp_rank", "tp_size", "gpu_id"):
+        init_text = init_text.replace(f"self.{body_field}", f"self._mr.{body_field}")
+        send_text = send_text.replace(f"self.{body_field}", f"self._mr.{body_field}")
 
     we.write_text(HEADER + init_text + "\n" + send_text.rstrip() + "\n")
 
@@ -131,12 +133,7 @@ def transform(wt: Path) -> None:
     )
     helper_method = (
         "    def init_weight_exporter(self):\n"
-        "        self.weight_exporter = WeightExporter(\n"
-        "            tp_rank=self.tp_rank,\n"
-        "            tp_size=self.tp_size,\n"
-        "            gpu_id=self.gpu_id,\n"
-        "            _mr=self,\n"
-        "        )\n"
+        "        self.weight_exporter = WeightExporter(_mr=self)\n"
         "\n"
     )
     text = text.replace(

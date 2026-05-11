@@ -99,6 +99,16 @@ def _global_subs(body: str) -> str:
         "    server_args=self.server_args,\n"
         ")",
     )
+    # See note in kvc-migrate-leaves._global_subs: redundant ServerArgs
+    # fields are dropped from the dataclass; route reads via server_args.
+    for name in (
+        "mem_fraction_static",
+        "enable_hisparse",
+        "page_size",
+        "pp_size",
+        "dp_size",
+    ):
+        body = body.replace(f"self.{name}", f"self.server_args.{name}")
     return body
 
 
