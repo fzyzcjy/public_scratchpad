@@ -75,6 +75,8 @@ ORDER: list[str] = [
     "extract-kernel-warmup-move",
     "extract-lora-moe-buffers-prep",
     "extract-lora-moe-buffers-move",
+    "extract-flashinfer-allreduce-workspace-prep",
+    "extract-flashinfer-allreduce-workspace-move",
     "init-dist-prep",
     "init-dist-move",
     "introduce-rwt-skeleton",
