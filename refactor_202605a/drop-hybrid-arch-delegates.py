@@ -38,19 +38,20 @@ BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-hybrid-arch-props
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-# Functions that take `model_config` (no extra kwarg).
+# All hybrid_arch free functions now take just `model_config`. The
+# ``is_draft_worker`` kwarg on ``mamba2_config`` / ``mambaish_config`` was
+# absorbed into ``extract-hybrid-arch-props`` (the kwarg is reachable via
+# ``model_config.is_draft_model``).
 _MODEL_CONFIG = {
     "qwen3_next_config",
     "hybrid_lightning_config",
     "hybrid_gdn_config",
     "kimi_linear_config",
     "linear_attn_model_spec",
-}
-# Functions that take `model_config` plus `is_draft_worker` kwarg.
-_MODEL_CONFIG_WITH_DRAFT = {
     "mamba2_config",
     "mambaish_config",
 }
+_MODEL_CONFIG_WITH_DRAFT: set[str] = set()
 
 
 def _rewrite_accesses(text: str, *, accessor: str, function_names: list[str]) -> str:
