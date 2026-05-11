@@ -32,7 +32,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-load-inquirer-prep"
-SUBJECT = "Build SchedulerLoadInquirer skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage queue-load reporting for handoff to SchedulerLoadInquirer"
 BODY = """\
 Inplace prep for the ``introduce-load-inquirer`` mech move.
 
@@ -160,18 +160,10 @@ SCHEDULER_INIT_INSERT = """\
             get_waiting_queue=lambda: self.waiting_queue,
             get_stats=lambda: self.stats,
             get_chunked_req=lambda: self.chunked_req,
-            get_disagg_prefill_bootstrap_queue=lambda: getattr(
-                self, "disagg_prefill_bootstrap_queue", None
-            ),
-            get_disagg_prefill_inflight_queue=lambda: getattr(
-                self, "disagg_prefill_inflight_queue", None
-            ),
-            get_disagg_decode_prealloc_queue=lambda: getattr(
-                self, "disagg_decode_prealloc_queue", None
-            ),
-            get_disagg_decode_transfer_queue=lambda: getattr(
-                self, "disagg_decode_transfer_queue", None
-            ),
+            get_disagg_prefill_bootstrap_queue=lambda: self.disagg_prefill_bootstrap_queue,
+            get_disagg_prefill_inflight_queue=lambda: self.disagg_prefill_inflight_queue,
+            get_disagg_decode_prealloc_queue=lambda: self.disagg_decode_prealloc_queue,
+            get_disagg_decode_transfer_queue=lambda: self.disagg_decode_transfer_queue,
             get_spec_total_num_accepted_tokens=lambda: self.spec_total_num_accepted_tokens,
             get_spec_total_num_forward_ct=lambda: self.spec_total_num_forward_ct,
         )

@@ -27,7 +27,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-session-controller-prep"
-SUBJECT = "Prep SessionController: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage session lifecycle for handoff to SessionController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -57,9 +57,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict
 
-from sglang.srt.managers.io_struct import OpenSessionReqOutput
-from sglang.utils import TypeBasedDispatcher
-
 
 @dataclass(slots=True, kw_only=True)
 class SessionControllerConfig:
@@ -71,23 +68,9 @@ class SessionController:
     """open_session / close_session endpoints + OpenSessionReqOutput dispatcher handler."""
 
     send_to_scheduler: Any
-    dispatcher: TypeBasedDispatcher
     auto_create_handle_loop: Callable[[], None]
     config: SessionControllerConfig
     session_futures: Dict[str, asyncio.Future] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        # Lambda forwarder: during prep the handler still lives on TokenizerManager
-        # as a @staticmethod with ``self: "SessionController"`` typing. The
-        # follow-up -move commit cuts the method into this class and flips this
-        # registration to a direct method reference.
-        from sglang.srt.managers.tokenizer_manager import TokenizerManager
-
-        self.dispatcher._mapping[OpenSessionReqOutput] = (
-            lambda recv_obj: TokenizerManager._handle_open_session_req_output(
-                self, recv_obj
-            )
-        )
 '''
 
 
@@ -132,7 +115,7 @@ NEW_CLOSE_HEADER = '''    @staticmethod
 '''
 
 NEW_HANDLE_HEADER = '''    @staticmethod
-    def _handle_open_session_req_output(self: "SessionController", recv_obj):
+    def handle_open_session_req_output(self: "SessionController", recv_obj):
 '''
 
 
@@ -171,12 +154,22 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Drop the OpenSessionReqOutput entry from init_request_dispatcher body
-    # (SessionController.__post_init__ registers it via lambda forwarder).
+    # Rewrite the OpenSessionReqOutput entry in init_request_dispatcher in place:
+    # point at a lambda forwarder that runs the @staticmethod (still on TM)
+    # with self.session_controller as the self arg. The follow-up -move commit
+    # flips this lambda to a direct method ref once the body lives on
+    # SessionController.
     text = replace_call_site(
         text,
         old="                (OpenSessionReqOutput, self._handle_open_session_req_output),\n",
-        new="",
+        new=(
+            "                (\n"
+            "                    OpenSessionReqOutput,\n"
+            "                    lambda recv_obj: TokenizerManager.handle_open_session_req_output(\n"
+            "                        self.session_controller, recv_obj\n"
+            "                    ),\n"
+            "                ),\n"
+        ),
     )
 
     text = insert_after(
@@ -212,7 +205,6 @@ def transform(wt: Path) -> None:
         "        # Session controller\n"
         "        self.session_controller = SessionController(\n"
         "            send_to_scheduler=self.send_to_scheduler,\n"
-        "            dispatcher=self._result_dispatcher,\n"
         "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
         "            config=SessionControllerConfig(\n"
         "                enable_streaming_session=self.server_args.enable_streaming_session,\n"

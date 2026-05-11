@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-lora-controller-prep"
-SUBJECT = "Prep LoraController: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage LoRA load/unload for handoff to LoraController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 

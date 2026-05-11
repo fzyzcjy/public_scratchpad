@@ -21,7 +21,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-move"
-SUBJECT = "Move 3 methods into SchedulerKvEventsPublisher class body"
+SUBJECT = "Hand KV-cache event emission over to SchedulerKvEventsPublisher"
 BODY = """\
 Mechanical cut + paste for the ``introduce-kv-events-publisher`` mech
 move.

@@ -68,7 +68,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-metrics-reporter-prep"
-SUBJECT = "Build SchedulerMetricsReporter skeleton at target path + @staticmethod typeflip (prep for move)"
+SUBJECT = "Stage metrics reporting + PrefillStats for handoff to SchedulerMetricsReporter"
 BODY = """\
 Inplace prep for the ``introduce-metrics-reporter`` mech move.
 
@@ -191,6 +191,12 @@ class SchedulerMetricsReporter:
         get_forward_ct: Callable,
         get_running_mbs: Callable,
         get_last_batch: Callable,
+        get_grammar_manager: Callable,
+        get_disaggregation_mode: Callable,
+        get_disagg_prefill_bootstrap_queue: Callable,
+        get_disagg_prefill_inflight_queue: Callable,
+        get_disagg_decode_prealloc_queue: Callable,
+        get_disagg_decode_transfer_queue: Callable,
     ) -> None:
         # Owned counters (ownership migration from Scheduler).
         self.num_retracted_reqs: int = 0
@@ -225,6 +231,12 @@ class SchedulerMetricsReporter:
         self.get_forward_ct = get_forward_ct
         self.get_running_mbs = get_running_mbs
         self.get_last_batch = get_last_batch
+        self.get_grammar_manager = get_grammar_manager
+        self.get_disaggregation_mode = get_disaggregation_mode
+        self.get_disagg_prefill_bootstrap_queue = get_disagg_prefill_bootstrap_queue
+        self.get_disagg_prefill_inflight_queue = get_disagg_prefill_inflight_queue
+        self.get_disagg_decode_prealloc_queue = get_disagg_decode_prealloc_queue
+        self.get_disagg_decode_transfer_queue = get_disagg_decode_transfer_queue
         # Run the original init_metrics body via the qualified staticmethod
         # form — methods still live on SchedulerMetricsMixin during prep;
         # the upcoming ``-move`` commit cuts + pastes them into this class
@@ -254,35 +266,33 @@ SCHEDULER_INIT_INSERT = """\
             dp_rank=self.ps.dp_rank,
             attn_tp_rank=self.ps.attn_tp_rank,
             moe_ep_rank=self.ps.moe_ep_rank,
-            device=getattr(self, "device", ""),
+            device=self.device,
             model_config=self.model_config,
             max_running_requests_under_SLO=getattr(
                 self, "max_running_requests_under_SLO", None
             ),
             waiting_queue=self.waiting_queue,
             grammar_manager=self.grammar_manager,
-            mm_receiver=getattr(self, "mm_receiver", None),
+            mm_receiver=self.mm_receiver,
             tree_cache=self.tree_cache,
             tp_worker=self.tp_worker,
             draft_worker=self.draft_worker,
-            disagg_prefill_bootstrap_queue=getattr(
-                self, "disagg_prefill_bootstrap_queue", None
-            ),
-            disagg_prefill_inflight_queue=getattr(
-                self, "disagg_prefill_inflight_queue", None
-            ),
-            disagg_decode_prealloc_queue=getattr(
-                self, "disagg_decode_prealloc_queue", None
-            ),
-            disagg_decode_transfer_queue=getattr(
-                self, "disagg_decode_transfer_queue", None
-            ),
+            disagg_prefill_bootstrap_queue=self.disagg_prefill_bootstrap_queue,
+            disagg_prefill_inflight_queue=self.disagg_prefill_inflight_queue,
+            disagg_decode_prealloc_queue=self.disagg_decode_prealloc_queue,
+            disagg_decode_transfer_queue=self.disagg_decode_transfer_queue,
             kv_events_publisher=self.kv_events_publisher,
             pool_stats_observer=self.pool_stats_observer,
             get_running_batch=lambda: self.running_batch,
             get_forward_ct=lambda: self.forward_ct,
-            get_running_mbs=lambda: getattr(self, "running_mbs", []),
+            get_running_mbs=lambda: self.running_mbs,
             get_last_batch=lambda: self.last_batch,
+            get_grammar_manager=lambda: self.grammar_manager,
+            get_disaggregation_mode=lambda: self.disaggregation_mode,
+            get_disagg_prefill_bootstrap_queue=lambda: self.disagg_prefill_bootstrap_queue,
+            get_disagg_prefill_inflight_queue=lambda: self.disagg_prefill_inflight_queue,
+            get_disagg_decode_prealloc_queue=lambda: self.disagg_decode_prealloc_queue,
+            get_disagg_decode_transfer_queue=lambda: self.disagg_decode_transfer_queue,
         )
         # Aliases so call sites that historically read self.X (when init_metrics
         # set those fields directly on Scheduler) still resolve.
@@ -562,16 +572,11 @@ def transform(wt: Path) -> None:
         old="                self.metrics_collector.increment_retracted_reqs(\n",
         new="                self.metrics_reporter.metrics_collector.increment_retracted_reqs(\n",
     )
-    text = replace_call_site(
-        text,
-        old="            or time.perf_counter() <= self.metrics_collector.last_log_time + 30\n",
-        new="            or time.perf_counter() <= self.metrics_reporter.metrics_collector.last_log_time + 30\n",
-    )
-    text = replace_call_site(
-        text,
-        old="        self.metrics_collector.log_stats(self.stats)\n",
-        new="        self.metrics_reporter.metrics_collector.log_stats(self.stats)\n",
-    )
+    # NOTE: ``_maybe_log_idle_metrics`` body reads (``self.metrics_collector.
+    # last_log_time`` / ``self.metrics_collector.log_stats(...)``) stay as
+    # ``self.X`` — that method lives in ``SchedulerRuntimeCheckerMixin`` now
+    # and moves to ``SchedulerMetricsReporter`` in the next commit, after
+    # which ``self.metrics_collector`` resolves correctly on the reporter.
     sched.write_text(text)
 
     # 4. Output processor mixin callsites — static-bound sister form.

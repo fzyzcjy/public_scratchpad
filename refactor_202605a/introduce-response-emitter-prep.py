@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-response-emitter-prep"
-SUBJECT = "Prep ResponseEmitter: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage client-side wait/abort for handoff to ResponseEmitter"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 

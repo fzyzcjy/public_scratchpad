@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-"""Prep: RawTokenizerWrapper full skeleton (with factory) + composition wiring + facade field rewrites."""
+"""Prep: RawTokenizerWrapper skeleton (fields only) + @property facade on TM +
+retype TokenizerManager.init_tokenizer_and_processor as @staticmethod with
+``self: "RawTokenizerWrapper"`` typing. Body of init_tokenizer_and_processor
+STAYS on TM (and stays byte-equivalent to upstream modulo server_args /
+model_config arg injection); move commit cuts and pastes.
+
+Per MECH_COMMIT_SPLIT §"反模式：prep 大段加代码 + move 大段删代码"——this is the
+canonical reshape that earlier "factory variant" iteration violated.
+"""
 
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]
 # ///
 
-import re
+import ast
 import sys
 from pathlib import Path
 
@@ -16,217 +24,171 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-raw-tokenizer-wrapper-prep"
-SUBJECT = "Prep RawTokenizerWrapper: skeleton + factory + composition wiring + facade field rewrites"
+SUBJECT = "Stage tokenizer/processor ownership for handoff to RawTokenizerWrapper"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景" (factory variant): the source
-method ``TokenizerManager.init_tokenizer_and_processor`` reads
-``self.server_args`` / ``self.model_config`` and writes the four fields
-that now live on RawTokenizerWrapper. The ``self: TargetClass`` retype
-trick does not apply (target class owns none of the reads), so the
-canonical body is materialized directly in the target file as
-``RawTokenizerWrapper.from_server_args`` classmethod factory; the source
-method becomes an orphan and is deleted in the next (move) commit.
+Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
-This commit does ALL semantic work: builds RawTokenizerWrapper skeleton
-+ factory body + InputFormat enum + module helpers; wires composition
-in ``TokenizerManager.__init__`` (replacing the
-``init_tokenizer_and_processor()`` call with
-``RawTokenizerWrapper.from_server_args(...)``); rewrites
-``self.<tokenizer|processor|mm_processor|async_dynamic_batch_tokenizer>``
-references on TM + TokenizerControlMixin to go through
-``self.raw_tokenizer_wrapper.<field>``. The next commit is pure
-cut/paste: drop the now-orphan ``init_tokenizer_and_processor`` and
-``InputFormat`` from TM, plus mechanical external-caller prefix rewrites.
+Builds RawTokenizerWrapper skeleton (fields only — no body), wires
+composition in TokenizerManager.__init__, retypes
+``init_tokenizer_and_processor`` as ``@staticmethod`` with
+``self: "RawTokenizerWrapper"`` + injected ``server_args``/``model_config``
+params (body left on TM, byte-equivalent modulo facade-attribute
+re-routing onto the new params). Adds permanent
+``@property tokenizer/processor/mm_processor`` (+ setters) on
+TokenizerManager so external callers keep using ``tm.tokenizer`` —
+``raw_tokenizer_wrapper`` stays as an internal-detail attribute.
+
+The follow-up -move commit is pure cut/paste: relocate
+``init_tokenizer_and_processor`` + ``InputFormat`` + module helpers
+(``_get_processor_wrapper`` / ``_determine_tensor_transport_mode``) into
+``raw_tokenizer_wrapper.py``; no body changes, no external caller
+rewrites (the @property facade absorbs all of them).
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-HEADER = '''from __future__ import annotations  # noqa: F401
+HEADER = '''from __future__ import annotations
 
-import logging  # noqa: F401
-import os  # noqa: F401
-from dataclasses import dataclass  # noqa: F401
-from enum import Enum  # noqa: F401
-from typing import Any, Optional  # noqa: F401
+from dataclasses import dataclass
+from typing import Any, Optional
 
-from sglang.srt.configs.model_config import ModelConfig  # noqa: F401
-from sglang.srt.environ import envs  # noqa: F401
-from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer  # noqa: F401
-from sglang.srt.managers.multimodal_processor import get_mm_processor, import_processors  # noqa: F401
-from sglang.srt.server_args import ServerArgs  # noqa: F401
-from sglang.srt.utils.hf_transformers_utils import (  # noqa: F401
-    get_processor,
-    get_tokenizer,
-    get_tokenizer_from_processor,
-)
-
-logger = logging.getLogger(__name__)
+from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer
 
 
-class InputFormat(Enum):
-    """Input format types for tokenization handling."""
-
-    SINGLE_STRING = 1
-    BATCH_STRINGS = 2
-    CROSS_ENCODER_PAIRS = 3
-
-
-def _get_processor_wrapper(server_args: ServerArgs):
-    try:
-        processor = get_processor(
-            server_args.tokenizer_path,
-            tokenizer_mode=server_args.tokenizer_mode,
-            trust_remote_code=server_args.trust_remote_code,
-            revision=server_args.revision,
-            use_fast=not server_args.disable_fast_image_processor,
-            tokenizer_backend=server_args.tokenizer_backend,
-        )
-    except ValueError as e:
-        error_message = str(e)
-        if "does not have a slow version" in error_message:
-            logger.info(
-                f"Processor {server_args.tokenizer_path} does not have a slow version. Automatically use fast version"
-            )
-            processor = get_processor(
-                server_args.tokenizer_path,
-                tokenizer_mode=server_args.tokenizer_mode,
-                trust_remote_code=server_args.trust_remote_code,
-                revision=server_args.revision,
-                use_fast=True,
-                tokenizer_backend=server_args.tokenizer_backend,
-            )
-        else:
-            raise e
-    return processor
-
-
-def _determine_tensor_transport_mode(server_args: ServerArgs):
-    is_cross_node = server_args.dist_init_addr
-    if is_cross_node:
-        return "default"
-    else:
-        return "cuda_ipc"
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class RawTokenizerWrapper:
     """Owns tokenizer / processor / mm_processor / async_dynamic_batch_tokenizer."""
 
-    tokenizer: Optional[Any]
-    processor: Optional[Any]
-    mm_processor: Optional[Any]
-    async_dynamic_batch_tokenizer: Optional[AsyncDynamicbatchTokenizer]
-
-    @classmethod
-    def from_server_args(
-        cls,
-        *,
-        server_args: ServerArgs,
-        model_config: ModelConfig,
-    ) -> "RawTokenizerWrapper":
-        if model_config.is_multimodal:
-            import_processors("sglang.srt.multimodal.processors")
-            if mm_process_pkg := envs.SGLANG_EXTERNAL_MM_PROCESSOR_PACKAGE.get():
-                import_processors(mm_process_pkg, overwrite=True)
-            _processor = _get_processor_wrapper(server_args)
-            transport_mode = _determine_tensor_transport_mode(server_args)
-            mm_processor = get_mm_processor(
-                model_config.hf_config,
-                server_args,
-                _processor,
-                transport_mode,
-                model_config=model_config,
-            )
-            if server_args.skip_tokenizer_init:
-                tokenizer = processor = None
-            else:
-                processor = _processor
-                tokenizer = get_tokenizer_from_processor(processor)
-                os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        else:
-            mm_processor = processor = None
-            if server_args.skip_tokenizer_init:
-                tokenizer = None
-            else:
-                tokenizer = get_tokenizer(
-                    server_args.tokenizer_path,
-                    tokenizer_mode=server_args.tokenizer_mode,
-                    trust_remote_code=server_args.trust_remote_code,
-                    revision=server_args.revision,
-                    tokenizer_backend=server_args.tokenizer_backend,
-                )
-        if (
-            server_args.enable_dynamic_batch_tokenizer
-            and not server_args.skip_tokenizer_init
-        ):
-            async_dynamic_batch_tokenizer = AsyncDynamicbatchTokenizer(
-                tokenizer,
-                max_batch_size=server_args.dynamic_batch_tokenizer_batch_size,
-                batch_wait_timeout_s=server_args.dynamic_batch_tokenizer_batch_timeout,
-            )
-        else:
-            async_dynamic_batch_tokenizer = None
-        return cls(
-            tokenizer=tokenizer,
-            processor=processor,
-            mm_processor=mm_processor,
-            async_dynamic_batch_tokenizer=async_dynamic_batch_tokenizer,
-        )
+    tokenizer: Optional[Any] = None
+    processor: Optional[Any] = None
+    mm_processor: Optional[Any] = None
+    async_dynamic_batch_tokenizer: Optional[AsyncDynamicbatchTokenizer] = None
 '''
 
 
-RTW_FIELDS = (
-    "async_dynamic_batch_tokenizer",
-    "mm_processor",
-    "processor",
-    "tokenizer",
-)
+NEW_INIT_TOKENIZER_HEADER = '''    @staticmethod
+    def init_tokenizer_and_processor(
+        self: "RawTokenizerWrapper",
+        server_args: ServerArgs,
+        model_config: ModelConfig,
+    ) -> None:
+'''
 
 
-def rewrite_self_field_refs(text: str) -> str:
-    for field in RTW_FIELDS:
-        text = re.sub(
-            rf"self\.{re.escape(field)}\b",
-            f"self.raw_tokenizer_wrapper.{field}",
-            text,
-        )
-    return text
+PROPERTY_FACADE = '''
+    # ---- raw_tokenizer_wrapper facade -----------------------------------
+    # ``tokenizer`` / ``processor`` / ``mm_processor`` are the TokenizerManager
+    # public API; storage is delegated to ``self.raw_tokenizer_wrapper``.
+    # ``async_dynamic_batch_tokenizer`` stays internal — access via
+    # ``self.raw_tokenizer_wrapper.async_dynamic_batch_tokenizer`` directly.
+
+    @property
+    def tokenizer(self):
+        return self.raw_tokenizer_wrapper.tokenizer
+
+    @tokenizer.setter
+    def tokenizer(self, value):
+        self.raw_tokenizer_wrapper.tokenizer = value
+
+    @property
+    def processor(self):
+        return self.raw_tokenizer_wrapper.processor
+
+    @processor.setter
+    def processor(self, value):
+        self.raw_tokenizer_wrapper.processor = value
+
+    @property
+    def mm_processor(self):
+        return self.raw_tokenizer_wrapper.mm_processor
+
+    @mm_processor.setter
+    def mm_processor(self, value):
+        self.raw_tokenizer_wrapper.mm_processor = value
+
+'''
+
+
+def _method_ranges(text: str, class_name: str, method_name: str):
+    tree = ast.parse(text)
+    func_types = (ast.FunctionDef, ast.AsyncFunctionDef)
+    for cls in ast.walk(tree):
+        if isinstance(cls, ast.ClassDef) and cls.name == class_name:
+            for i, node in enumerate(cls.body):
+                if isinstance(node, func_types) and node.name == method_name:
+                    start = node.lineno - 1
+                    if node.decorator_list:
+                        start = node.decorator_list[0].lineno - 1
+                    body_start = node.body[0].lineno - 1
+                    if i + 1 < len(cls.body):
+                        end = cls.body[i + 1].lineno - 1
+                        nxt = cls.body[i + 1]
+                        if isinstance(nxt, func_types + (ast.ClassDef,)) and nxt.decorator_list:
+                            end = nxt.decorator_list[0].lineno - 1
+                    else:
+                        end = node.end_lineno
+                    return start, body_start, end
+    raise ValueError(f"{class_name}.{method_name} not found")
 
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    control = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     new = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
     new.write_text(HEADER)
 
-    # Replace the init_tokenizer_and_processor() call with composition wiring.
     text = tm.read_text()
+
+    # ---- 1. Composition wiring: replace init_tokenizer_and_processor() call
+    # with RawTokenizerWrapper construction + class-qualified factory call.
     text = replace_call_site(
         text,
-        old="        # Initialize tokenizer and multimodalprocessor\n        self.init_tokenizer_and_processor()",
+        old=(
+            "        # Initialize tokenizer and multimodalprocessor\n"
+            "        self.init_tokenizer_and_processor()"
+        ),
         new=(
             "        # Initialize tokenizer and multimodal processor\n"
-            "        self.raw_tokenizer_wrapper = RawTokenizerWrapper.from_server_args(\n"
+            "        self.raw_tokenizer_wrapper = RawTokenizerWrapper()\n"
+            "        TokenizerManager.init_tokenizer_and_processor(\n"
+            "            self.raw_tokenizer_wrapper,\n"
             "            server_args=self.server_args,\n"
             "            model_config=self.model_config,\n"
             "        )"
         ),
     )
-    # Rewrite self.<field> refs in TM (not within init_tokenizer_and_processor body,
-    # which still exists as a now-orphaned method until move).
-    text = rewrite_self_field_refs(text)
+
+    # ---- 2. Import RawTokenizerWrapper into TM.
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
         addition="from sglang.srt.managers.raw_tokenizer_wrapper import RawTokenizerWrapper\n",
     )
-    tm.write_text(text)
 
-    text = control.read_text()
-    text = rewrite_self_field_refs(text)
-    control.write_text(text)
+    # ---- 3. Retype init_tokenizer_and_processor on TM. Body stays here;
+    # only swap header + rewrite ``self.server_args`` → ``server_args``,
+    # ``self.model_config`` → ``model_config``, and drop the local
+    # ``server_args = self.server_args`` alias (now a real param).
+    s, body_s, e = _method_ranges(text, "TokenizerManager", "init_tokenizer_and_processor")
+    lines = text.splitlines(keepends=True)
+    body_text = "".join(lines[body_s:e])
+    body_text = body_text.replace(
+        "        server_args = self.server_args\n\n", ""
+    )
+    body_text = body_text.replace("self.server_args", "server_args")
+    body_text = body_text.replace("self.model_config", "model_config")
+    text = "".join(lines[:s]) + NEW_INIT_TOKENIZER_HEADER + body_text + "".join(lines[e:])
+
+    # ---- 4. Insert @property facade after init_request_dispatcher method
+    # (last method block before ``class SignalHandler``).
+    text = replace_call_site(
+        text,
+        old="class SignalHandler:\n",
+        new=PROPERTY_FACADE.lstrip("\n") + "\nclass SignalHandler:\n",
+    )
+
+    tm.write_text(text)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-logprob-computer-move"
-SUBJECT = "Move 9 methods into SchedulerLogprobComputer class body"
+SUBJECT = "Hand logprob assembly over to SchedulerLogprobComputer"
 BODY = """\
 Mechanical cut + paste for the ``introduce-logprob-computer`` mech move.
 

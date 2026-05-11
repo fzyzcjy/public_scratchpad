@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-prep"
-SUBJECT = "Prep WeightDiskUpdateController: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage disk-based weight reload for handoff to WeightDiskUpdateController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -53,11 +53,9 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, List, Optional
 
-from sglang.srt.managers.io_struct import UpdateWeightFromDiskReqOutput
 from sglang.srt.managers.pause_controller import PauseController
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils.aio_rwlock import RWLock
-from sglang.utils import TypeBasedDispatcher
 
 
 @dataclass(slots=True, kw_only=True)
@@ -72,7 +70,6 @@ class WeightDiskUpdateController:
     """update_weights_from_disk endpoint + UpdateWeightFromDiskReqOutput dispatcher handler."""
 
     send_to_scheduler: Any
-    dispatcher: TypeBasedDispatcher
     pause_controller: PauseController
     model_update_lock: RWLock
     server_args: ServerArgs
@@ -85,14 +82,6 @@ class WeightDiskUpdateController:
     def __post_init__(self) -> None:
         if self.config.checkpoint_engine_wait_weights_before_ready:
             self.initial_weights_loaded = False
-        # Lambda forwarder: until the move commit relocates the @staticmethod
-        # body onto this class, the actual handler lives on TokenizerManager.
-        # Late import avoids the TokenizerManager <-> WeightDiskUpdateController
-        # import cycle. Move-time flips this to a direct method reference.
-        from sglang.srt.managers.tokenizer_manager import TokenizerManager
-        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (
-            lambda x: TokenizerManager._handle_update_weights_from_disk_req_output(self, x)
-        )
 '''
 
 
@@ -136,7 +125,7 @@ NEW_HEADERS = {
     ) -> Tuple[bool, str]:
 ''',
     "_handle_update_weights_from_disk_req_output": '''    @staticmethod
-    def _handle_update_weights_from_disk_req_output(self: "WeightDiskUpdateController", recv_obj):
+    def handle_update_weights_from_disk_req_output(self: "WeightDiskUpdateController", recv_obj):
 ''',
     "_update_weight_version_if_provided": '''    @staticmethod
     def _update_weight_version_if_provided(
@@ -246,7 +235,6 @@ def transform(wt: Path) -> None:
             "        # Weight disk update controller\n"
             "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
-            "            dispatcher=self._result_dispatcher,\n"
             "            pause_controller=self.pause_controller,\n"
             "            model_update_lock=self.model_update_lock,\n"
             "            server_args=self.server_args,\n"
@@ -263,12 +251,21 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Remove the UpdateWeightFromDiskReqOutput dispatcher entry from TM;
-    # WeightDiskUpdateController.__post_init__ registers it via lambda forwarder.
+    # Rewrite the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher
+    # in place: route through a lambda forwarder calling the @staticmethod
+    # (still on TM) with self.weight_disk_update_controller as the self arg.
+    # -move flips this to a direct method ref.
     text = replace_call_site(
         text,
         old="                (\n                    UpdateWeightFromDiskReqOutput,\n                    self._handle_update_weights_from_disk_req_output,\n                ),\n",
-        new="",
+        new=(
+            "                (\n"
+            "                    UpdateWeightFromDiskReqOutput,\n"
+            "                    lambda x: TokenizerManager.handle_update_weights_from_disk_req_output(\n"
+            "                        self.weight_disk_update_controller, x\n"
+            "                    ),\n"
+            "                ),\n"
+        ),
     )
 
     # ---- TM: convert 4 methods to @staticmethod with self: "WeightDiskUpdateController" typing ----

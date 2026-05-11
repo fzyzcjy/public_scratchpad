@@ -25,7 +25,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site, rewrite_me
 from _runner import run_pr
 
 ID = "migrate-profiler-mixin-move"
-SUBJECT = "Move 6 methods into SchedulerProfilerManager class body"
+SUBJECT = "Hand profiler controls over to SchedulerProfilerManager"
 BODY = """\
 Mechanical cut + paste for the ``migrate-profiler-mixin`` mech move.
 

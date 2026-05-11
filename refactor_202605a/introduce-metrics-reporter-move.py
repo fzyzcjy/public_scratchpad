@@ -37,7 +37,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "introduce-metrics-reporter-move"
-SUBJECT = "Move 15 methods + PrefillStats + module constants into SchedulerMetricsReporter; delete metrics mixin"
+SUBJECT = "Hand metrics reporting over to SchedulerMetricsReporter (retire metrics mixin)"
 BODY = """\
 Mechanical cut + paste for the ``introduce-metrics-reporter`` mech move.
 

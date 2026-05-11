@@ -45,6 +45,7 @@ ORDER: list[str] = [
     "extract-build-kv-cache-pre-prep",
     "extract-build-kv-cache-prep",
     "extract-build-kv-cache-move",
+    "init-mode-conditional-defaults",
     "introduce-scheduler-request-receiver-prep",
     "introduce-scheduler-request-receiver-move",
     # Group B — Mixin mech-move (each: prep + move)
@@ -72,6 +73,7 @@ ORDER: list[str] = [
     "introduce-metrics-reporter-pre-rename",
     "introduce-metrics-reporter-prep",
     "introduce-metrics-reporter-move",
+    "move-maybe-log-idle-metrics-to-metrics-reporter",  # single (doc exception)
     "introduce-logprob-computer-pre-rename",
     "introduce-logprob-computer-prep",
     "introduce-logprob-computer-move",

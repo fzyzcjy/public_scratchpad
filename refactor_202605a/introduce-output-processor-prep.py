@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-output-processor-prep"
-SUBJECT = "Prep OutputProcessor: skeleton + composition + staticmethod conversion + caller rewrite"
+SUBJECT = "Stage batch-output handling for handoff to OutputProcessor"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -139,7 +139,7 @@ def transform(wt: Path) -> None:
             "        # Output processor\n"
             "        self.output_processor = OutputProcessor(\n"
             "            rid_to_state=self.rid_to_state,\n"
-            "            tokenizer=self.raw_tokenizer_wrapper.tokenizer,\n"
+            "            tokenizer=self.tokenizer,\n"
             "            request_metrics_recorder=self.request_metrics_recorder,\n"
             "            request_log_manager=self.request_log_manager,\n"
             "            lora_controller=self.lora_controller,\n"
@@ -189,7 +189,6 @@ def transform(wt: Path) -> None:
         "served_model_name=self.served_model_name,",
         "served_model_name=self.config.served_model_name,",
     )
-    body_text = body_text.replace("self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer")
     body_text = body_text.replace("self.crash_dump_folder", "self.request_log_manager.crash_dump_folder")
 
     new_method = NEW_HANDLE_HEADER + body_text

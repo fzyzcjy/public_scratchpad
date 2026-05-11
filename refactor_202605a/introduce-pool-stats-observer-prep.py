@@ -40,7 +40,7 @@ from _helpers import find_class_lines, find_method_lines, insert_after, replace_
 from _runner import run_pr
 
 ID = "introduce-pool-stats-observer-prep"
-SUBJECT = "Build SchedulerPoolStatsObserver skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage pool-stats sampling for handoff to SchedulerPoolStatsObserver"
 BODY = """\
 Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 

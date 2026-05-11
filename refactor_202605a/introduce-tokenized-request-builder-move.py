@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-tokenized-request-builder-move"
-SUBJECT = "Move TokenizedRequestBuilder methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand TokenizedRequest assembly over to TokenizedRequestBuilder"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 _create_tokenized_object + _resolve_embed_overrides from TokenizerManager;

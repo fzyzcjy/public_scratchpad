@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-multimodal-processor-prep"
-SUBJECT = "Prep MultimodalProcessor: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage EPD dispatch for handoff to MultimodalProcessor"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -185,7 +185,7 @@ def transform(wt: Path) -> None:
             "        self.multimodal_processor = MultimodalProcessor.from_server_args(\n"
             "            server_args=self.server_args,\n"
             "            model_config=self.model_config,\n"
-            "            mm_processor=self.raw_tokenizer_wrapper.mm_processor,\n"
+            "            mm_processor=self.mm_processor,\n"
             "        )\n"
             "\n"
             "        # Tokenized request builder\n"

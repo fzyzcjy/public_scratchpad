@@ -26,7 +26,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "introduce-pause-controller-move"
-SUBJECT = "Move pause/abort methods to PauseController: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand generation pause/abort over to PauseController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut the 4 @staticmethod methods
 (pause_generation, continue_generation, abort_request, _handle_abort_req)
@@ -64,12 +64,13 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     pc = wt / "python/sglang/srt/managers/pause_controller.py"
 
-    # Cut bottom-up to preserve line numbers between cuts.
+    # Cut bottom-up to preserve line numbers between cuts. ``_handle_abort_req``
+    # was privacy-flipped to ``handle_abort_req`` in prep.
     method_names = (
         "pause_generation",
         "continue_generation",
         "abort_request",
-        "_handle_abort_req",
+        "handle_abort_req",
     )
     name_to_range = {}
     for n in method_names:
@@ -102,32 +103,26 @@ def transform(wt: Path) -> None:
         "from dataclasses import dataclass, field\n",
         "from dataclasses import dataclass, field\n\n" + EXTRA_IMPORTS,
     )
-    # Flip __post_init__ from lambda forwarder back to direct method reference.
-    pc_text = replace_call_site(
-        pc_text,
-        old=(
-            "    def __post_init__(self) -> None:\n"
-            "        # Forward to the still-on-TM staticmethod _handle_abort_req via lambda.\n"
-            "        # The next commit cuts the method here and flips this to a direct\n"
-            "        # ``self._handle_abort_req`` reference.\n"
-            "        from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
-            "\n"
-            "        # TypeBasedDispatcher has no public register(); poke private _mapping.\n"
-            "        self.dispatcher._mapping[AbortReq] = (\n"
-            "            lambda x: TokenizerManager._handle_abort_req(self, x)\n"
-            "        )\n"
-        ),
-        new=(
-            "    def __post_init__(self) -> None:\n"
-            "        # TypeBasedDispatcher has no public register(); poke private _mapping.\n"
-            "        self.dispatcher._mapping[AbortReq] = self._handle_abort_req\n"
-        ),
-    )
     pc.write_text(pc_text.rstrip() + "\n" + methods_text)
 
-    # Caller prefix replacement in TM: TokenizerManager.<m>(self.pause_controller, ...) -> self.pause_controller.<m>(...).
+    # Collapse the prep-stage lambda forwarder in TM's init_request_dispatcher
+    # entry to a direct method ref on the controller.
     text = tm.read_text()
-    for m in ("abort_request", "pause_generation", "continue_generation", "_handle_abort_req"):
+    text = replace_call_site(
+        text,
+        old=(
+            "                (\n"
+            "                    AbortReq,\n"
+            "                    lambda x: TokenizerManager.handle_abort_req(\n"
+            "                        self.pause_controller, x\n"
+            "                    ),\n"
+            "                ),\n"
+        ),
+        new="                (AbortReq, self.pause_controller.handle_abort_req),\n",
+    )
+
+    # Caller prefix replacement in TM: TokenizerManager.<m>(self.pause_controller, ...) -> self.pause_controller.<m>(...).
+    for m in ("abort_request", "pause_generation", "continue_generation", "handle_abort_req"):
         text = text.replace(
             f"TokenizerManager.{m}(self.pause_controller, ",
             f"self.pause_controller.{m}(",
@@ -138,7 +133,7 @@ def transform(wt: Path) -> None:
     for fname in ("tokenizer_control_mixin.py", "multi_tokenizer_mixin.py"):
         f = wt / "python/sglang/srt/managers" / fname
         t = f.read_text()
-        for m in ("abort_request", "pause_generation", "continue_generation", "_handle_abort_req"):
+        for m in ("abort_request", "pause_generation", "continue_generation", "handle_abort_req"):
             t = t.replace(
                 f"TokenizerManager.{m}(self.pause_controller, ",
                 f"self.pause_controller.{m}(",

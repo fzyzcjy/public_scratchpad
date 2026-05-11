@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-corpus-controller-move"
-SUBJECT = "Move CorpusController methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand external-corpus operations over to CorpusController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 add_external_corpus / remove_external_corpus / list_external_corpora

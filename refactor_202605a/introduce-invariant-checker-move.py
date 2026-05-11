@@ -26,7 +26,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site, rewrite_me
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-move"
-SUBJECT = "Move 10 check methods into SchedulerInvariantChecker class body; delete runtime_checker mixin"
+SUBJECT = "Hand invariant checks over to SchedulerInvariantChecker (retire runtime_checker mixin)"
 BODY = """\
 Mechanical cut + paste for the ``introduce-invariant-checker`` mech move
 (tail commit of the ``SchedulerRuntimeCheckerMixin`` 1:N split).
@@ -149,24 +149,12 @@ def transform(wt: Path) -> None:
     rtext = rtext.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
     target.write_text(rtext)
 
-    # 3. Drop the now-empty mixin file. Before deleting, verify that nothing
-    # is left except the module docstring / imports — the file should be
-    # empty of class / function bodies post-cut.
-    src.unlink()
-
-    # 4. ``scheduler.py``: drop ``SchedulerRuntimeCheckerMixin`` from the
-    # inheritance list and from the import block.
+    # 3. ``_maybe_log_idle_metrics`` is the lone remaining method on
+    # ``SchedulerRuntimeCheckerMixin`` after this cut. It moves to
+    # ``SchedulerMetricsReporter`` in the later
+    # ``move-maybe-log-idle-metrics-to-metrics-reporter`` commit, which is
+    # what finally deletes the mixin file + inheritance entry + import.
     text = sched.read_text()
-    text = replace_call_site(
-        text,
-        old=(
-            "from sglang.srt.managers.scheduler_runtime_checker_mixin import (\n"
-            "    SchedulerRuntimeCheckerMixin,\n"
-            ")\n"
-        ),
-        new="",
-    )
-    text = replace_call_site(text, old="    SchedulerRuntimeCheckerMixin,\n", new="")
 
     # 5. Caller rewrites: ``<receiver>.<method>(<receiver>.invariant_checker, ...)``
     # → ``<receiver>.invariant_checker.<method>(...)``. ``<receiver>`` is

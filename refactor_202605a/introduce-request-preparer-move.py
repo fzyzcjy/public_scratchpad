@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-request-preparer-move"
-SUBJECT = "Move tokenize-orchestration methods to RequestPreparer: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand tokenize-pipeline orchestration over to RequestPreparer"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut the 4 @staticmethod
 methods (_tokenize_one_request, _batch_tokenize_and_process,
@@ -97,24 +97,22 @@ def transform(wt: Path) -> None:
     rp.write_text(rp_text.rstrip() + "\n" + methods_text)
 
     # Caller prefix replacement: TokenizerManager.<m>(self.request_preparer, ... )
-    #                           -> self.request_preparer.<m>(...)
+    #                           -> self.request_preparer.<m>(...).
+    # Use regex to absorb both single-line and black-wrapped multi-line forms.
+    import re as _re
+
     text = tm.read_text()
-    text = text.replace(
-        "await TokenizerManager._tokenize_one_request(self.request_preparer, ",
-        "await self.request_preparer._tokenize_one_request(",
-    )
-    text = text.replace(
-        "TokenizerManager._tokenize_one_request(self.request_preparer, ",
-        "self.request_preparer._tokenize_one_request(",
-    )
-    text = text.replace(
-        "await TokenizerManager._batch_tokenize_and_process(self.request_preparer, ",
-        "await self.request_preparer._batch_tokenize_and_process(",
-    )
-    text = text.replace(
-        "TokenizerManager._should_use_batch_tokenization(self.request_preparer, ",
-        "self.request_preparer._should_use_batch_tokenization(",
-    )
+    for name in (
+        "_tokenize_one_request",
+        "_batch_tokenize_and_process",
+        "_should_use_batch_tokenization",
+        "_batch_has_text",
+    ):
+        text = _re.sub(
+            rf"TokenizerManager\.{_re.escape(name)}\(\s*self\.request_preparer,\s*",
+            f"self.request_preparer.{name}(",
+            text,
+        )
     tm.write_text(text)
 
 

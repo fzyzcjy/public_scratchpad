@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-corpus-controller-prep"
-SUBJECT = "Prep CorpusController: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage external-corpus operations for handoff to CorpusController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -157,7 +157,7 @@ def transform(wt: Path) -> None:
             "            add_external_corpus_communicator=self.add_external_corpus_communicator,\n"
             "            remove_external_corpus_communicator=self.remove_external_corpus_communicator,\n"
             "            list_external_corpora_communicator=self.list_external_corpora_communicator,\n"
-            "            tokenizer=self.raw_tokenizer_wrapper.tokenizer,\n"
+            "            tokenizer=self.tokenizer,\n"
             "            config=CorpusControllerConfig(\n"
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"
             "                max_external_corpus_tokens=self.server_args.speculative_ngram_external_corpus_max_tokens,\n"

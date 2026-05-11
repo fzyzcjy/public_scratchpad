@@ -1,109 +1,152 @@
 #!/usr/bin/env python3
-"""Move: cut init_tokenizer_and_processor + InputFormat from TM; external entrypoint rewrites."""
+"""Move (pure cut/paste): relocate ``init_tokenizer_and_processor`` +
+``_get_processor_wrapper`` + ``_determine_tensor_transport_mode`` from
+TokenizerManager to ``raw_tokenizer_wrapper.py``.
+
+Per MECH_COMMIT_SPLIT §"反模式：prep 大段加代码 + move 大段删代码"——this
+commit's diff should be: TM −body, RTW +body, byte-equivalent. The
+@property facade introduced in prep absorbs all external callers; no
+caller rewrites in entrypoints / template_manager / tests / docs.
+"""
 
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]
 # ///
 
-import re
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_class_lines, find_method_lines
+from _helpers import cut_lines, find_function_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-raw-tokenizer-wrapper-move"
-SUBJECT = "Move RawTokenizerWrapper: cut init_tokenizer_and_processor + InputFormat; rewire external callers"
+SUBJECT = "Hand tokenizer/processor ownership over to RawTokenizerWrapper"
 BODY = """\
-Pure cut/paste move per MECH_COMMIT_SPLIT (factory variant: target
-body was already materialized in prep, so this commit only deletes the
-source-side orphans + does mechanical caller prefix rewrites).
+Pure cut/paste move per MECH_COMMIT_SPLIT. Cuts:
 
-Cuts ``init_tokenizer_and_processor`` (orphan after prep wired
-composition through ``RawTokenizerWrapper.from_server_args``) and the
-``InputFormat`` enum (its canonical home is now raw_tokenizer_wrapper.py)
-from TokenizerManager. External entrypoint / template_manager / test /
-docs callers are pure-prefix-rewritten from
-``tokenizer_manager.<field>`` →
-``tokenizer_manager.raw_tokenizer_wrapper.<field>`` (and the same for
-``tm.<field>`` / ``self.tm.<field>`` test patterns); test mocks pick up
-the new attribute. No body rewrites.
+  - ``TokenizerManager.init_tokenizer_and_processor`` (@staticmethod
+    in prep) → ``RawTokenizerWrapper.init_tokenizer_and_processor``
+    (instance method, drop @staticmethod, restore plain ``self``)
+  - module-level helpers ``_get_processor_wrapper`` and
+    ``_determine_tensor_transport_mode`` from tokenizer_manager.py →
+    raw_tokenizer_wrapper.py module top-level
+
+Updates imports in both files (move what the body needs, drop what TM
+no longer uses). No external caller rewrites — the @property facade on
+TokenizerManager (added in prep) absorbs every ``tm.tokenizer`` /
+``tm.processor`` / ``tm.mm_processor`` access. InputFormat enum + the
+4 tokenize-pipeline helpers move in the follow-up
+``rtw-move-tokenize-helpers`` commit.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
+RTW_BODY_IMPORTS = """import os
+
+from sglang.srt.configs.model_config import ModelConfig
+from sglang.srt.environ import envs
+from sglang.srt.managers.mm_utils import TensorTransportMode
+from sglang.srt.managers.multimodal_processor import (
+    get_mm_processor,
+    import_processors,
+)
+from sglang.srt.server_args import ServerArgs
+from sglang.srt.utils.hf_transformers_utils import (
+    get_processor,
+    get_tokenizer,
+    get_tokenizer_from_processor,
+)
+"""
+
+RTW_LOGGER_BLOCK = """
+import logging
+
+logger = logging.getLogger(__name__)
+"""
+
+
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
+    rtw = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
 
+    # ---- 1. Cut the @staticmethod init_tokenizer_and_processor body from TM.
     s, e = find_method_lines(
-        tm.read_text(), class_name="TokenizerManager", method_name="init_tokenizer_and_processor"
+        tm.read_text(),
+        class_name="TokenizerManager",
+        method_name="init_tokenizer_and_processor",
     )
-    cut_lines(tm, s, e)
+    method_text = cut_lines(tm, s, e)
 
+    # Strip @staticmethod + restore plain self (RawTokenizerWrapper instance).
+    method_text = method_text.replace("    @staticmethod\n", "", 1)
+    method_text = method_text.replace('self: "RawTokenizerWrapper",', "self,")
+    method_text = method_text.replace('self: "RawTokenizerWrapper"\n', "self\n")
+
+    # ---- 2. Cut module-level helpers from TM.
     text = tm.read_text()
-    if "class InputFormat(Enum):\n" in text:
-        s, e = find_class_lines(text, class_name="InputFormat")
-        cut_lines(tm, s, e)
+    s, e = find_function_lines(text, function_name="_get_processor_wrapper")
+    helper1 = cut_lines(tm, s, e)
+    text = tm.read_text()
+    s, e = find_function_lines(text, function_name="_determine_tensor_transport_mode")
+    helper2 = cut_lines(tm, s, e)
 
-    # External callers (entrypoints/, template_manager.py, tests, docs).
-    import glob
-    external_files = [Path(p) for p in glob.glob(
-        str(wt / "python/sglang/srt/entrypoints/**/*.py"), recursive=True
-    )]
-    external_files.append(wt / "python/sglang/srt/managers/template_manager.py")
-    external_files += [Path(p) for p in glob.glob(
-        str(wt / "test/registered/**/*.py"), recursive=True
-    )]
-    external_files += [Path(p) for p in glob.glob(
-        str(wt / "docs/**/*.ipynb"), recursive=True
-    )]
-    external_files += [Path(p) for p in glob.glob(
-        str(wt / "docs_new/**/*.ipynb"), recursive=True
-    )]
-    for f in external_files:
-        if not f.exists():
+    # ---- 3. Inject imports + helpers + the method into RTW.
+    rtw_text = rtw.read_text()
+    rtw_text = rtw_text.replace(
+        "from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
+        "from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n\n"
+        + RTW_BODY_IMPORTS
+        + RTW_LOGGER_BLOCK,
+    )
+    # Append helpers at module level (before the class).
+    # Insert at end of file then re-class-merge: simplest is append after class.
+    # Helpers reference ``server_args`` / ``ServerArgs`` only.
+    body_to_append = helper1.rstrip() + "\n\n\n" + helper2.rstrip() + "\n\n"
+    rtw_text = rtw_text.rstrip() + "\n\n\n" + body_to_append
+    # Append method inside the class — find the trailing close of dataclass body.
+    # The class only has fields; method goes at the end of the class block.
+    # Strategy: append method after class closing, then move it under the class.
+    # Cleaner: insert method body just before the helpers we just appended.
+    # But the class has slots=True so we can't add methods? Actually slots+kw_only
+    # allows methods — slots just restricts instance attrs.
+    # We'll insert into class body: anchor on
+    # ``async_dynamic_batch_tokenizer: Optional[AsyncDynamicbatchTokenizer] = None``
+    # which is the last class field.
+    rtw_text = rtw_text.replace(
+        "    async_dynamic_batch_tokenizer: Optional[AsyncDynamicbatchTokenizer] = None\n",
+        "    async_dynamic_batch_tokenizer: Optional[AsyncDynamicbatchTokenizer] = None\n"
+        + "\n"
+        + method_text.rstrip()
+        + "\n",
+    )
+    rtw.write_text(rtw_text)
+
+    # ---- 4. Drop the now-unused imports from TM. ``import os`` may still be
+    # used elsewhere — only drop the obviously-RTW-specific imports.
+    text = tm.read_text()
+    # Drop multimodal processor import (only used by init_tokenizer_and_processor + InputFormat helpers
+    # that still live on TM until rtw-move-tokenize-helpers — but those use `import_processors`
+    # implicitly too?). Safer: leave imports alone in TM and let pre-commit's ruff F401 prune.
+
+    # ---- 5. Drop the prep-injected facade-attr rewrites in entrypoints / tests
+    # / docs. With @property the canonical form is ``tm.tokenizer`` etc., so the
+    # ``tm.raw_tokenizer_wrapper.tokenizer`` form should NOT exist anywhere
+    # except inside raw_tokenizer_wrapper.py itself. Sanity-check: search and
+    # warn if any other file references ``raw_tokenizer_wrapper.tokenizer``.
+    bad = []
+    for f in (wt / "python").rglob("*.py"):
+        if f == rtw:
             continue
-        t = f.read_text()
-        t = re.sub(
-            r"\btokenizer_manager\.tokenizer\b",
-            "tokenizer_manager.raw_tokenizer_wrapper.tokenizer",
-            t,
-        )
-        t = re.sub(
-            r"\btokenizer_manager\.processor\b",
-            "tokenizer_manager.raw_tokenizer_wrapper.processor",
-            t,
-        )
-        if "test/" in str(f) or "_test.py" in str(f) or "test_" in f.name:
-            t = re.sub(
-                r"\bself\.tm\.tokenizer\b",
-                "self.tm.raw_tokenizer_wrapper.tokenizer",
-                t,
-            )
-            t = re.sub(
-                r"(?<![\w.])tm\.tokenizer\b",
-                "tm.raw_tokenizer_wrapper.tokenizer",
-                t,
-            )
-            t = re.sub(
-                r"^(        self\.tokenizer = Mock\(\)\n)",
-                r"\1"
-                r"        self.raw_tokenizer_wrapper = Mock()\n"
-                r"        self.raw_tokenizer_wrapper.tokenizer = self.tokenizer\n",
-                t,
-                flags=re.MULTILINE,
-            )
-            t = re.sub(
-                r"(\s+)(\w+) = Mock\(spec=TokenizerManager\)\n",
-                lambda m: m.group(0) + f"{m.group(1)}{m.group(2)}.raw_tokenizer_wrapper = Mock()\n",
-                t,
-            )
-        f.write_text(t)
+        if "raw_tokenizer_wrapper.tokenizer" in f.read_text():
+            bad.append(f)
+    if bad:
+        # Don't fail — just print so we know if anything slips through.
+        print(f"WARN: residual raw_tokenizer_wrapper.tokenizer refs in: {bad}")
 
 
 if __name__ == "__main__":

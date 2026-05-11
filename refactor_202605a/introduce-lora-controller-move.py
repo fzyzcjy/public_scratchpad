@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-lora-controller-move"
-SUBJECT = "Move LoraController methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand LoRA load/unload over to LoraController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut the 6 @staticmethod lora
 methods (4 from TokenizerControlMixin: load_lora_adapter,

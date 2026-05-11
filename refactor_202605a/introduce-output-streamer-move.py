@@ -21,7 +21,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-output-streamer-move"
-SUBJECT = "Move 6 methods into SchedulerOutputStreamer class body"
+SUBJECT = "Hand output streaming over to SchedulerOutputStreamer"
 BODY = """\
 Mechanical cut + paste for the ``introduce-output-streamer`` mech move.
 

@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Move ``on_idle`` and ``_maybe_log_idle_metrics`` from
-``scheduler_runtime_checker_mixin.py`` to the Scheduler main class. Per
-``components/scheduler/index.md`` these stay on Scheduler proper rather than
-splitting into the upcoming pool_stats_observer / invariant_checker sisters.
+"""Move ``on_idle`` from ``scheduler_runtime_checker_mixin.py`` to the
+Scheduler main class. Per ``components/scheduler/index.md`` this stays on
+Scheduler proper rather than splitting into the upcoming pool_stats_observer
+/ invariant_checker sisters.
 
-Bodies are byte-identical apart from dropping the ``: Scheduler`` parameter
+Body byte-identical apart from dropping the ``: Scheduler`` parameter
 annotation.
+
+Note: ``_maybe_log_idle_metrics`` (``on_idle``'s 30-second metric flush
+helper) stays in ``SchedulerRuntimeCheckerMixin`` for now; a downstream
+commit (``move-maybe-log-idle-metrics-to-metrics-reporter``) cuts it
+directly from the mixin into ``SchedulerMetricsReporter`` after C14 builds
+the reporter class. ``self._maybe_log_idle_metrics()`` from ``on_idle``
+still resolves via mixin inheritance until that later commit rewrites the
+caller.
 """
 
 # /// script
@@ -18,27 +26,34 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, insert_after, replace_call_site
+from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "move-on-idle-to-scheduler-main"
-SUBJECT = "Move on_idle and _maybe_log_idle_metrics from runtime_checker mixin to Scheduler main class"
+SUBJECT = "Move on_idle from runtime_checker mixin to Scheduler main class"
 BODY = """\
-Move ``on_idle`` (the idle housekeeping orchestrator) and
-``_maybe_log_idle_metrics`` (its 30-second metric flush helper) from
+Move ``on_idle`` (the idle housekeeping orchestrator) from
 ``scheduler_runtime_checker_mixin.py`` into the Scheduler main class
-(``scheduler.py``), per the explicit human decision on these two methods'
+(``scheduler.py``), per the explicit human decision on this method's
 ownership in ``components/scheduler/index.md``.
 
-The two methods are placed immediately before ``Scheduler.is_fully_idle`` to
-keep the idle-related cluster contiguous. Bodies are byte-identical apart
+The method is placed immediately before ``Scheduler.is_fully_idle`` to
+keep the idle-related cluster contiguous. Body is byte-identical apart
 from dropping the ``self: Scheduler`` parameter annotation (now redundant
-since the methods live on Scheduler directly).
+since it lives on Scheduler directly).
+
+``_maybe_log_idle_metrics`` (``on_idle``'s metric flush helper) is
+intentionally NOT moved here. It is a metrics-collection routine, not an
+orchestrator, so it gets relocated directly from
+``SchedulerRuntimeCheckerMixin`` into ``SchedulerMetricsReporter`` by a
+downstream commit (``move-maybe-log-idle-metrics-to-metrics-reporter``).
+Until that commit runs, ``self._maybe_log_idle_metrics()`` inside
+``on_idle`` continues to resolve via mixin inheritance.
 
 No behavior change. Subsequent commits (``introduce-pool-stats-observer`` /
 ``introduce-invariant-checker`` / ``introduce-kv-events-publisher`` /
-``introduce-metrics-reporter``) will rewire the cross-class calls these
-bodies make (``self.get_pool_stats()`` / ``self._check_all_pools`` /
+``introduce-metrics-reporter``) will rewire the cross-class calls this
+body makes (``self.get_pool_stats()`` / ``self._check_all_pools`` /
 ``self._publish_kv_events`` / ``self.reset_device_timer_window`` etc.) to
 the new sister components.
 """
@@ -51,7 +66,6 @@ def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_runtime_checker_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
 
-    # Cut bottom-up so earlier line ranges stay valid.
     s, e = find_method_lines(
         src.read_text(),
         class_name="SchedulerRuntimeCheckerMixin",
@@ -59,33 +73,16 @@ def transform(wt: Path) -> None:
     )
     on_idle_text = cut_lines(src, s, e)
 
-    s, e = find_method_lines(
-        src.read_text(),
-        class_name="SchedulerRuntimeCheckerMixin",
-        method_name="_maybe_log_idle_metrics",
-    )
-    log_idle_text = cut_lines(src, s, e)
-
-    # Drop ``: Scheduler`` annotations.
+    # Drop ``: Scheduler`` annotation.
     on_idle_text = on_idle_text.replace("self: Scheduler", "self")
-    log_idle_text = log_idle_text.replace("self: Scheduler", "self")
 
     # Insert into Scheduler main class just before ``def is_fully_idle``.
     text = sched.read_text()
     text = replace_call_site(
         text,
         old="    def is_fully_idle(self, for_health_check=False) -> bool:\n",
-        new=log_idle_text
-        + on_idle_text
+        new=on_idle_text
         + "    def is_fully_idle(self, for_health_check=False) -> bool:\n",
-    )
-    # ``_maybe_log_idle_metrics`` body uses ``QueueCount.from_reqs(...)`` —
-    # add the import (was previously transitively pulled in via the
-    # runtime_checker mixin).
-    text = insert_after(
-        text,
-        anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
-        addition="from sglang.srt.observability.metrics_collector import QueueCount\n",
     )
     sched.write_text(text)
 

@@ -11,11 +11,11 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import replace_call_site
+from _helpers import replace_call_site, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-score-request-handler-move"
-SUBJECT = "Move score mixin body to ScoreRequestHandler: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand scoring over to ScoreRequestHandler"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut TokenizerManagerScoreMixin
 class body (11 @staticmethod methods, already retyped to
@@ -68,12 +68,26 @@ def transform(wt: Path) -> None:
     # single-line forms.
     class_body = class_body.replace('self: "ScoreRequestHandler",', "self,")
     class_body = class_body.replace('self: "ScoreRequestHandler"', "self")
-    # Internal cross-method calls were rewritten by prep to the class-qualified
-    # form ``TokenizerManagerScoreMixin.<method>(self, ...)``. After move,
-    # methods are regular instance methods on ScoreRequestHandler — flip the
-    # qualifier so lint resolves and runtime dispatch lands on the new class.
-    class_body = class_body.replace(
-        "TokenizerManagerScoreMixin.", "ScoreRequestHandler."
+    # Collapse prep-stage ``TokenizerManagerScoreMixin.<m>(self, ...)`` calls to
+    # plain ``self.<m>(...)`` — methods are regular instance methods on
+    # ScoreRequestHandler after the move.
+    class_body = rewrite_intra_class_calls(
+        class_body,
+        source_classes=["TokenizerManagerScoreMixin"],
+        target_class="ScoreRequestHandler",
+        methods=[
+            "score_request",
+            "score_prompts",
+            "_build_multi_item_token_sequence",
+            "_batch_tokenize_query_and_items",
+            "_process_multi_item_scoring_results",
+            "_process_single_item_scoring_results",
+            "_resolve_overrides_for_sequence",
+            "_resolve_embed_overrides_for_request",
+            "_build_token_id_inputs",
+            "_convert_logprobs_to_scores",
+            "_extract_logprobs_for_tokens",
+        ],
     )
 
     # ---- 2. Append into the handler module + add the extra imports the

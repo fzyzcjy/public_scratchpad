@@ -32,7 +32,7 @@ from _helpers import find_class_lines, find_method_lines, insert_after, replace_
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-prep"
-SUBJECT = "Build SchedulerKvEventsPublisher skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage KV-cache event emission for handoff to SchedulerKvEventsPublisher"
 BODY = """\
 Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 

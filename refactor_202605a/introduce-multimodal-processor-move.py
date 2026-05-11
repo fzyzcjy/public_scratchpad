@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-multimodal-processor-move"
-SUBJECT = "Move MultimodalProcessor methods: pure cut/paste + privacy flip + caller prefix replacement"
+SUBJECT = "Hand EPD dispatch over to MultimodalProcessor (with privacy flip)"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 _should_dispatch_to_encoder + _handle_epd_disaggregation_encode_request

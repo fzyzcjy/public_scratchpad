@@ -24,7 +24,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-scheduler-request-receiver-prep"
-SUBJECT = "Build SchedulerRequestReceiver skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage request-ingress methods for handoff to SchedulerRequestReceiver"
 BODY = """\
 Inplace prep for the ``introduce-scheduler-request-receiver`` mech move.
 
@@ -133,7 +133,7 @@ INIT_INSERT = '''        self.request_receiver = SchedulerRequestReceiver(
             recv_from_rpc=self.recv_from_rpc,
             recv_skipper=self.recv_skipper,
             input_blocker=self.input_blocker,
-            mm_receiver=getattr(self, "mm_receiver", None),
+            mm_receiver=self.mm_receiver,
             ps=self.ps,
             tp_group=self.tp_group,
             tp_cpu_group=self.tp_cpu_group,

@@ -31,7 +31,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-output-streamer-prep"
-SUBJECT = "Build SchedulerOutputStreamer skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage output streaming for handoff to SchedulerOutputStreamer"
 BODY = """\
 Inplace prep for the ``introduce-output-streamer`` mech move.
 
@@ -251,10 +251,13 @@ def transform(wt: Path) -> None:
             # ``self.enable_hicache_storage`` may already appear without
             # trailing args; the replace runs once per occurrence — fine.
 
-        # Collapse load_inquirer.get_loads(...) multi-kwarg call into single
-        # arg shim. Only ``stream_output`` carries this expression.
-        if name == "stream_output":
+        # Collapse load_inquirer.get_loads(...) call into single-arg shim.
+        # The call appears in `stream_output_generation` (privacy-flipped to
+        # `_stream_output_generation` later in prep, but at this point the
+        # body's original method name is still in scope).
+        if name in ("stream_output", "stream_output_generation"):
             import re as _re_body
+            # multi-line form (DOTALL .*? allows nested parens).
             new_method = _re_body.sub(
                 r"        load = self\.load_inquirer\.get_loads\(\n.*?\n        \)",
                 '        load = self.load_inquirer_get_loads(GetLoadsReqInput(include=["core"]))',

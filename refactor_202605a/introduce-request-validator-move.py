@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-request-validator-move"
-SUBJECT = "Move RequestValidator methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand inbound-request validation over to RequestValidator"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut 5 @staticmethod _validate_*
 methods from TokenizerManager; paste into RequestValidator (drop

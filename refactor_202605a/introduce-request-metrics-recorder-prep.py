@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-request-metrics-recorder-prep"
-SUBJECT = "Prep RequestMetricsRecorder: skeleton + composition + __post_init__ + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage per-request metrics for handoff to RequestMetricsRecorder"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 

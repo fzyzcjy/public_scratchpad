@@ -24,7 +24,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-logprob-computer-prep"
-SUBJECT = "Build SchedulerLogprobComputer skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage logprob assembly for handoff to SchedulerLogprobComputer"
 BODY = """\
 Inplace prep for the ``introduce-logprob-computer`` mech move.
 

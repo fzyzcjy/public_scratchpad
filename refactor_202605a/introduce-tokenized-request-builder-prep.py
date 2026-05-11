@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-tokenized-request-builder-prep"
-SUBJECT = "Prep TokenizedRequestBuilder: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage TokenizedRequest assembly for handoff to TokenizedRequestBuilder"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -123,7 +123,7 @@ def transform(wt: Path) -> None:
         new=(
             "        # Tokenized request builder\n"
             "        self.tokenized_request_builder = TokenizedRequestBuilder(\n"
-            "            tokenizer=self.raw_tokenizer_wrapper.tokenizer,\n"
+            "            tokenizer=self.tokenizer,\n"
             "            config=TokenizedRequestBuilderConfig(\n"
             "                vocab_size=self.model_config.vocab_size,\n"
             "                preferred_sampling_params=self.preferred_sampling_params,\n"
@@ -146,7 +146,6 @@ def transform(wt: Path) -> None:
     # Body rewrites (self.X → self.config.X / self.tokenizer / etc.)
     body_text = body_text.replace("self.preferred_sampling_params", "self.config.preferred_sampling_params")
     body_text = body_text.replace("self.sampling_params_class", "self.config.sampling_params_class")
-    body_text = body_text.replace("self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer")
     body_text = body_text.replace("self.model_config.vocab_size", "self.config.vocab_size")
     body_text = body_text.replace(
         "self.server_args.disaggregation_transfer_backend",

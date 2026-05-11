@@ -17,7 +17,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-pause-controller-prep"
-SUBJECT = "Prep PauseController: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage generation pause/abort for handoff to PauseController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -57,10 +57,9 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from sglang.srt.managers.io_struct import AbortReq
+from sglang.srt.managers.io_struct import AbortReq  # noqa: F401  (used in handler signature once method moves in)
 from sglang.srt.managers.request_state import ReqState
 from sglang.srt.utils.aio_rwlock import RWLock
-from sglang.utils import TypeBasedDispatcher
 
 
 @dataclass(slots=True, kw_only=True)
@@ -75,7 +74,6 @@ class PauseController:
     """Pause / resume / abort state machine + AbortReq dispatcher handler."""
 
     send_to_scheduler: Any
-    dispatcher: TypeBasedDispatcher
     rid_to_state: Dict[str, ReqState]
     model_update_lock: RWLock
     metrics_collector: Optional[Any]
@@ -83,15 +81,6 @@ class PauseController:
     config: PauseControllerConfig
     is_pause: bool = False
     is_pause_cond: asyncio.Condition = field(default_factory=asyncio.Condition)
-
-    def __post_init__(self) -> None:
-        # Forward to the still-on-TM staticmethod _handle_abort_req via lambda.
-        # The next commit cuts the method here and flips this to a direct
-        # ``self._handle_abort_req`` reference.
-        from sglang.srt.managers.tokenizer_manager import TokenizerManager
-
-        # TypeBasedDispatcher has no public register(); poke private _mapping.
-        self.dispatcher._mapping[AbortReq] = lambda x: TokenizerManager._handle_abort_req(self, x)
 '''
 
 
@@ -134,7 +123,7 @@ NEW_HEADERS = {
     ),
     "_handle_abort_req": (
         '    @staticmethod\n'
-        '    def _handle_abort_req(self: "PauseController", recv_obj: AbortReq):\n'
+        '    def handle_abort_req(self: "PauseController", recv_obj: AbortReq):\n'
     ),
 }
 
@@ -145,9 +134,6 @@ def _rewrite_body(body: str) -> str:
     body = body.replace("self.server_args.weight_version", "self.config.weight_version")
     body = body.replace(
         "self.server_args.skip_tokenizer_init", "self.config.skip_tokenizer_init"
-    )
-    body = body.replace(
-        "self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer"
     )
     body = body.replace(
         "self.request_metrics_recorder.metrics_collector", "self.metrics_collector"
@@ -204,11 +190,10 @@ def transform(wt: Path) -> None:
             "        # Pause controller\n"
             "        self.pause_controller = PauseController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
-            "            dispatcher=self._result_dispatcher,\n"
             "            rid_to_state=self.rid_to_state,\n"
             "            model_update_lock=self.model_update_lock,\n"
             "            metrics_collector=self.request_metrics_recorder.metrics_collector,\n"
-            "            tokenizer=self.raw_tokenizer_wrapper.tokenizer,\n"
+            "            tokenizer=self.tokenizer,\n"
             "            config=PauseControllerConfig(\n"
             "                enable_metrics=self.enable_metrics,\n"
             "                skip_tokenizer_init=self.server_args.skip_tokenizer_init,\n"
@@ -221,12 +206,20 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Remove the AbortReq dispatcher entry from TM; PauseController.__post_init__
-    # registers it now.
+    # Rewrite the AbortReq entry in TM's init_request_dispatcher in place: route
+    # through a lambda forwarder that calls the @staticmethod (still on TM) with
+    # self.pause_controller as the self arg. -move flips this to a direct ref.
     text = replace_call_site(
         text,
         old="                (AbortReq, self._handle_abort_req),\n",
-        new="",
+        new=(
+            "                (\n"
+            "                    AbortReq,\n"
+            "                    lambda x: TokenizerManager.handle_abort_req(\n"
+            "                        self.pause_controller, x\n"
+            "                    ),\n"
+            "                ),\n"
+        ),
     )
 
     # Convert the 4 methods to @staticmethod with self: "PauseController" typing.
@@ -259,8 +252,12 @@ def transform(wt: Path) -> None:
     # in-class cross-calls handled by _rewrite_body.
     tm_lines = text.splitlines(keepends=True)
     retyped_ranges = []
+    # NEW_HEADERS keys are pre-rename method names; `_handle_abort_req` was
+    # privacy-flipped to `handle_abort_req` by the retype loop above.
+    _renamed = {"_handle_abort_req": "handle_abort_req"}
     for method_name in NEW_HEADERS:
-        s, _body_s, e = _method_ranges(text, "TokenizerManager", method_name)
+        final_name = _renamed.get(method_name, method_name)
+        s, _body_s, e = _method_ranges(text, "TokenizerManager", final_name)
         retyped_ranges.append((s, e))
     retyped_ranges.sort()
 

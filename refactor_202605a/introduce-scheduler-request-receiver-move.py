@@ -21,7 +21,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-scheduler-request-receiver-move"
-SUBJECT = "Move 3 methods into SchedulerRequestReceiver class body"
+SUBJECT = "Hand request ingress over to SchedulerRequestReceiver"
 BODY = """\
 Mechanical cut + paste for the ``introduce-scheduler-request-receiver``
 mech move.

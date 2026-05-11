@@ -31,7 +31,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-session-controller-move"
-SUBJECT = "Move session methods to SessionController: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand session lifecycle over to SessionController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT §"拆 class 场景". Cut
 @staticmethod open_session + close_session from TokenizerControlMixin and
@@ -71,11 +71,13 @@ def transform(wt: Path) -> None:
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
 
-    # Cut bottom-up so earlier line numbers stay valid.
+    # Cut bottom-up so earlier line numbers stay valid. Method was renamed
+    # from ``_handle_open_session_req_output`` to ``handle_open_session_req_output``
+    # in prep (privacy flip — it's now public API of SessionController).
     s, e = find_method_lines(
         tm.read_text(),
         class_name="TokenizerManager",
-        method_name="_handle_open_session_req_output",
+        method_name="handle_open_session_req_output",
     )
     handle_text = cut_lines(tm, s, e)
 
@@ -112,33 +114,30 @@ def transform(wt: Path) -> None:
         "from dataclasses import dataclass, field\n",
         "from dataclasses import dataclass, field\n\n" + EXTRA_IMPORTS,
     )
-    # Flip lambda forwarder → direct method reference; drop the TokenizerManager
-    # local import that only existed to support the forwarder.
-    sc_text = replace_call_site(
-        sc_text,
+    # Also need OpenSessionReqOutput for the post-move handler type annotation.
+    sc.write_text(sc_text.rstrip() + "\n\n" + methods)
+
+    # Collapse the prep-stage lambda forwarder in TM's init_request_dispatcher
+    # entry list to a direct method ref on the controller.
+    text = tm.read_text()
+    text = replace_call_site(
+        text,
         old=(
-            "    def __post_init__(self) -> None:\n"
-            "        # Lambda forwarder: during prep the handler still lives on TokenizerManager\n"
-            "        # as a @staticmethod with ``self: \"SessionController\"`` typing. The\n"
-            "        # follow-up -move commit cuts the method into this class and flips this\n"
-            "        # registration to a direct method reference.\n"
-            "        from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
-            "\n"
-            "        self.dispatcher._mapping[OpenSessionReqOutput] = (\n"
-            "            lambda recv_obj: TokenizerManager._handle_open_session_req_output(\n"
-            "                self, recv_obj\n"
-            "            )\n"
-            "        )\n"
+            "                (\n"
+            "                    OpenSessionReqOutput,\n"
+            "                    lambda recv_obj: TokenizerManager.handle_open_session_req_output(\n"
+            "                        self.session_controller, recv_obj\n"
+            "                    ),\n"
+            "                ),\n"
         ),
         new=(
-            "    def __post_init__(self) -> None:\n"
-            "        # TypeBasedDispatcher exposes only ``__init__(mapping)`` and ``__iadd__``;\n"
-            "        # assign to its private ``_mapping`` to register a single (Type, handler)\n"
-            "        # entry post-construction.\n"
-            "        self.dispatcher._mapping[OpenSessionReqOutput] = self._handle_open_session_req_output\n"
+            "                (\n"
+            "                    OpenSessionReqOutput,\n"
+            "                    self.session_controller.handle_open_session_req_output,\n"
+            "                ),\n"
         ),
     )
-    sc.write_text(sc_text.rstrip() + "\n\n" + methods)
+    tm.write_text(text)
 
     # Drop the SessionController TYPE_CHECKING import added in prep — no longer
     # referenced now that the method bodies have moved out of the mixin.

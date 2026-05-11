@@ -34,13 +34,13 @@ ORDER: list[str] = [
     "move-spec-decoding-meta-prep",
     "move-spec-decoding-meta-move",
     "define-scheduler-sender",
-    "move-init-request-dispatcher-call",
     # Stage 1 — score handler early
     "introduce-score-request-handler-prep",
     "introduce-score-request-handler-move",
     # Stage 2 — inputs
     "introduce-raw-tokenizer-wrapper-prep",
     "introduce-raw-tokenizer-wrapper-move",
+    "rtw-prep-tokenize-helpers",
     "rtw-move-tokenize-helpers",
     "introduce-request-validator-prep",
     "introduce-request-validator-move",
@@ -72,8 +72,9 @@ ORDER: list[str] = [
     "introduce-response-emitter-prep",
     "introduce-response-emitter-move",
     # Stage 6 — _handle_batch_request 切段
-    "extract-handle-batch-request-wait-yield-prep",
-    "extract-handle-batch-request-wait-yield-move",
+    "extract-handle-batch-request-wait-yield",
+    # Stage 8 — module-level cleanup
+    "cleanup-tm-module-leftovers",
     # Stage 7 — MM 分支抽出 (deferred — script TBD; non-canonical complexity per plan §V2.6)
     # "mmp-extract-tokenize-branch",
 ]

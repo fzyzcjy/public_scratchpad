@@ -44,7 +44,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-prep"
-SUBJECT = "Build SchedulerInvariantChecker skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage invariant checks for handoff to SchedulerInvariantChecker"
 BODY = """\
 Inplace prep for the ``introduce-invariant-checker`` mech move.
 

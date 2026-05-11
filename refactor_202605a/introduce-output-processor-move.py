@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-output-processor-move"
-SUBJECT = "Move _handle_batch_output to OutputProcessor: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand batch-output handling over to OutputProcessor"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 _handle_batch_output from TokenizerManager; paste into OutputProcessor

@@ -33,7 +33,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-batch-result-processor-prep"
-SUBJECT = "Build SchedulerBatchResultProcessor skeleton + @staticmethod prep (prep for move)"
+SUBJECT = "Stage batch-result processing for handoff to SchedulerBatchResultProcessor"
 BODY = """\
 Inplace prep for the ``introduce-batch-result-processor`` mech move (the
 last extract from ``SchedulerOutputProcessorMixin``).
@@ -196,7 +196,7 @@ SCHEDULER_INIT_INSERT = """\
             enable_hisparse=self.enable_hisparse,
             enable_metrics=self.enable_metrics,
             enable_overlap=self.enable_overlap,
-            enable_overlap_mlx=getattr(self, "enable_overlap_mlx", False),
+            enable_overlap_mlx=self.enable_overlap_mlx,
             server_args=self.server_args,
             model_config=self.model_config,
             token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
@@ -204,7 +204,7 @@ SCHEDULER_INIT_INSERT = """\
             hisparse_coordinator=self.hisparse_coordinator,
             req_to_token_pool=self.req_to_token_pool,
             decode_offload_manager=self.decode_offload_manager,
-            metrics_collector=getattr(self, "metrics_collector", None),
+            metrics_collector=self.metrics_collector,
             draft_worker=self.draft_worker,
             model_worker=self.model_worker,
             logprob_computer=self.logprob_computer,

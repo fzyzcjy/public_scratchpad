@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-response-emitter-move"
-SUBJECT = "Move ResponseEmitter methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand client-side wait/abort over to ResponseEmitter"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 _wait_one_response, create_abort_task, _handle_abort_finish_reason,
@@ -114,11 +114,15 @@ def transform(wt: Path) -> None:
     )
     re_.write_text(re_text.rstrip() + "\n\n" + "\n\n".join(b.rstrip() for b in bodies) + "\n")
 
-    # TM-facade caller prefix replacement.
+    # TM-facade caller prefix replacement. Use regex to absorb both single-line
+    # and black-wrapped multi-line forms.
+    import re as _re
+
     text = tm.read_text()
-    text = text.replace(
-        "TokenizerManager._wait_one_response(self.response_emitter, ",
+    text = _re.sub(
+        r"TokenizerManager\._wait_one_response\(\s*self\.response_emitter,\s*",
         "self.response_emitter._wait_one_response(",
+        text,
     )
     tm.write_text(text)
 

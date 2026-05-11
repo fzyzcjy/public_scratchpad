@@ -26,7 +26,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-batch-result-processor-move"
-SUBJECT = "Move 11 methods into SchedulerBatchResultProcessor class body; delete output_processor mixin file"
+SUBJECT = "Hand batch-result processing over to SchedulerBatchResultProcessor (retire output_processor mixin)"
 BODY = """\
 Mechanical cut + paste for the ``introduce-batch-result-processor`` mech
 move (final extract from ``SchedulerOutputProcessorMixin``).

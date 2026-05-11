@@ -185,19 +185,62 @@ def rewrite_method_call_site(text: str, *, method_name: str, target_attr: str) -
 
 
 def rewrite_intra_class_calls(
-    body: str, *, source_classes: list[str], target_class: str, methods: list[str]
+    body: str,
+    *,
+    source_classes: list[str],
+    target_class: str,
+    methods: list[str],
 ) -> str:
-    """For each ``method`` in ``methods``, rewrite ``<src>.<method>(`` →
-    ``<target_class>.<method>(`` for every ``<src>`` in ``source_classes``.
+    """Collapse intra-class self-dispatch to plain ``self.<m>(...)`` form.
 
-    Used by owner-class move scripts: prep stage rewrites intra-class self-calls
-    to ``OldClass.<m>(self, ...)`` (so the body still works while the methods
-    are still on OldClass via @staticmethod with self typing). After the move,
-    the methods live on the new owner class, so the qualifier must flip.
+    Prep rewrites every sibling-method call to ``<OldClass>.<m>(self, ...)``
+    so the body still type-checks while the methods are still on OldClass
+    via ``@staticmethod`` with ``self: "OwnerClass"`` typing. After the move,
+    those methods are regular instance methods on ``target_class``, so the
+    class-qualified form is dead cruft — fold every variant back to
+    ``self.<m>(...)``.
+
+    Handles single-line, multi-line where ``self`` sits with other args,
+    multi-line where ``self`` is on its own line, and the zero-arg form.
+
+    ``target_class`` is unused in the output (we always fold to ``self.``) —
+    kept in the signature for documentation and to flag which class is the
+    final owner.
     """
+    del target_class  # documentation only; output is always ``self.<m>(...)``
+    import re
+
     for m in methods:
+        m_re = re.escape(m)
         for src in source_classes:
-            body = body.replace(f"{src}.{m}(", f"{target_class}.{m}(")
+            src_re = re.escape(src)
+            # Single-line: ``<src>.<m>(self, ARG, ...)`` → ``self.<m>(ARG, ...)``
+            body = re.sub(
+                rf"\b{src_re}\.{m_re}\(\s*self\s*,\s*",
+                f"self.{m}(",
+                body,
+            )
+            # Multi-line with self+other-arg on same line:
+            #   ``<src>.<m>(\n<indent>self, ARG`` → ``self.<m>(\n<indent>ARG``
+            body = re.sub(
+                rf"\b{src_re}\.{m_re}\(\s*\n(\s+)self,\s+",
+                lambda mt: f"self.{m}(\n{mt.group(1)}",
+                body,
+            )
+            # Multi-line with self alone on its line, then next arg on next line:
+            #   ``<src>.<m>(\n<indent>self,\n<indent>ARG`` →
+            #   ``self.<m>(\n<indent>ARG``
+            body = re.sub(
+                rf"\b{src_re}\.{m_re}\(\s*\n\s+self,\s*\n(\s+)",
+                lambda mt: f"self.{m}(\n{mt.group(1)}",
+                body,
+            )
+            # Zero-arg: ``<src>.<m>(self)`` → ``self.<m>()``
+            body = re.sub(
+                rf"\b{src_re}\.{m_re}\(\s*self\s*\)",
+                f"self.{m}()",
+                body,
+            )
     return body
 
 

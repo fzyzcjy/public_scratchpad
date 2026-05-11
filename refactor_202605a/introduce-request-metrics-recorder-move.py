@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-request-metrics-recorder-move"
-SUBJECT = "Move RequestMetricsRecorder methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand per-request metrics over to RequestMetricsRecorder"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
 collect_metrics + _request_has_grammar from TokenizerManager; paste into

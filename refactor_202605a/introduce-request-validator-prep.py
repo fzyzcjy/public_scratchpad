@@ -16,7 +16,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-request-validator-prep"
-SUBJECT = "Prep RequestValidator: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage inbound-request validation for handoff to RequestValidator"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 

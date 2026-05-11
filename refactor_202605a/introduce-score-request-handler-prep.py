@@ -15,7 +15,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-score-request-handler-prep"
-SUBJECT = "Prep ScoreRequestHandler: skeleton + composition + staticmethod conversion + caller rewrites"
+SUBJECT = "Stage scoring methods for handoff to ScoreRequestHandler"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
@@ -176,20 +176,18 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
-    # First owner-class composition: anchor on the (now-early) init_request_dispatcher
-    # call and insert AFTER it so subsequent owner-class wiring can chain.
+    # First owner-class composition: anchor on init_request_dispatcher (which
+    # runs at the end of __init__) and insert BEFORE it. Subsequent preps then
+    # chain via their own ``# <previous owner>`` markers, all staying above
+    # init_request_dispatcher — required because its entry list references
+    # ``self.<owner>.handle_X`` and those must exist at call time.
     text = replace_call_site(
         text,
         old=(
-            "        # Init request dispatcher (called early so owner-class ctors can\n"
-            "        # pass dispatcher=self._result_dispatcher as a kwarg).\n"
-            "        self.init_request_dispatcher()\n"
+            "        # Init request dispatcher\n"
+            "        self.init_request_dispatcher()"
         ),
         new=(
-            "        # Init request dispatcher (called early so owner-class ctors can\n"
-            "        # pass dispatcher=self._result_dispatcher as a kwarg).\n"
-            "        self.init_request_dispatcher()\n"
-            "\n"
             "        # Score request handler\n"
             "        self.score_request_handler = ScoreRequestHandler(\n"
             "            tokenizer=self.tokenizer,\n"
@@ -201,6 +199,9 @@ def transform(wt: Path) -> None:
             "                model_config=self.model_config,\n"
             "            ),\n"
             "        )\n"
+            "\n"
+            "        # Init request dispatcher\n"
+            "        self.init_request_dispatcher()"
         ),
     )
     tm.write_text(text)

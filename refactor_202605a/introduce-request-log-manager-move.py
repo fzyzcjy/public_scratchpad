@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-request-log-manager-move"
-SUBJECT = "Move RequestLogManager methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand request dumping over to RequestLogManager"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod dump_requests
 + record_request_for_crash_dump + _dump_data_to_file +

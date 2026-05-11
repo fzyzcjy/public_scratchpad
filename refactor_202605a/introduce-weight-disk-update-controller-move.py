@@ -15,7 +15,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-move"
-SUBJECT = "Move WeightDiskUpdateController methods: pure cut/paste + caller prefix replacement"
+SUBJECT = "Hand disk-based weight reload over to WeightDiskUpdateController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut 4 @staticmethod methods
 (``update_weights_from_disk``, ``_update_model_path_info``,
@@ -53,7 +53,7 @@ _MOVED_METHODS = (
     "update_weights_from_disk",
     "_update_model_path_info",
     "_wait_for_model_update_from_disk",
-    "_handle_update_weights_from_disk_req_output",
+    "handle_update_weights_from_disk_req_output",
     "_update_weight_version_if_provided",
 )
 
@@ -80,12 +80,13 @@ def transform(wt: Path) -> None:
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     wd = wt / "python/sglang/srt/managers/weight_disk_update_controller.py"
 
-    # Cut 4 methods from TM, bottom-up (highest start line first).
+    # Cut 4 methods from TM, bottom-up (highest start line first). The handler
+    # method was privacy-flipped in prep.
     tm_methods = (
         "update_weights_from_disk",
         "_update_model_path_info",
         "_wait_for_model_update_from_disk",
-        "_handle_update_weights_from_disk_req_output",
+        "handle_update_weights_from_disk_req_output",
     )
     name_to_range = {}
     for n in tm_methods:
@@ -109,7 +110,7 @@ def transform(wt: Path) -> None:
         _strip_static_prefix(cut_blocks_tm["update_weights_from_disk"]),
         _strip_static_prefix(cut_blocks_tm["_update_model_path_info"]),
         _strip_static_prefix(cut_blocks_tm["_wait_for_model_update_from_disk"]),
-        _strip_static_prefix(cut_blocks_tm["_handle_update_weights_from_disk_req_output"]),
+        _strip_static_prefix(cut_blocks_tm["handle_update_weights_from_disk_req_output"]),
         _strip_static_prefix(cut_block_mixin),
     ]
 
@@ -119,24 +120,24 @@ def transform(wt: Path) -> None:
         "from dataclasses import dataclass, field\n\n" + EXTRA_IMPORTS,
     )
 
-    # Flip __post_init__ dispatcher entry: lambda forwarder + late TM import →
-    # direct method reference (now an instance method on this class).
-    wd_text = wd_text.replace(
-        "        # Lambda forwarder: until the move commit relocates the @staticmethod\n"
-        "        # body onto this class, the actual handler lives on TokenizerManager.\n"
-        "        # Late import avoids the TokenizerManager <-> WeightDiskUpdateController\n"
-        "        # import cycle. Move-time flips this to a direct method reference.\n"
-        "        from sglang.srt.managers.tokenizer_manager import TokenizerManager\n"
-        "        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (\n"
-        "            lambda x: TokenizerManager._handle_update_weights_from_disk_req_output(self, x)\n"
-        "        )\n",
-        "        # TypeBasedDispatcher has no public register(); poke private _mapping.\n"
-        "        self.dispatcher._mapping[UpdateWeightFromDiskReqOutput] = (\n"
-        "            self._handle_update_weights_from_disk_req_output\n"
-        "        )\n",
-    )
-
     wd.write_text(wd_text.rstrip() + "\n\n" + "\n".join(b.rstrip() + "\n" for b in bodies))
+
+    # Collapse the prep-stage lambda forwarder in TM's init_request_dispatcher
+    # entry to a direct method ref on the controller.
+    text = tm.read_text()
+    text = text.replace(
+        "                (\n"
+        "                    UpdateWeightFromDiskReqOutput,\n"
+        "                    lambda x: TokenizerManager.handle_update_weights_from_disk_req_output(\n"
+        "                        self.weight_disk_update_controller, x\n"
+        "                    ),\n"
+        "                ),\n",
+        "                (\n"
+        "                    UpdateWeightFromDiskReqOutput,\n"
+        "                    self.weight_disk_update_controller.handle_update_weights_from_disk_req_output,\n"
+        "                ),\n",
+    )
+    tm.write_text(text)
 
     # ---- Caller prefix replacement: TM facade + sibling mixin callers ----
     # TokenizerManager.<method>(self.weight_disk_update_controller, ... ) →
