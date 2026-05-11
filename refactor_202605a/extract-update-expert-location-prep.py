@@ -109,16 +109,17 @@ def transform(wt: Path) -> None:
             "            )\n"
         ),
     )
-    # ``ModelRunner`` is referenced via ``self._model_runner`` in this module
-    # but the class itself was not imported. Add the import for the qualified
-    # static call we just introduced.
-    if "from sglang.srt.model_executor.model_runner import ModelRunner\n" not in text:
-        text = text.replace(
-            "from sglang.srt.eplb.expert_location import ExpertLocationMetadata\n",
-            "from sglang.srt.eplb.expert_location import ExpertLocationMetadata\n"
-            "from sglang.srt.model_executor.model_runner import ModelRunner\n",
-            1,
-        )
+    # ``ModelRunner`` is in this module only under TYPE_CHECKING (to break a
+    # cycle). Rather than promote it to top-level (which would cause the
+    # cycle), use a function-local import on the line above the qualified
+    # call. The ``-move`` commit drops both.
+    text = text.replace(
+        "            ModelRunner.update_expert_location_with_recovery(\n",
+        "            from sglang.srt.model_executor.model_runner import ModelRunner\n"
+        "\n"
+        "            ModelRunner.update_expert_location_with_recovery(\n",
+        1,
+    )
     eplb.write_text(text)
 
 

@@ -62,16 +62,15 @@ def transform(wt: Path) -> None:
     append_to_file(elu, function_text)
 
     text = eplb.read_text()
+    # Collapse local-import + qualified call into the bare free-function call.
     text = replace_call_site(
         text,
-        old="ModelRunner.update_expert_location_with_recovery(",
-        new="update_expert_location_with_recovery(",
-    )
-    # Drop the temporary ModelRunner import the prep commit introduced.
-    text = replace_call_site(
-        text,
-        old="from sglang.srt.model_executor.model_runner import ModelRunner\n",
-        new="",
+        old=(
+            "            from sglang.srt.model_executor.model_runner import ModelRunner\n"
+            "\n"
+            "            ModelRunner.update_expert_location_with_recovery(\n"
+        ),
+        new="            update_expert_location_with_recovery(\n",
     )
     text = insert_after(
         text,
