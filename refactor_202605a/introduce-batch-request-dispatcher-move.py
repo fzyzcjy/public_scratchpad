@@ -101,12 +101,24 @@ def transform(wt: Path) -> None:
     # ---- 3. Paste into BatchRequestDispatcher class body. Inject EXTRA_IMPORTS
     # after the existing ``from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter``
     # block (last skeleton import).
+    # The long import path gets black-wrapped to a 3-line form. Inject
+    # EXTRA_IMPORTS right after that block.
     brd_text = brd.read_text()
-    brd_text = brd_text.replace(
-        "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n",
-        "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n\n"
-        + EXTRA_IMPORTS,
+    wrapped_anchor = (
+        "from sglang.srt.managers.tokenizer_manager_components.response_emitter import (\n"
+        "    ResponseEmitter,\n"
+        ")\n"
     )
+    if wrapped_anchor in brd_text:
+        brd_text = brd_text.replace(
+            wrapped_anchor, wrapped_anchor + "\n" + EXTRA_IMPORTS
+        )
+    else:
+        brd_text = brd_text.replace(
+            "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n",
+            "from sglang.srt.managers.tokenizer_manager_components.response_emitter import ResponseEmitter\n\n"
+            + EXTRA_IMPORTS,
+        )
     # Append method at the end of the BatchRequestDispatcher class body. Anchor
     # on the last skeleton field declaration.
     brd_text = brd_text.replace(

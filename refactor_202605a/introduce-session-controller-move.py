@@ -140,11 +140,16 @@ def transform(wt: Path) -> None:
     tm.write_text(text)
 
     # Drop the SessionController TYPE_CHECKING import added in prep — no longer
-    # referenced now that the method bodies have moved out of the mixin.
+    # referenced now that the method bodies have moved out of the mixin. Path
+    # is long enough that black wraps the import across 3 lines.
     mixin_text = control_mixin.read_text()
     mixin_text = replace_call_site(
         mixin_text,
-        old="    from sglang.srt.managers.tokenizer_manager_components.session_controller import SessionController\n",
+        old=(
+            "    from sglang.srt.managers.tokenizer_manager_components.session_controller import (\n"
+            "        SessionController,\n"
+            "    )\n"
+        ),
         new="",
     )
     control_mixin.write_text(mixin_text)
