@@ -107,6 +107,13 @@ class KVCacheConfigurator:
     # speculative decoding
     spec_algorithm: SpeculativeAlgorithm
     is_draft_worker: bool
+    # DFLASH-only: target's `cell_size` is scaled to include draft KV cache.
+    # ``pool_configurator.DefaultPoolConfigurator`` reads this off the
+    # configurator (was ``getattr(mr, "dflash_draft_num_layers", None)`` in
+    # the mixin era — silent ``None`` if missing). Must be plumbed through;
+    # otherwise the target KV pool oversizes by 1+ GB on 32GB GPUs and
+    # OOMs at cuda graph capture (see debug_journal 2026-05-11-kvc-...).
+    dflash_draft_num_layers: Optional[int]
     # arch flags
     is_hybrid_swa: bool
     is_hybrid_swa_compress: bool
@@ -148,6 +155,7 @@ _CTOR_INSERT = '''\
             kv_cache_dtype=self.kv_cache_dtype,
             spec_algorithm=self.spec_algorithm,
             is_draft_worker=self.is_draft_worker,
+            dflash_draft_num_layers=self.dflash_draft_num_layers,
             is_hybrid_swa=self.is_hybrid_swa,
             is_hybrid_swa_compress=self.is_hybrid_swa_compress,
             use_mla_backend=self.use_mla_backend,
