@@ -96,18 +96,15 @@ def transform(wt: Path) -> None:
         wt / "python/sglang/srt/multiplex/multiplexing_mixin.py",
     ]:
         text = f.read_text()
-        # Match ``self.recv_requests(\n<indent>    self.request_receiver,\n<indent>    last_forward_mode=<expr>,\n<indent>)``
-        # and collapse to ``self.request_receiver.recv_requests(\n<indent>    last_forward_mode=<expr>,\n<indent>)``.
+        # Match ``self.recv_requests(\n<indent>    self.request_receiver,\n<indent>)``
+        # and collapse to ``self.request_receiver.recv_requests()``.
         # We rely on the prep step having emitted these forms verbatim.
         for indent in ("            ", "                ", "                    "):
             text = text.replace(
                 f"{indent}recv_reqs = self.recv_requests(\n"
                 f"{indent}    self.request_receiver,\n"
-                f"{indent}    last_forward_mode=last_forward_mode,\n"
                 f"{indent})\n",
-                f"{indent}recv_reqs = self.request_receiver.recv_requests(\n"
-                f"{indent}    last_forward_mode=last_forward_mode,\n"
-                f"{indent})\n",
+                f"{indent}recv_reqs = self.request_receiver.recv_requests()\n",
             )
         f.write_text(text)
 

@@ -64,6 +64,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 RECEIVER_HEADER = '''from __future__ import annotations  # noqa: F401
 
+from dataclasses import dataclass
 from http import HTTPStatus  # noqa: F401
 from typing import Any, Callable, List, Optional, Union  # noqa: F401
 
@@ -81,50 +82,31 @@ from sglang.srt.managers.mm_utils import has_shm_features, unwrap_shm_features  
 from sglang.srt.utils import broadcast_pyobj, point_to_point_pyobj  # noqa: F401
 
 
+@dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerRequestReceiver:
     """Wire-level request receiver: pulls ``recv_req`` lists from zmq /
     pipeline upstream, applies recv_skipper / input_blocker guards, broadcasts
     across TP/DP/CP groups, runs MM-receiver pre-processing, and unwraps shm
     features. Owns no mutable state."""
 
-    def __init__(
-        self,
-        *,
-        recv_from_tokenizer,
-        recv_from_rpc,
-        recv_skipper,
-        input_blocker,
-        mm_receiver,
-        ps,
-        tp_group,
-        tp_cpu_group,
-        attn_tp_group,
-        attn_tp_cpu_group,
-        attn_cp_group,
-        attn_cp_cpu_group,
-        world_group,
-        server_args,
-        model_config,
-        max_recv_per_poll: int,
-        stream_output: Callable[..., None],
-    ) -> None:
-        self.recv_from_tokenizer = recv_from_tokenizer
-        self.recv_from_rpc = recv_from_rpc
-        self.recv_skipper = recv_skipper
-        self.input_blocker = input_blocker
-        self.mm_receiver = mm_receiver
-        self.ps = ps
-        self.tp_group = tp_group
-        self.tp_cpu_group = tp_cpu_group
-        self.attn_tp_group = attn_tp_group
-        self.attn_tp_cpu_group = attn_tp_cpu_group
-        self.attn_cp_group = attn_cp_group
-        self.attn_cp_cpu_group = attn_cp_cpu_group
-        self.world_group = world_group
-        self.server_args = server_args
-        self.model_config = model_config
-        self.max_recv_per_poll = max_recv_per_poll
-        self.stream_output = stream_output
+    recv_from_tokenizer: Any
+    recv_from_rpc: Any
+    recv_skipper: Any
+    input_blocker: Any
+    mm_receiver: Any
+    ps: Any
+    tp_group: Any
+    tp_cpu_group: Any
+    attn_tp_group: Any
+    attn_tp_cpu_group: Any
+    attn_cp_group: Any
+    attn_cp_cpu_group: Any
+    world_group: Any
+    server_args: Any
+    model_config: Any
+    max_recv_per_poll: int
+    stream_output: Callable[..., None]
+    get_last_forward_mode: Callable[[], Any]
 '''
 
 
@@ -146,6 +128,7 @@ INIT_INSERT = '''        self.request_receiver = SchedulerRequestReceiver(
             model_config=self.model_config,
             max_recv_per_poll=self.max_recv_per_poll,
             stream_output=self.stream_output,
+            get_last_forward_mode=lambda: self.last_batch.forward_mode if self.last_batch is not None else None,
         )
 
 '''
@@ -164,7 +147,7 @@ LAST_FORWARD_MODE_BLOCK = """\
 
 LAST_FORWARD_MODE_REPLACEMENT = """\
         if self.recv_skipper is not None:
-            if not self.recv_skipper.handle(last_forward_mode):
+            if not self.recv_skipper.handle(self.get_last_forward_mode()):
                 return []
 
 """
@@ -172,12 +155,8 @@ LAST_FORWARD_MODE_REPLACEMENT = """\
 
 def _make_caller_replacement_4space() -> str:
     return (
-        "            last_forward_mode = (\n"
-        "                self.last_batch.forward_mode if self.last_batch is not None else None\n"
-        "            )\n"
         "            recv_reqs = self.recv_requests(\n"
         "                self.request_receiver,\n"
-        "                last_forward_mode=last_forward_mode,\n"
         "            )\n"
     )
 
@@ -204,8 +183,6 @@ def transform(wt: Path) -> None:
         "    @staticmethod\n"
         "    def recv_requests(\n"
         "        self: \"SchedulerRequestReceiver\",\n"
-        "        *,\n"
-        "        last_forward_mode,\n"
         "    ) -> List[",
     )
     if LAST_FORWARD_MODE_BLOCK not in new_method:
@@ -267,22 +244,14 @@ def transform(wt: Path) -> None:
     text = pp_mixin.read_text()
     text = text.replace(
         "                    recv_reqs = self.recv_requests()\n",
-        "                    last_forward_mode = (\n"
-        "                        self.last_batch.forward_mode if self.last_batch is not None else None\n"
-        "                    )\n"
         "                    recv_reqs = self.recv_requests(\n"
         "                        self.request_receiver,\n"
-        "                        last_forward_mode=last_forward_mode,\n"
         "                    )\n",
     )
     text = text.replace(
         "                recv_reqs = self.recv_requests()\n",
-        "                last_forward_mode = (\n"
-        "                    self.last_batch.forward_mode if self.last_batch is not None else None\n"
-        "                )\n"
         "                recv_reqs = self.recv_requests(\n"
         "                    self.request_receiver,\n"
-        "                    last_forward_mode=last_forward_mode,\n"
         "                )\n",
     )
     pp_mixin.write_text(text)
@@ -297,22 +266,14 @@ def transform(wt: Path) -> None:
         ftext = f.read_text()
         ftext = ftext.replace(
             "\n            recv_reqs = self.recv_requests()\n",
-            "\n            last_forward_mode = (\n"
-            "                self.last_batch.forward_mode if self.last_batch is not None else None\n"
-            "            )\n"
-            "            recv_reqs = self.recv_requests(\n"
+            "\n            recv_reqs = self.recv_requests(\n"
             "                self.request_receiver,\n"
-            "                last_forward_mode=last_forward_mode,\n"
             "            )\n",
         )
         ftext = ftext.replace(
             "\n                recv_reqs = self.recv_requests()\n",
-            "\n                last_forward_mode = (\n"
-            "                    self.last_batch.forward_mode if self.last_batch is not None else None\n"
-            "                )\n"
-            "                recv_reqs = self.recv_requests(\n"
+            "\n                recv_reqs = self.recv_requests(\n"
             "                    self.request_receiver,\n"
-            "                    last_forward_mode=last_forward_mode,\n"
             "                )\n",
         )
         f.write_text(ftext)
