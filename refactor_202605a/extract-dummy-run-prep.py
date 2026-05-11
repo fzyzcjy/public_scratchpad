@@ -98,7 +98,7 @@ def transform(wt: Path) -> None:
             "                    model_config=self.model_config,\n"
             "                    req_to_token_pool=self.req_to_token_pool,\n"
             "                    token_to_kv_pool=self.token_to_kv_pool,\n"
-            "                    lora_manager=self.lora_manager,\n"
+            "                    lora_manager=getattr(self, \"lora_manager\", None),\n"
             "                    tp_group=self.tp_group,\n"
             "                    run_ctx=None,\n"
             "                ),\n"
