@@ -72,9 +72,9 @@ def transform(wt: Path) -> None:
 
     dg.write_text(_HEADER + function_text)
 
-    # ModelRunner: prefix-strip call sites + add import. The free function
-    # mutates ``model_runner.graph_runner`` / ``.graph_mem_usage`` in place
-    # (same semantics as the original method), so call sites stay assignment-free.
+    # ModelRunner: prefix-strip call sites + add import. Function is read-only
+    # (returns ``(graph_runner, graph_mem_usage)`` tuple); call sites already
+    # do tuple-unpack writeback from the prep stage.
     text = mr.read_text()
     text = replace_call_site(
         text,

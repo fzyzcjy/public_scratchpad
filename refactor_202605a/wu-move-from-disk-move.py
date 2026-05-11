@@ -90,24 +90,28 @@ def transform(wt: Path) -> None:
     mr.write_text(text)
 
     # 5) External callers: drop local import + collapse to instance form.
+    for path in (tw, ew):
+        text = path.read_text()
+        text = re.sub(
+            r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
+            "",
+            text,
+            flags=re.MULTILINE,
+        )
+        path.write_text(text)
+
     text = tw.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        success, message = ModelRunner\.update_weights_from_disk\(\n"
-        r"            self\.model_runner\.weight_updater,\n",
-        "        success, message = self.model_runner.weight_updater.update_weights_from_disk(\n",
+        r"ModelRunner\.update_weights_from_disk\(\s*self\.model_runner\.weight_updater,\s*",
+        "self.model_runner.weight_updater.update_weights_from_disk(",
         text,
     )
     tw.write_text(text)
 
     text = ew.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        success, message = ModelRunner\.update_weights_from_disk\(\n"
-        r"            self\._draft_worker\.draft_runner\.weight_updater,\n",
-        "        success, message = self._draft_worker.draft_runner.weight_updater.update_weights_from_disk(\n",
+        r"ModelRunner\.update_weights_from_disk\(\s*self\._draft_worker\.draft_runner\.weight_updater,\s*",
+        "self._draft_worker.draft_runner.weight_updater.update_weights_from_disk(",
         text,
     )
     ew.write_text(text)

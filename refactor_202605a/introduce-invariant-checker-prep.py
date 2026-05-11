@@ -443,8 +443,7 @@ def transform(wt: Path) -> None:
     # kwarg-only signature.
     watchdog_text = watchdog_text.replace(
         "scheduler._check_all_pools(\n"
-        "            scheduler.get_pool_stats(\n"
-        "                scheduler.pool_stats_observer,\n"
+        "            scheduler.pool_stats_observer.get_pool_stats(\n"
         "                last_batch=scheduler.last_batch,\n"
         "                running_batch=scheduler.running_batch,\n"
         "            )\n"
@@ -532,8 +531,7 @@ def transform(wt: Path) -> None:
     # the get_pool_stats() call inside the _check_all_pools call).
     text = text.replace(
         "            has_leak, messages = self._check_all_pools(\n"
-        "                self.get_pool_stats(\n"
-        "                    self.pool_stats_observer,\n"
+        "                self.pool_stats_observer.get_pool_stats(\n"
         "                    last_batch=self.last_batch,\n"
         "                    running_batch=self.running_batch,\n"
         "                )\n"

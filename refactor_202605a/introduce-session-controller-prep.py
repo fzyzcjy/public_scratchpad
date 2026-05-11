@@ -31,7 +31,7 @@ SKELETON = '''from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from sglang.utils import TypeBasedDispatcher
 
@@ -47,6 +47,7 @@ class SessionController:
 
     send_to_scheduler: Any
     dispatcher: TypeBasedDispatcher
+    auto_create_handle_loop: Callable[[], None]
     config: SessionControllerConfig
     session_futures: Dict[str, asyncio.Future] = field(default_factory=dict)
 '''
@@ -139,6 +140,7 @@ def transform(wt: Path) -> None:
             "        self.session_controller = SessionController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
             "            dispatcher=self._result_dispatcher,\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "            config=SessionControllerConfig(\n"
             "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
             "            ),\n"

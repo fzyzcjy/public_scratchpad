@@ -88,7 +88,15 @@ class NgramEmbeddingManager:
 
 # Replacement for the call site in ModelRunner.__init__:
 #     self.maybe_init_ngram_embedding()
-INLINE_INIT_CALL = '''        self.ngram_embedding_manager = NgramEmbeddingManager.maybe_init_ngram_embedding(
+# Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line factory call
+# lives in its own helper method.
+INLINE_INIT_CALL = "        self.init_ngram_embedding_manager()\n"
+
+# The helper method body — inserted before ``_build_model_config`` in
+# ModelRunner. Combines the factory call and the legacy double-track fields
+# (the latter are dropped by ``nem-drop-legacy-fields`` later in the chain).
+_INIT_HELPER = '''    def init_ngram_embedding_manager(self):
+        self.ngram_embedding_manager = NgramEmbeddingManager.maybe_init_ngram_embedding(
             model=self.model,
             model_config=self.model_config,
             req_to_token_pool=self.req_to_token_pool,
@@ -102,6 +110,7 @@ INLINE_INIT_CALL = '''        self.ngram_embedding_manager = NgramEmbeddingManag
         self.use_ngram_embedding = self.ngram_embedding_manager.use_ngram_embedding
         if self.ngram_embedding_manager.use_ngram_embedding:
             self.token_table = self.ngram_embedding_manager.token_table
+
 '''
 
 
@@ -215,6 +224,12 @@ def transform(wt: Path) -> None:
         text,
         old="        self.maybe_init_ngram_embedding()\n",
         new=INLINE_INIT_CALL,
+    )
+    # Insert the init helper method before ``_build_model_config``.
+    text = text.replace(
+        "    def _build_model_config(",
+        _INIT_HELPER + "    def _build_model_config(",
+        1,
     )
 
     text = replace_call_site(

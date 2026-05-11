@@ -74,11 +74,14 @@ def transform(wt: Path) -> None:
     # External caller: drop local import + collapse to instance form.
     text = tw.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        success, message = ModelRunner\.update_weights_from_distributed\(\n"
-        r"            self\.model_runner\.weight_updater,\n",
-        "        success, message = self.model_runner.weight_updater.update_weights_from_distributed(\n",
+        r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    text = re.sub(
+        r"ModelRunner\.update_weights_from_distributed\(\s*self\.model_runner\.weight_updater,\s*",
+        "self.model_runner.weight_updater.update_weights_from_distributed(",
         text,
     )
     tw.write_text(text)

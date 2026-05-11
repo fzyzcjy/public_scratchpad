@@ -106,6 +106,29 @@ METHODS = [
 TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
+import logging
+from typing import TYPE_CHECKING, List, Union
+
+import torch
+
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.environ import envs
+from sglang.srt.layers.logits_processor import LogitsProcessorOutput
+from sglang.srt.managers.io_struct import AbortReq
+from sglang.srt.managers.schedule_batch import Req, ScheduleBatch
+from sglang.srt.mem_cache.common import maybe_cache_unfinished_req, release_kv_cache
+from sglang.srt.server_args import get_global_server_args
+from sglang.srt.state_capturer.indexer_topk import get_global_indexer_capturer
+from sglang.srt.state_capturer.routed_experts import get_global_experts_capturer
+
+if TYPE_CHECKING:
+    from sglang.srt.managers.scheduler import (
+        EmbeddingBatchResult,
+        GenerationBatchResult,
+    )
+
+logger = logging.getLogger(__name__)
+
 
 class SchedulerBatchResultProcessor:
     """``Scheduler.process_batch_result`` hot-path main body. Composition
@@ -376,11 +399,10 @@ def transform(wt: Path) -> None:
                 f"self.process_batch_result_{suffix}(",
                 f"self.process_batch_result_{suffix}(self.batch_result_processor, ",
             )
-        # ``process_batch_result`` (top-level dispatch, no _suffix).
-        ftext = ftext.replace(
-            "self.process_batch_result(",
-            "self.process_batch_result(self.batch_result_processor, ",
-        )
+        # ``process_batch_result`` (top-level dispatch, no _suffix) STAYS in
+        # Scheduler as a regular (self, batch, result) method — it routes to
+        # ``self.batch_result_processor.process_batch_result_<suffix>``
+        # internally. Do NOT rewrite its callers.
         f.write_text(ftext)
 
 

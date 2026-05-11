@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    mp = wt / "python/sglang/srt/managers/multimodal_processor.py"
+    mp = wt / "python/sglang/srt/managers/multimodal_processor_owner.py"
 
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_handle_epd_disaggregation_encode_request")
     handle_text = cut_lines(tm, s, e)

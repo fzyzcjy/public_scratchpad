@@ -104,7 +104,10 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Replace the 3 init-time field assignments with a single transport ctor.
+    # Replace the 3 init-time field assignments with a call to a fresh
+    # ``init_remote_instance_weight_transport`` helper (per MECH_COMMIT_SPLIT
+    # "长 ctor → init_X" rule — the ctor is a multi-line kwarg call, so it
+    # lives in its own method instead of inlined in ``__init__``).
     text = replace_call_site(
         text,
         old=(
@@ -112,14 +115,23 @@ def transform(wt: Path) -> None:
             '        self.remote_instance_transfer_engine_session_id = ""\n'
             "        self.remote_instance_transfer_engine_weight_info = None\n"
         ),
-        new=(
-            "        self.remote_instance_weight_transport = RemoteInstanceWeightTransport(\n"
-            "            server_args=server_args,\n"
-            "            model=None,\n"
-            "            tp_rank=self.tp_rank,\n"
-            "            gpu_id=self.gpu_id,\n"
-            "        )\n"
-        ),
+        new="        self.init_remote_instance_weight_transport()\n",
+    )
+    # Insert the new init helper method just before ``_build_model_config``.
+    helper_method = (
+        "    def init_remote_instance_weight_transport(self):\n"
+        "        self.remote_instance_weight_transport = RemoteInstanceWeightTransport(\n"
+        "            server_args=self.server_args,\n"
+        "            model=None,\n"
+        "            tp_rank=self.tp_rank,\n"
+        "            gpu_id=self.gpu_id,\n"
+        "        )\n"
+        "\n"
+    )
+    text = text.replace(
+        "    def _build_model_config(",
+        helper_method + "    def _build_model_config(",
+        1,
     )
 
     # After load_model populates self.model, propagate the ref onto the transport

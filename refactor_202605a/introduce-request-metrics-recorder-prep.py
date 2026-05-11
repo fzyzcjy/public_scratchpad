@@ -30,6 +30,7 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.observability.metrics_collector import TokenizerMetricsCollector
 from sglang.srt.server_args import ServerArgs
 
@@ -41,6 +42,7 @@ class RequestMetricsRecorder:
     server_args: ServerArgs
     enable_metrics: bool
     enable_priority_scheduling: bool
+    disaggregation_mode: DisaggregationMode
     metrics_collector: Optional[TokenizerMetricsCollector] = None
 '''
 
@@ -68,6 +70,7 @@ def transform(wt: Path) -> None:
             "            server_args=self.server_args,\n"
             "            enable_metrics=self.enable_metrics,\n"
             "            enable_priority_scheduling=self.enable_priority_scheduling,\n"
+            "            disaggregation_mode=self.disaggregation_mode,\n"
             "        )\n"
             "\n"
             "        # Request log manager\n"

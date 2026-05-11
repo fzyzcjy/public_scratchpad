@@ -43,13 +43,29 @@ def transform(wt: Path) -> None:
         "    def create_piecewise_cuda_graphs(model_runner: \"ModelRunner\"):\n",
         1,
     )
+    # Body: convert the runner write to a local + return-form. The
+    # ``attention_layers`` / ``moe_layers`` / ``moe_fusions`` writes stay as
+    # side-effects (downstream runner ctors read them off ``model_runner``,
+    # per the original method's documented side-effect contract).
+    method = method.replace("self.piecewise_cuda_graph_runner = ", "piecewise_cuda_graph_runner = ")
     method = method.replace("self.", "model_runner.")
+    # Bare ``self`` (no dot) — passed as ctor arg to graph runner classes.
+    method = method.replace("(self)", "(model_runner)")
+    # Early bails (bare ``return``) → ``return None``.
+    method = method.replace("            return\n", "            return None\n")
+    method = method.replace("        return\n", "        return None\n")
+    # Final fall-through gets an explicit return.
+    method = method.rstrip("\n") + "\n        return piecewise_cuda_graph_runner\n\n"
     text = "".join(lines[:start]) + method + "".join(lines[end:])
 
+    # Caller becomes a writeback ``self.piecewise_cuda_graph_runner = ...``.
     text = replace_call_site(
         text,
         old="self.init_piecewise_cuda_graphs()",
-        new="ModelRunner.create_piecewise_cuda_graphs(self)",
+        new=(
+            "self.piecewise_cuda_graph_runner = "
+            "ModelRunner.create_piecewise_cuda_graphs(self)"
+        ),
     )
     mr.write_text(text)
 

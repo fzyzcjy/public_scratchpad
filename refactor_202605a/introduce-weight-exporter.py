@@ -116,6 +116,8 @@ def transform(wt: Path) -> None:
         anchor="from sglang.srt.model_executor.weight_updater import WeightUpdater\n",
         addition="from sglang.srt.model_executor.weight_exporter import WeightExporter\n",
     )
+    # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
+    # lives in its own helper method.
     text = replace_call_site(
         text,
         old=(
@@ -124,13 +126,23 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n"
-            "        self.weight_exporter = WeightExporter(\n"
-            "            tp_rank=self.tp_rank,\n"
-            "            tp_size=self.tp_size,\n"
-            "            gpu_id=self.gpu_id,\n"
-            "            model_runner_ref=self,\n"
-            "        )\n"
+            "        self.init_weight_exporter()\n"
         ),
+    )
+    helper_method = (
+        "    def init_weight_exporter(self):\n"
+        "        self.weight_exporter = WeightExporter(\n"
+        "            tp_rank=self.tp_rank,\n"
+        "            tp_size=self.tp_size,\n"
+        "            gpu_id=self.gpu_id,\n"
+        "            model_runner_ref=self,\n"
+        "        )\n"
+        "\n"
+    )
+    text = text.replace(
+        "    def _build_model_config(",
+        helper_method + "    def _build_model_config(",
+        1,
     )
     mr.write_text(text)
 

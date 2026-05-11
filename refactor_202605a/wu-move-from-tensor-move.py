@@ -111,14 +111,17 @@ def transform(wt: Path) -> None:
         separator="\n\n",
     )
 
-    # tp_worker.py: collapse + drop local import.
+    # tp_worker.py: collapse + drop local import (lenient regex for pre-commit reformat).
     text = tw.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        success, message = ModelRunner\.update_weights_from_tensor\(\n"
-        r"            self\.model_runner\.weight_updater,\n",
-        "        success, message = self.model_runner.weight_updater.update_weights_from_tensor(\n",
+        r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    text = re.sub(
+        r"ModelRunner\.update_weights_from_tensor\(\s*self\.model_runner\.weight_updater,\s*",
+        "self.model_runner.weight_updater.update_weights_from_tensor(",
         text,
     )
     tw.write_text(text)

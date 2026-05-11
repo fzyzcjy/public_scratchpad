@@ -387,6 +387,8 @@ def transform(wt: Path) -> None:
         old="    SchedulerDPAttnMixin,\n",
         new="",
     )
+    sched.write_text(text)  # persist import + inheritance drop before regex pass
+
     # Caller rewrites in scheduler.py / pp_mixin / prefill / decode: use
     # the robust regex-based helper (handles black single-line and multi-line
     # formatting alike).
@@ -400,7 +402,6 @@ def transform(wt: Path) -> None:
             except ValueError:
                 pass  # not all methods called in every file
         f.write_text(ftext)
-    text = sched.read_text()
 
     # Test fixture: previously mocked ``s.maybe_prepare_mlp_sync_batch`` directly;
     # now the callsite is ``s.dp_attn_adapter.maybe_prepare_mlp_sync_batch``.

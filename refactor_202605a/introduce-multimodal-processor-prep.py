@@ -79,7 +79,7 @@ class MultimodalProcessor:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/multimodal_processor.py"
+    new = wt / "python/sglang/srt/managers/multimodal_processor_owner.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -99,7 +99,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.multimodal_processor import MultimodalProcessor\n",
+        addition="from sglang.srt.managers.multimodal_processor_owner import MultimodalProcessor\n",
     )
     text = replace_call_site(
         text,

@@ -255,6 +255,19 @@ def transform(wt: Path) -> None:
         old="        self.is_initializing = False\n",
         new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
     )
+    # Default ``self.send_metrics_from_scheduler = None`` at top of init_ipc_channels.
+    # The original conditionally creates the socket only when
+    # ``current_scheduler_metrics_enabled`` is True; the publisher now reads the
+    # field unconditionally in its ctor, so the attribute must always exist.
+    text = text.replace(
+        "    def init_ipc_channels(self, port_args: PortArgs):\n"
+        "        context = zmq.Context(2)\n"
+        "        self.idle_sleeper = None\n",
+        "    def init_ipc_channels(self, port_args: PortArgs):\n"
+        "        context = zmq.Context(2)\n"
+        "        self.idle_sleeper = None\n"
+        "        self.send_metrics_from_scheduler = None\n",
+    )
     # on_idle (in scheduler.py since C8) callsite.
     text = text.replace(
         "        self.publish_kv_events()\n",

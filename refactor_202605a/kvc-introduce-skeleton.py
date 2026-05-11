@@ -202,6 +202,8 @@ def transform(wt: Path) -> None:
             ),
         )
 
+    # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
+    # lives in its own ``init_kv_cache_configurator`` helper method.
     text = replace_call_site(
         text,
         old=(
@@ -210,9 +212,19 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        # Init memory pool and attention backends\n"
-            f"{_CTOR_INSERT}"
+            "        self.init_kv_cache_configurator()\n"
             "        self.init_memory_pool(pre_model_load_memory)\n"
         ),
+    )
+    helper_method = (
+        "    def init_kv_cache_configurator(self):\n"
+        f"{_CTOR_INSERT}"
+        "\n"
+    )
+    text = text.replace(
+        "    def _build_model_config(",
+        helper_method + "    def _build_model_config(",
+        1,
     )
 
     mr.write_text(text)

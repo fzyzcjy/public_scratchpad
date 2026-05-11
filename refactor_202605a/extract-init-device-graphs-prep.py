@@ -34,7 +34,7 @@ def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
     wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
 
-    # Reshape: rename + @staticmethod + signature + body subs.
+    # Reshape: rename + @staticmethod + signature + body to read-only form.
     text = mr.read_text()
     start, end = find_method_lines(text, class_name="ModelRunner", method_name="init_device_graphs")
     lines = text.splitlines(keepends=True)
@@ -45,15 +45,30 @@ def transform(wt: Path) -> None:
         "    def create_device_graphs(model_runner: \"ModelRunner\") -> tuple[object, float]:\n",
         1,
     )
+    # Body subs: convert ``self.graph_runner = ...`` / ``self.graph_mem_usage = ...``
+    # writes to local variables; ``self.X`` reads → ``model_runner.X``. Early
+    # bails ``return`` (no value) → ``return None, 0`` (tuple form so caller
+    # tuple-unpack always works). Final implicit fall-through stays an
+    # explicit ``return graph_runner, graph_mem_usage``.
+    method = method.replace("self.graph_runner = ", "graph_runner = ")
+    method = method.replace("self.graph_mem_usage = ", "graph_mem_usage = ")
+    method = method.replace("self.graph_mem_usage:", "graph_mem_usage:")
     method = method.replace("self.", "model_runner.")
+    # Bare ``self`` (no dot) — passed as ctor arg.
+    method = method.replace("(self)", "(model_runner)")
+    method = method.replace("            return\n", "            return None, 0\n")
+    # Append explicit final return before the closing line.
+    # The last line of the method body is the trailing log statement; add
+    # a return after it.
+    method = method.rstrip("\n") + "\n        return graph_runner, graph_mem_usage\n\n"
     text = "".join(lines[:start]) + method + "".join(lines[end:])
 
     # Three ``self.init_device_graphs()`` call sites in initialize() — all share
-    # the same substring; single replace covers all.
+    # the same substring; single replace covers all. Caller now tuple-unpacks.
     text = replace_call_site(
         text,
         old="self.init_device_graphs()",
-        new="ModelRunner.create_device_graphs(self)",
+        new="self.graph_runner, self.graph_mem_usage = ModelRunner.create_device_graphs(self)",
     )
     mr.write_text(text)
 
@@ -62,7 +77,10 @@ def transform(wt: Path) -> None:
     wu_text = replace_call_site(
         wu_text,
         old="self._mr.init_device_graphs()",
-        new="ModelRunner.create_device_graphs(self._mr)",
+        new=(
+            "(self._mr.graph_runner, self._mr.graph_mem_usage) = "
+            "ModelRunner.create_device_graphs(self._mr)"
+        ),
     )
     # ``ModelRunner`` not imported in weight_updater.py — add a temp import for
     # the qualified call. ``-move`` drops this and switches to the free fn.

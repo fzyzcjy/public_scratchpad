@@ -108,6 +108,14 @@ def transform(wt: Path) -> None:
     )
     wd.write_text(wd_text.rstrip() + "\n" + methods_text)
 
+    # Rewire stale _update_weight_version_if_provided refs in tokenizer_control_mixin.
+    text = control_mixin.read_text()
+    text = text.replace(
+        "self._update_weight_version_if_provided(",
+        "self.weight_disk_update_controller._update_weight_version_if_provided(",
+    )
+    control_mixin.write_text(text)
+
     # External entrypoints.
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"

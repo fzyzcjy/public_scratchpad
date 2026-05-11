@@ -68,44 +68,42 @@ def transform(wt: Path) -> None:
 
     append_to_file(we, "\n\n".join(m.rstrip() for m in cut_methods) + "\n", separator="\n")
 
-    # tp_worker.py: collapse to instance call, drop local import.
+    # Collapse qualified calls back to instance form. Pre-commit may have
+    # joined or wrapped lines differently; use lenient regex (\s* between tokens).
     text = tw.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        parameter = ModelRunner\.get_weights_by_name\(\n"
-        r"            self\.model_runner\.weight_exporter,\n",
-        "        parameter = self.model_runner.weight_exporter.get_weights_by_name(\n",
+        r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    text = re.sub(
+        r"ModelRunner\.get_weights_by_name\(\s*self\.model_runner\.weight_exporter,\s*",
+        "self.model_runner.weight_exporter.get_weights_by_name(",
         text,
     )
     tw.write_text(text)
 
-    # scheduler_update_weights_mixin.py: collapse 3 qualified callers.
     text = sm.read_text()
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        ModelRunner\.save_remote_model\(\n"
-        r"            self\.tp_worker\.model_runner\.weight_exporter, url\n"
-        r"        \)",
-        "        self.tp_worker.model_runner.weight_exporter.save_remote_model(url)",
+        r"^[ \t]*from sglang\.srt\.model_executor\.model_runner import ModelRunner\n\n",
+        "",
+        text,
+        flags=re.MULTILINE,
+    )
+    text = re.sub(
+        r"ModelRunner\.save_remote_model\(\s*self\.tp_worker\.model_runner\.weight_exporter,\s*url\s*\)",
+        "self.tp_worker.model_runner.weight_exporter.save_remote_model(url)",
         text,
     )
     text = re.sub(
-        r"            from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"            ModelRunner\.save_remote_model\(\n"
-        r"                self\.draft_worker\.model_runner\.weight_exporter, draft_url\n"
-        r"            \)",
-        "            self.draft_worker.model_runner.weight_exporter.save_remote_model(draft_url)",
+        r"ModelRunner\.save_remote_model\(\s*self\.draft_worker\.model_runner\.weight_exporter,\s*draft_url\s*\)",
+        "self.draft_worker.model_runner.weight_exporter.save_remote_model(draft_url)",
         text,
     )
     text = re.sub(
-        r"        from sglang\.srt\.model_executor\.model_runner import ModelRunner\n"
-        r"\n"
-        r"        ModelRunner\.save_sharded_model\(\n"
-        r"            self\.tp_worker\.model_runner\.weight_exporter,\n",
-        "        self.tp_worker.model_runner.weight_exporter.save_sharded_model(\n",
+        r"ModelRunner\.save_sharded_model\(\s*self\.tp_worker\.model_runner\.weight_exporter,\s*",
+        "self.tp_worker.model_runner.weight_exporter.save_sharded_model(",
         text,
     )
     sm.write_text(text)
