@@ -54,20 +54,20 @@ def transform(wt: Path) -> None:
         old="ModelRunner._pre_initialize_flashinfer_allreduce_workspace(",
         new="_pre_initialize_flashinfer_allreduce_workspace(",
     )
+    # The two ``_flashinfer_autotune*`` helpers were imported earlier in the
+    # chain but their only in-class caller (``_flashinfer_autotune``) moved to
+    # kernel_warmup.py too, so ruff stripped them as F401. The current import
+    # carries just ``kernel_warmup``; extend it with the new helper.
     text = replace_call_site(
         text,
         old=(
             "from sglang.srt.model_executor.kernel_warmup import (\n"
-            "    _flashinfer_autotune_cache_path,\n"
-            "    _should_run_flashinfer_autotune,\n"
             "    kernel_warmup,\n"
             ")\n"
         ),
         new=(
             "from sglang.srt.model_executor.kernel_warmup import (\n"
-            "    _flashinfer_autotune_cache_path,\n"
             "    _pre_initialize_flashinfer_allreduce_workspace,\n"
-            "    _should_run_flashinfer_autotune,\n"
             "    kernel_warmup,\n"
             ")\n"
         ),

@@ -104,11 +104,21 @@ SIBLING_CALL_REWRITES = [
 def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     """Drop @staticmethod, the ``self: TargetClass`` annotation, and the
     ``SchedulerRuntimeCheckerMixin.<sibling>(self, ...)`` qualified form on
-    internal sibling calls."""
+    internal sibling calls.
+
+    Sibling-call stripping is regex-based (tolerates single-line and
+    multi-line black formatting alike).
+    """
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace(f'self: "{target_class}"', "self")
-    for old, new in SIBLING_CALL_REWRITES:
-        text = text.replace(old, new)
+    # Regex: SchedulerRuntimeCheckerMixin.<method>(<ws>self<ws>(optional comma+ws))
+    # → self.<method>(
+    text = re.sub(
+        r"SchedulerRuntimeCheckerMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 
