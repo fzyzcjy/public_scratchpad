@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Move EPD dispatch methods to MultimodalProcessor."""
+"""Move (pure cut/paste): MultimodalProcessor methods relocate from TM to target class."""
 
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]
 # ///
 
-import re
 import sys
 from pathlib import Path
 
@@ -16,14 +15,21 @@ from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-multimodal-processor-move"
-SUBJECT = "Move EPD dispatch methods to MultimodalProcessor"
+SUBJECT = "Move MultimodalProcessor methods: pure cut/paste + privacy flip + caller prefix replacement"
 BODY = """\
-Cut _should_dispatch_to_encoder + _handle_epd_disaggregation_encode_request
-from TM into MultimodalProcessor. Privacy flip per design:
-  _should_dispatch_to_encoder            -> should_dispatch_to_encoder
+Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
+_should_dispatch_to_encoder + _handle_epd_disaggregation_encode_request
+from TokenizerManager; paste into MultimodalProcessor (drop @staticmethod,
+replace ``self: "MultimodalProcessor"`` → plain ``self``). Privacy flip
+per design:
+  _should_dispatch_to_encoder              -> should_dispatch_to_encoder
   _handle_epd_disaggregation_encode_request -> maybe_dispatch_to_encoder
 
-Body rewrites self.server_args.X -> self.config.X. Callers updated.
+Caller prefix replacement:
+  TokenizerManager._handle_epd_disaggregation_encode_request(self.multimodal_processor, obj)
+    -> self.multimodal_processor.maybe_dispatch_to_encoder(obj)
+  TokenizerManager._should_dispatch_to_encoder(self, obj) (intra-class call)
+    -> self.should_dispatch_to_encoder(obj)
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -43,37 +49,44 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     mp = wt / "python/sglang/srt/managers/multimodal_processor_owner.py"
 
-    s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_handle_epd_disaggregation_encode_request")
+    # Cut bottom-up.
+    s, e = find_method_lines(
+        tm.read_text(),
+        class_name="TokenizerManager",
+        method_name="_handle_epd_disaggregation_encode_request",
+    )
     handle_text = cut_lines(tm, s, e)
-    s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_should_dispatch_to_encoder")
+    s, e = find_method_lines(
+        tm.read_text(),
+        class_name="TokenizerManager",
+        method_name="_should_dispatch_to_encoder",
+    )
     should_text = cut_lines(tm, s, e)
 
-    def rewrite(body: str) -> str:
-        body = body.replace(
-            "self.server_args.enable_adaptive_dispatch_to_encoder",
-            "self.config.enable_adaptive_dispatch_to_encoder",
-        )
-        body = body.replace(
-            "self.server_args.encoder_transfer_backend",
-            "self.config.encoder_transfer_backend",
-        )
-        body = body.replace(
-            "envs.SGLANG_ENCODER_DISPATCH_MIN_ITEMS.get()",
-            "self.config.encoder_dispatch_min_items",
-        )
-        body = body.replace(
-            "self._should_dispatch_to_encoder",
-            "self.should_dispatch_to_encoder",
-        )
+    # Strip @staticmethod + restore plain self. Privacy flip renames.
+    def strip_staticmethod_and_self_type(body: str) -> str:
+        body = body.replace("    @staticmethod\n", "", 1)
+        body = body.replace('self: "MultimodalProcessor",', "self,")
         return body
 
-    should_text = rewrite(should_text).replace(
+    should_text = strip_staticmethod_and_self_type(should_text)
+    should_text = should_text.replace(
         "def _should_dispatch_to_encoder(",
         "def should_dispatch_to_encoder(",
+        1,
     )
-    handle_text = rewrite(handle_text).replace(
+
+    handle_text = strip_staticmethod_and_self_type(handle_text)
+    handle_text = handle_text.replace(
         "def _handle_epd_disaggregation_encode_request(",
         "def maybe_dispatch_to_encoder(",
+        1,
+    )
+    # Intra-class call: TokenizerManager._should_dispatch_to_encoder(self, obj)
+    #                 → self.should_dispatch_to_encoder(obj)
+    handle_text = handle_text.replace(
+        "TokenizerManager._should_dispatch_to_encoder(self, obj)",
+        "self.should_dispatch_to_encoder(obj)",
     )
 
     mp_text = mp.read_text()
@@ -81,18 +94,25 @@ def transform(wt: Path) -> None:
         "from dataclasses import dataclass\n",
         "from dataclasses import dataclass\n\n" + EXTRA_IMPORTS,
     )
-    mp.write_text(mp_text.rstrip() + "\n" + should_text.rstrip() + "\n\n" + handle_text.rstrip() + "\n")
+    mp.write_text(
+        mp_text.rstrip()
+        + "\n"
+        + should_text.rstrip()
+        + "\n\n"
+        + handle_text.rstrip()
+        + "\n"
+    )
 
+    # Caller prefix replacement on TM side.
     text = tm.read_text()
     text = replace_call_site(
         text,
-        old="            self._handle_epd_disaggregation_encode_request(obj)",
-        new="            self.multimodal_processor.maybe_dispatch_to_encoder(obj)",
-    )
-    text = re.sub(
-        r"\bself\.mm_receiver\b",
-        "self.multimodal_processor.mm_receiver",
-        text,
+        old=(
+            "            TokenizerManager._handle_epd_disaggregation_encode_request(\n"
+            "                self.multimodal_processor, obj\n"
+            "            )\n"
+        ),
+        new="            self.multimodal_processor.maybe_dispatch_to_encoder(obj)\n",
     )
     tm.write_text(text)
 

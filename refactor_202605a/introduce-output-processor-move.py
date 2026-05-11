@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move _handle_batch_output (~247 LOC) to OutputProcessor."""
+"""Move (pure cut/paste): _handle_batch_output relocates from TM to OutputProcessor."""
 
 # /// script
 # requires-python = ">=3.10"
@@ -15,11 +15,15 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-output-processor-move"
-SUBJECT = "Move _handle_batch_output to OutputProcessor (renamed handle_batch_output)"
+SUBJECT = "Move _handle_batch_output to OutputProcessor: pure cut/paste + caller prefix replacement"
 BODY = """\
-Cut _handle_batch_output from TM. Body rewrites self.server_args.X -> self.config.X
-etc. Privacy flip: _handle_batch_output -> handle_batch_output. Caller in
-handle_loop updated.
+Pure physical move per MECH_COMMIT_SPLIT. Cut @staticmethod
+_handle_batch_output from TokenizerManager; paste into OutputProcessor
+(drop @staticmethod, replace ``self: "OutputProcessor"`` -> plain
+``self``). Privacy flip rename: _handle_batch_output -> handle_batch_output
+(method is now public API of new class). Caller prefix replacement:
+``TokenizerManager._handle_batch_output(self.output_processor, ...)`` ->
+``self.output_processor.handle_batch_output(...)``.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -51,36 +55,28 @@ def transform(wt: Path) -> None:
     op = wt / "python/sglang/srt/managers/output_processor.py"
 
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_handle_batch_output")
-    body = cut_lines(tm, s, e)
+    handle_text = cut_lines(tm, s, e)
 
-    body = body.replace("async def _handle_batch_output(", "async def handle_batch_output(")
-    body = body.replace("self.server_args.weight_version", "self.config.weight_version")
-    body = body.replace("self.server_args.incremental_streaming_output", "self.config.incremental_streaming_output")
-    body = body.replace("self.server_args.skip_tokenizer_init", "self.config.skip_tokenizer_init")
-    body = body.replace("self.server_args.speculative_algorithm", "self.config.speculative_algorithm")
-    body = body.replace("self.server_args.speculative_num_draft_tokens", "self.config.speculative_num_draft_tokens")
-    body = body.replace("self.server_args.dp_size", "self.config.dp_size")
-    body = body.replace("self.server_args.batch_notify_size", "self.config.batch_notify_size")
-    body = body.replace("self.server_args.enable_lora", "self.config.enable_lora")
-    body = body.replace("self.enable_metrics", "self.config.enable_metrics")
-    body = body.replace(
-        "served_model_name=self.served_model_name,",
-        "served_model_name=self.config.served_model_name,",
-    )
-    body = body.replace("self.raw_tokenizer_wrapper.tokenizer", "self.tokenizer")
-    body = body.replace("self.crash_dump_folder", "self.request_log_manager.crash_dump_folder")
+    # Strip @staticmethod + restore plain self. Privacy flip rename: _handle_batch_output -> handle_batch_output.
+    handle_text = handle_text.replace("    @staticmethod\n", "", 1)
+    handle_text = handle_text.replace('self: "OutputProcessor",', "self,")
+    handle_text = handle_text.replace("async def _handle_batch_output(", "async def handle_batch_output(", 1)
 
     op_text = op.read_text()
     op_text = op_text.replace(
         "from dataclasses import dataclass\n",
         "from dataclasses import dataclass\n\n" + EXTRA_IMPORTS,
     )
-    op.write_text(op_text.rstrip() + "\n\n" + body.rstrip() + "\n")
+    op.write_text(op_text.rstrip() + "\n" + handle_text.rstrip() + "\n")
 
-    # Caller update.
+    # Caller prefix replacement:
+    #   TokenizerManager._handle_batch_output(self.output_processor, recv_obj)
+    # -> self.output_processor.handle_batch_output(recv_obj)
     text = tm.read_text()
     text = text.replace(
-        "                await self._handle_batch_output(recv_obj)\n",
+        "                await TokenizerManager._handle_batch_output(\n"
+        "                    self.output_processor, recv_obj\n"
+        "                )\n",
         "                await self.output_processor.handle_batch_output(recv_obj)\n",
     )
     tm.write_text(text)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move TokenizerManagerScoreMixin body to ScoreRequestHandler; drop mixin from TM bases."""
+"""Move (pure cut/paste): TokenizerManagerScoreMixin body relocates to ScoreRequestHandler."""
 
 # /// script
 # requires-python = ">=3.10"
@@ -15,15 +15,19 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "introduce-score-request-handler-move"
-SUBJECT = "Move score mixin body to ScoreRequestHandler"
+SUBJECT = "Move score mixin body to ScoreRequestHandler: pure cut/paste + caller prefix replacement"
 BODY = """\
-Cut TokenizerManagerScoreMixin class body and paste into ScoreRequestHandler
-(11 methods). Body rewrites: self.is_generation -> self.config.is_generation,
-self.server_args.enable_mis -> self.config.enable_mis, self.model_config ->
-self.config.model_config.
+Pure physical move per MECH_COMMIT_SPLIT. Cut TokenizerManagerScoreMixin
+class body (11 @staticmethod methods, already retyped to
+self: "ScoreRequestHandler" in prep); paste into ScoreRequestHandler,
+dropping @staticmethod decorators and restoring plain self. Drop the
+mixin base from TokenizerManager bases and delete the mixin file.
 
-Drop the mixin from TM bases + delete the mixin file. Entrypoint callers
-rewired through self.tokenizer_manager.score_request_handler.
+Caller prefix replacement:
+``TokenizerManagerScoreMixin.<method>(self.tokenizer_manager.score_request_handler, ...)``
+→ ``self.tokenizer_manager.score_request_handler.<method>(...)``.
+Drop the now-unused TokenizerManagerScoreMixin import from the three
+entrypoint caller files.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -48,17 +52,25 @@ def transform(wt: Path) -> None:
     old_mixin = wt / "python/sglang/srt/managers/tokenizer_manager_score_mixin.py"
     srh = wt / "python/sglang/srt/managers/score_request_handler.py"
 
-    # Extract mixin class body.
+    # ---- 1. Extract the (already-prepped) mixin class body. Bytes inside
+    # the class body are identical to what we want in the new class, except
+    # for the @staticmethod decorator on each method and the
+    # ``self: "ScoreRequestHandler"`` annotation — both stripped below.
     old_text = old_mixin.read_text()
     class_marker = "class TokenizerManagerScoreMixin:\n"
     assert class_marker in old_text, "TokenizerManagerScoreMixin not found"
     body_start = old_text.index(class_marker) + len(class_marker)
     class_body = old_text[body_start:].rstrip() + "\n"
 
-    class_body = class_body.replace("self.is_generation", "self.config.is_generation")
-    class_body = class_body.replace("self.server_args.enable_mis", "self.config.enable_mis")
-    class_body = class_body.replace("self.model_config", "self.config.model_config")
+    # Drop @staticmethod decorators (one per method, 11 total).
+    class_body = class_body.replace("    @staticmethod\n", "")
+    # Restore plain ``self`` (drop the type annotation) — both multi-line and
+    # single-line forms.
+    class_body = class_body.replace('self: "ScoreRequestHandler",', "self,")
+    class_body = class_body.replace('self: "ScoreRequestHandler"', "self")
 
+    # ---- 2. Append into the handler module + add the extra imports the
+    # moved body needs.
     srh_text = srh.read_text()
     srh_text = srh_text.replace(
         "from dataclasses import dataclass\n",
@@ -66,9 +78,10 @@ def transform(wt: Path) -> None:
     )
     srh.write_text(srh_text.rstrip() + "\n" + class_body)
 
+    # ---- 3. Delete the now-empty mixin file.
     old_mixin.unlink()
 
-    # Drop mixin import + base class from TM.
+    # ---- 4. TM: drop mixin import + drop mixin from bases.
     text = tm.read_text()
     text = replace_call_site(
         text,
@@ -86,38 +99,36 @@ def transform(wt: Path) -> None:
     )
     tm.write_text(text)
 
-    # Entrypoint callers.
+    # ---- 5. Caller prefix replacement across the three entrypoint files.
+    # Every prep-stage ``TokenizerManagerScoreMixin.<method>(self.tokenizer_manager.score_request_handler, ...)``
+    # collapses to ``self.tokenizer_manager.score_request_handler.<method>(...)``.
+    # Drop the prep-injected mixin import too.
     engine = wt / "python/sglang/srt/entrypoints/engine_score_mixin.py"
     serving_score = wt / "python/sglang/srt/entrypoints/openai/serving_score.py"
     serving_rerank = wt / "python/sglang/srt/entrypoints/openai/serving_rerank.py"
 
-    text = engine.read_text()
-    text = replace_call_site(
-        text,
-        old="from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
-        new="from sglang.srt.managers.score_request_handler import ScoreResult",
+    mixin_import = (
+        "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+        "    TokenizerManagerScoreMixin,\n"
+        ")\n"
     )
-    text = text.replace(
-        "self.tokenizer_manager.score_request(",
-        "self.tokenizer_manager.score_request_handler.score_request(",
-    )
-    engine.write_text(text)
 
-    text = serving_score.read_text()
-    text = replace_call_site(
-        text,
-        old="self.tokenizer_manager.score_request(",
-        new="self.tokenizer_manager.score_request_handler.score_request(",
-    )
-    serving_score.write_text(text)
+    for path, methods in (
+        (engine, ("score_request",)),
+        (serving_score, ("score_request",)),
+        (serving_rerank, ("score_prompts",)),
+    ):
+        ftext = path.read_text()
+        for method in methods:
+            ftext = ftext.replace(
+                f"TokenizerManagerScoreMixin.{method}(self.tokenizer_manager.score_request_handler, ",
+                f"self.tokenizer_manager.score_request_handler.{method}(",
+            )
+        ftext = replace_call_site(ftext, old=mixin_import, new="")
+        path.write_text(ftext)
 
-    text = serving_rerank.read_text()
-    text = replace_call_site(
-        text,
-        old="self.tokenizer_manager.score_prompts(",
-        new="self.tokenizer_manager.score_request_handler.score_prompts(",
-    )
-    serving_rerank.write_text(text)
+    # ScoreResult import in engine_score_mixin.py already points at the new
+    # handler module (rewired in prep); nothing more to do for it.
 
 
 if __name__ == "__main__":

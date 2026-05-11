@@ -294,16 +294,16 @@ def transform(wt: Path) -> None:
         new="",
     )
 
-    # Insert weight_updater ctor BEFORE the dp_attn_adapter ctor (which was
-    # inserted in C5 prep just before ``self.is_initializing = False``). The
-    # weight_updater ctor must come earlier so that
-    # ``self.weight_updater.offload_tags`` resolves when dp_attn_adapter is
-    # constructed.
+    # Insert weight_updater ctor BEFORE ``self.init_request_dispatcher()`` call.
+    # ``init_request_dispatcher`` registers RPC dispatch tuples that reference
+    # ``self.weight_updater.update_weights_from_disk`` etc., so weight_updater
+    # must exist by that point. Insertion site is also BEFORE the dp_attn_adapter
+    # ctor (which references ``self.weight_updater.offload_tags``).
     text = replace_call_site(
         text,
-        old="        self.dp_attn_adapter = SchedulerDPAttnAdapter(\n",
+        old="        self.init_request_dispatcher()\n",
         new=SCHEDULER_INIT_INSERT_WEIGHT_UPDATER
-        + "        self.dp_attn_adapter = SchedulerDPAttnAdapter(\n",
+        + "        self.init_request_dispatcher()\n",
     )
 
     # Rewire dp_attn_adapter's offload_tags arg from self.offload_tags to

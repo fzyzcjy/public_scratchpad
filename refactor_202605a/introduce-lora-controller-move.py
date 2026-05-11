@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Move lora load/unload methods to LoraController."""
+"""Move (pure cut/paste): LoraController methods relocate from TM + ControlMixin to target class."""
 
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]
 # ///
 
-import re
 import sys
 from pathlib import Path
 
@@ -16,13 +15,17 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-lora-controller-move"
-SUBJECT = "Move lora methods to LoraController"
+SUBJECT = "Move LoraController methods: pure cut/paste + caller prefix replacement"
 BODY = """\
-Cut 6 lora methods (init_lora discarded as already in __post_init__):
-load_lora_adapter, load_lora_adapter_from_tensors, unload_lora_adapter,
-_unload_lora_adapter_locked, _validate_and_resolve_lora, _resolve_lora_path.
-
-Callers in TM + entrypoints rewired through self.lora_controller.<X>.
+Pure physical move per MECH_COMMIT_SPLIT. Cut the 6 @staticmethod lora
+methods (4 from TokenizerControlMixin: load_lora_adapter,
+load_lora_adapter_from_tensors, unload_lora_adapter,
+_unload_lora_adapter_locked; 2 from TokenizerManager:
+_validate_and_resolve_lora, _resolve_lora_path); paste into LoraController
+(drop @staticmethod, replace ``self: "LoraController"`` → plain ``self``).
+Caller prefix replacement:
+``TokenizerManager.<method>(self.lora_controller, ...)`` →
+``self.lora_controller.<method>(...)``; ditto entrypoints.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -49,23 +52,50 @@ logger = logging.getLogger(__name__)
 '''
 
 
+def _strip_static_prefix(body: str) -> str:
+    """Remove @staticmethod decorator, replace ``self: "LoraController",`` → ``self,``,
+    and rewrite intra-cluster cross-calls (``TokenizerManager.<m>(self, ...)`` → ``self.<m>(...)``).
+    Both transforms are pure prefix replacement — body bytes are otherwise unchanged.
+    """
+    body = body.replace("    @staticmethod\n", "", 1)
+    body = body.replace('self: "LoraController",', "self,")
+    # Intra-cluster cross-call prefix replacement.
+    body = body.replace(
+        "await TokenizerManager._unload_lora_adapter_locked(\n                            self,\n",
+        "await self._unload_lora_adapter_locked(\n",
+    )
+    body = body.replace(
+        "return await TokenizerManager._unload_lora_adapter_locked(self, obj)",
+        "return await self._unload_lora_adapter_locked(obj)",
+    )
+    body = body.replace(
+        "await TokenizerManager._resolve_lora_path(self, obj)",
+        "await self._resolve_lora_path(obj)",
+    )
+    body = body.replace(
+        "load_result = await TokenizerManager.load_lora_adapter(\n                self,\n",
+        "load_result = await self.load_lora_adapter(\n",
+    )
+    return body
+
+
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     lc = wt / "python/sglang/srt/managers/lora_controller.py"
 
-    # Cut init_lora + 2 helpers from TM.
-    tm_methods = ("init_lora", "_validate_and_resolve_lora", "_resolve_lora_path")
+    # Cut 2 methods from TM, bottom-up (highest start line first).
+    tm_methods = ("_validate_and_resolve_lora", "_resolve_lora_path")
     name_to_range = {}
     for n in tm_methods:
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
-        name_to_range[n] = (s, e)
+        name_to_range[n] = s
     cut_blocks_tm = {}
-    for n in sorted(tm_methods, key=lambda nn: -name_to_range[nn][0]):
+    for n in sorted(tm_methods, key=lambda nn: -name_to_range[nn]):
         s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name=n)
         cut_blocks_tm[n] = cut_lines(tm, s, e)
 
-    # Cut 4 methods from control_mixin.
+    # Cut 4 methods from control_mixin, bottom-up.
     cm_methods = (
         "_unload_lora_adapter_locked",
         "load_lora_adapter",
@@ -79,9 +109,9 @@ def transform(wt: Path) -> None:
             class_name="TokenizerControlMixin",
             method_name=n,
         )
-        name_to_range_cm[n] = (s, e)
+        name_to_range_cm[n] = s
     cut_blocks_cm = {}
-    for n in sorted(cm_methods, key=lambda nn: -name_to_range_cm[nn][0]):
+    for n in sorted(cm_methods, key=lambda nn: -name_to_range_cm[nn]):
         s, e = find_method_lines(
             control_mixin.read_text(),
             class_name="TokenizerControlMixin",
@@ -89,18 +119,14 @@ def transform(wt: Path) -> None:
         )
         cut_blocks_cm[n] = cut_lines(control_mixin, s, e)
 
-    def strip_typehint(body: str) -> str:
-        return body.replace("self: TokenizerManager,", "self,").replace(
-            "self: TokenizerManager\n", "self\n"
-        )
-
+    # Assemble in canonical order. Body bytes unchanged except @staticmethod stripped + self typing.
     bodies = [
-        strip_typehint(cut_blocks_cm["load_lora_adapter"]),
-        strip_typehint(cut_blocks_cm["load_lora_adapter_from_tensors"]),
-        strip_typehint(cut_blocks_cm["unload_lora_adapter"]),
-        strip_typehint(cut_blocks_cm["_unload_lora_adapter_locked"]),
-        cut_blocks_tm["_validate_and_resolve_lora"],
-        cut_blocks_tm["_resolve_lora_path"],
+        _strip_static_prefix(cut_blocks_cm["load_lora_adapter"]),
+        _strip_static_prefix(cut_blocks_cm["load_lora_adapter_from_tensors"]),
+        _strip_static_prefix(cut_blocks_cm["unload_lora_adapter"]),
+        _strip_static_prefix(cut_blocks_cm["_unload_lora_adapter_locked"]),
+        _strip_static_prefix(cut_blocks_tm["_validate_and_resolve_lora"]),
+        _strip_static_prefix(cut_blocks_tm["_resolve_lora_path"]),
     ]
 
     lc_text = lc.read_text()
@@ -108,46 +134,59 @@ def transform(wt: Path) -> None:
         "from dataclasses import dataclass, field\n",
         "from dataclasses import dataclass, field\n\n" + EXTRA_IMPORTS,
     )
-    lc.write_text(lc_text.rstrip() + "\n\n" + "\n\n".join(b.rstrip() for b in bodies) + "\n")
+    lc.write_text(lc_text.rstrip() + "\n\n" + "\n".join(b.rstrip() + "\n" for b in bodies))
 
-    # Caller updates.
+    # ---- Caller prefix replacement in TM facade ----
+    # TokenizerManager.<method>(self.lora_controller, ... ) → self.lora_controller.<method>(...)
+    # Cross-call sites (now removed from TM) and the validate-and-resolve site at line 551 remain.
     text = tm.read_text()
     text = text.replace(
-        "self._validate_and_resolve_lora(",
+        "TokenizerManager._validate_and_resolve_lora(self.lora_controller, ",
         "self.lora_controller._validate_and_resolve_lora(",
     )
-    text = text.replace(
-        "self._resolve_lora_path(",
-        "self.lora_controller._resolve_lora_path(",
-    )
+    tm.write_text(text)
+
+    # ---- Caller prefix replacement in entrypoints ----
+    entrypoint_specs = [
+        (
+            wt / "python/sglang/srt/entrypoints/engine.py",
+            "self.tokenizer_manager",
+        ),
+        (
+            wt / "python/sglang/srt/entrypoints/http_server.py",
+            "_global_state.tokenizer_manager",
+        ),
+    ]
+    for ep, prefix in entrypoint_specs:
+        ep_text = ep.read_text()
+        for method in (
+            "load_lora_adapter_from_tensors",
+            "load_lora_adapter",
+            "unload_lora_adapter",
+        ):
+            ep_text = ep_text.replace(
+                f"TokenizerManager.{method}({prefix}.lora_controller, ",
+                f"{prefix}.lora_controller.{method}(",
+            )
+        ep.write_text(ep_text)
+
+    # ---- Migrate remaining self.lora_* field reads in TM to self.lora_controller.* ----
+    # These are in non-moved methods (generate_request, handle_loop, http_server.lora_registry).
+    text = tm.read_text()
+    import re
     text = re.sub(r"\bself\.lora_registry\b", "self.lora_controller.lora_registry", text)
     text = re.sub(r"\bself\.lora_update_lock\b", "self.lora_controller.lora_update_lock", text)
     text = re.sub(r"\bself\.lora_ref_cache\b", "self.lora_controller.lora_ref_cache", text)
     tm.write_text(text)
 
-    # Entrypoint callers.
-    engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
-    for f in [engine, http_server]:
-        text = f.read_text()
-        text = text.replace(
-            "tokenizer_manager.load_lora_adapter_from_tensors(",
-            "tokenizer_manager.lora_controller.load_lora_adapter_from_tensors(",
-        )
-        text = text.replace(
-            "tokenizer_manager.load_lora_adapter(",
-            "tokenizer_manager.lora_controller.load_lora_adapter(",
-        )
-        text = text.replace(
-            "tokenizer_manager.unload_lora_adapter(",
-            "tokenizer_manager.lora_controller.unload_lora_adapter(",
-        )
-        text = re.sub(
-            r"\btokenizer_manager\.lora_registry\b",
-            "tokenizer_manager.lora_controller.lora_registry",
-            text,
-        )
-        f.write_text(text)
+    text = http_server.read_text()
+    text = re.sub(
+        r"\btokenizer_manager\.lora_registry\b",
+        "tokenizer_manager.lora_controller.lora_registry",
+        text,
+    )
+    http_server.write_text(text)
 
 
 if __name__ == "__main__":

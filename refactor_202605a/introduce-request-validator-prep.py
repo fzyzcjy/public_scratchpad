@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Prep: empty RequestValidator skeleton + composition wiring."""
+"""Prep: RequestValidator skeleton + composition wiring + in-place staticmethod conversion + caller rewrites."""
 
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]
 # ///
 
+import ast
 import sys
 from pathlib import Path
 
@@ -15,10 +16,18 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-request-validator-prep"
-SUBJECT = "Prep RequestValidator: empty skeleton + composition wiring"
+SUBJECT = "Prep RequestValidator: skeleton + composition + staticmethod conversion + caller rewrites"
 BODY = """\
-Per MECH_COMMIT_SPLIT: skeleton + composition wiring only. Methods + caller
-rewrites land in the next commit.
+Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+
+Builds RequestValidator skeleton; wires composition in TM.__init__;
+converts 5 _validate_* methods to @staticmethod with
+self: "RequestValidator" annotation; applies body rewrites
+(self.server_args.X / self.model_config.X / self.<context_len-etc>
+-> self.config.X); rewrites callers to
+``TokenizerManager.<method>(self.request_validator, ...)`` form.
+Methods stay on TM in this commit; the next commit's pure cut/paste +
+caller prefix replacement completes the move.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -55,6 +64,117 @@ class RequestValidator:
 '''
 
 
+CONFIG_FIELDS_LONG = (
+    "server_args.allow_auto_truncate",
+    "server_args.enable_return_hidden_states",
+    "server_args.enable_custom_logit_processor",
+    "server_args.limit_mm_data_per_request",
+    "model_config.is_matryoshka",
+    "model_config.matryoshka_dimensions",
+    "model_config.hidden_size",
+    "model_config.model_path",
+)
+CONFIG_FIELDS_SHORT = (
+    "context_len",
+    "num_reserved_tokens",
+    "validate_total_tokens",
+    "is_generation",
+)
+
+
+def _rewrite_body(body: str) -> str:
+    for field in CONFIG_FIELDS_LONG:
+        short = field.split(".", 1)[1]
+        body = body.replace(f"self.{field}", f"self.config.{short}")
+    for field in CONFIG_FIELDS_SHORT:
+        body = body.replace(f"self.{field}", f"self.config.{field}")
+    return body
+
+
+def _method_ranges(text: str, class_name: str, method_name: str):
+    """Return (start, body_start, end) line indices for a method (incl. decorators)."""
+    tree = ast.parse(text)
+    func_types = (ast.FunctionDef, ast.AsyncFunctionDef)
+    for cls in ast.walk(tree):
+        if isinstance(cls, ast.ClassDef) and cls.name == class_name:
+            for i, node in enumerate(cls.body):
+                if isinstance(node, func_types) and node.name == method_name:
+                    start = node.lineno - 1
+                    if node.decorator_list:
+                        start = node.decorator_list[0].lineno - 1
+                    body_start = node.body[0].lineno - 1
+                    if i + 1 < len(cls.body):
+                        end = cls.body[i + 1].lineno - 1
+                        nxt = cls.body[i + 1]
+                        if isinstance(nxt, func_types + (ast.ClassDef,)) and nxt.decorator_list:
+                            end = nxt.decorator_list[0].lineno - 1
+                    else:
+                        end = node.end_lineno
+                    return start, body_start, end
+    raise ValueError(f"{class_name}.{method_name} not found")
+
+
+# Replacement headers: @staticmethod + self: "RequestValidator" typing.
+# Method names keep `_validate_*` prefix in prep; the privacy flip (rename to
+# `validate_one` etc.) happens in MOVE per scope-induced rename convention.
+NEW_HEADERS = {
+    "_validate_one_request": (
+        '    @staticmethod\n'
+        '    def _validate_one_request(\n'
+        '        self: "RequestValidator",\n'
+        '        obj: Union[GenerateReqInput, EmbeddingReqInput],\n'
+        '        input_ids: List[int],\n'
+        '    ) -> None:\n'
+    ),
+    "_validate_mm_limits": (
+        '    @staticmethod\n'
+        '    def _validate_mm_limits(\n'
+        '        self: "RequestValidator",\n'
+        '        obj: Union[GenerateReqInput, EmbeddingReqInput],\n'
+        '    ) -> None:\n'
+    ),
+    "_validate_for_matryoshka_dim": (
+        '    @staticmethod\n'
+        '    def _validate_for_matryoshka_dim(\n'
+        '        self: "RequestValidator", obj: EmbeddingReqInput\n'
+        '    ) -> None:\n'
+    ),
+    "_validate_input_ids_in_vocab": (
+        '    @staticmethod\n'
+        '    def _validate_input_ids_in_vocab(\n'
+        '        self: "RequestValidator",\n'
+        '        input_ids: Union[List[int], List[List[int]]],\n'
+        '        vocab_size: int,\n'
+        '    ) -> None:\n'
+    ),
+    "_validate_batch_tokenization_constraints": (
+        '    @staticmethod\n'
+        '    def _validate_batch_tokenization_constraints(\n'
+        '        self: "RequestValidator",\n'
+        '        batch_size: int,\n'
+        '        obj: Union[GenerateReqInput, EmbeddingReqInput],\n'
+        '    ) -> None:\n'
+    ),
+}
+
+
+def _rewrite_method(text: str, method_name: str) -> str:
+    s, body_s, e = _method_ranges(text, "TokenizerManager", method_name)
+    lines = text.splitlines(keepends=True)
+    body_text = "".join(lines[body_s:e])
+    body_text = _rewrite_body(body_text)
+    # Internal call: self._validate_for_matryoshka_dim(obj)
+    #   -> TokenizerManager._validate_for_matryoshka_dim(self, obj)
+    # The leading `self` is intentional: in prep self is "RequestValidator"-typed,
+    # and TM.<method>(self, ...) preserves the class-qualified caller convention.
+    body_text = body_text.replace(
+        "self._validate_for_matryoshka_dim(obj)",
+        "TokenizerManager._validate_for_matryoshka_dim(self, obj)",
+    )
+    new_method = NEW_HEADERS[method_name] + body_text
+    return "".join(lines[:s]) + new_method + "".join(lines[e:])
+
+
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     new = wt / "python/sglang/srt/managers/request_validator.py"
@@ -71,6 +191,8 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
+
+    # Composition wiring.
     text = replace_call_site(
         text,
         old=(
@@ -100,6 +222,40 @@ def transform(wt: Path) -> None:
             "        self.score_request_handler = ScoreRequestHandler(\n"
         ),
     )
+
+    # Convert all 5 _validate_* methods to @staticmethod with self: "RequestValidator" typing.
+    # Apply body rewrites in-place. Bodies stay in TM class.
+    for method_name in (
+        "_validate_one_request",
+        "_validate_mm_limits",
+        "_validate_for_matryoshka_dim",
+        "_validate_input_ids_in_vocab",
+        "_validate_batch_tokenization_constraints",
+    ):
+        text = _rewrite_method(text, method_name)
+
+    # Caller rewrites: 4 sites in TM use these methods.
+    text = replace_call_site(
+        text,
+        old="        self._validate_one_request(obj, input_ids)",
+        new="        TokenizerManager._validate_one_request(self.request_validator, obj, input_ids)",
+    )
+    text = replace_call_site(
+        text,
+        old="            self._validate_one_request(obj[i], input_ids_list[i])",
+        new="            TokenizerManager._validate_one_request(self.request_validator, obj[i], input_ids_list[i])",
+    )
+    text = replace_call_site(
+        text,
+        old="                self._validate_mm_limits(obj)",
+        new="                TokenizerManager._validate_mm_limits(self.request_validator, obj)",
+    )
+    text = replace_call_site(
+        text,
+        old="        self._validate_batch_tokenization_constraints(batch_size, obj)",
+        new="        TokenizerManager._validate_batch_tokenization_constraints(self.request_validator, batch_size, obj)",
+    )
+
     tm.write_text(text)
 
 

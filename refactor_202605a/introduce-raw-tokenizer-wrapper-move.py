@@ -18,12 +18,19 @@ from _runner import run_pr
 ID = "introduce-raw-tokenizer-wrapper-move"
 SUBJECT = "Move RawTokenizerWrapper: cut init_tokenizer_and_processor + InputFormat; rewire external callers"
 BODY = """\
-Cut init_tokenizer_and_processor method (body now lives in
-RawTokenizerWrapper.from_server_args) and the InputFormat enum
-(relocated to raw_tokenizer_wrapper.py) from TokenizerManager.
+Pure cut/paste move per MECH_COMMIT_SPLIT (factory variant: target
+body was already materialized in prep, so this commit only deletes the
+source-side orphans + does mechanical caller prefix rewrites).
 
-External entrypoint/test/docs callers rewired to access tokenizer/processor
-via tokenizer_manager.raw_tokenizer_wrapper.<field>.
+Cuts ``init_tokenizer_and_processor`` (orphan after prep wired
+composition through ``RawTokenizerWrapper.from_server_args``) and the
+``InputFormat`` enum (its canonical home is now raw_tokenizer_wrapper.py)
+from TokenizerManager. External entrypoint / template_manager / test /
+docs callers are pure-prefix-rewritten from
+``tokenizer_manager.<field>`` →
+``tokenizer_manager.raw_tokenizer_wrapper.<field>`` (and the same for
+``tm.<field>`` / ``self.tm.<field>`` test patterns); test mocks pick up
+the new attribute. No body rewrites.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

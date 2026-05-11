@@ -41,6 +41,10 @@ _KWARGS = (
     "        device: str,\n"
     "        model: torch.nn.Module,\n"
     "        model_config: ModelConfig,\n"
+    "        req_to_token_pool,\n"
+    "        token_to_kv_pool,\n"
+    "        lora_manager,\n"
+    "        tp_group,\n"
     "        run_ctx=None,\n"
 )
 
@@ -57,7 +61,9 @@ def transform(wt: Path) -> None:
         f"    @staticmethod\n    def dummy_run(\n{_KWARGS}    ):\n",
         1,
     )
-    # Body subs: each ``self.X`` (8 fields) → bare kwarg.
+    # Body subs: each ``self.X`` (12 fields) → bare kwarg. Order:
+    # longer/more-specific first so ``self.model_config`` doesn't get
+    # half-rewritten by ``self.model``.
     for name in (
         "is_generation",
         "spec_algorithm",
@@ -65,7 +71,11 @@ def transform(wt: Path) -> None:
         "server_args",
         "attn_backend",
         "device",
-        "model_config",  # specific before generic to avoid ``self.model_config`` ↔ ``self.model`` overlap
+        "model_config",
+        "req_to_token_pool",
+        "token_to_kv_pool",
+        "lora_manager",
+        "tp_group",
         "model",
     ):
         method = method.replace(f"self.{name}", name)
@@ -86,6 +96,10 @@ def transform(wt: Path) -> None:
             "                    device=self.device,\n"
             "                    model=self.model,\n"
             "                    model_config=self.model_config,\n"
+            "                    req_to_token_pool=self.req_to_token_pool,\n"
+            "                    token_to_kv_pool=self.token_to_kv_pool,\n"
+            "                    lora_manager=self.lora_manager,\n"
+            "                    tp_group=self.tp_group,\n"
             "                    run_ctx=None,\n"
             "                ),\n"
         ),

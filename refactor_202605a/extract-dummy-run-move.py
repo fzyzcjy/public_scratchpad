@@ -36,21 +36,32 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 _HEADER = '''from __future__ import annotations
 
+import inspect
 import logging
 
 import torch
 
 from sglang.srt.configs.model_config import ModelConfig
-from sglang.srt.layers.dp_attention import get_attention_tp_size
-from sglang.srt.managers.schedule_batch import ForwardMode
+from sglang.srt.layers.dp_attention import (
+    DpPaddingMode,
+    get_attention_tp_size,
+    set_dp_buffer_len,
+    set_is_extend_in_batch,
+)
 from sglang.srt.model_executor.cuda_graph_runner import (
-    CaptureHiddenMode,
     DecodeInputBuffers,
     set_torch_compile_config,
+)
+from sglang.srt.model_executor.forward_batch_info import (
+    CaptureHiddenMode,
+    ForwardBatch,
+    ForwardMode,
+    PPProxyTensors,
 )
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 from sglang.srt.utils import (
+    empty_context,
     log_info_on_rank0,
     require_attn_tp_gather,
     require_gathered_buffer,

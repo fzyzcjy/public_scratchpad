@@ -17,7 +17,27 @@ from _runner import run_pr
 
 ID = "introduce-raw-tokenizer-wrapper-prep"
 SUBJECT = "Prep RawTokenizerWrapper: skeleton + factory + composition wiring + facade field rewrites"
-BODY = "Per MECH_COMMIT_SPLIT: build the target file + composition wiring + facade self.<field> rewrites; move (cut init_tokenizer_and_processor + InputFormat + entrypoint rewrites) is next commit."
+BODY = """\
+Per MECH_COMMIT_SPLIT §"拆 class 场景" (factory variant): the source
+method ``TokenizerManager.init_tokenizer_and_processor`` reads
+``self.server_args`` / ``self.model_config`` and writes the four fields
+that now live on RawTokenizerWrapper. The ``self: TargetClass`` retype
+trick does not apply (target class owns none of the reads), so the
+canonical body is materialized directly in the target file as
+``RawTokenizerWrapper.from_server_args`` classmethod factory; the source
+method becomes an orphan and is deleted in the next (move) commit.
+
+This commit does ALL semantic work: builds RawTokenizerWrapper skeleton
++ factory body + InputFormat enum + module helpers; wires composition
+in ``TokenizerManager.__init__`` (replacing the
+``init_tokenizer_and_processor()`` call with
+``RawTokenizerWrapper.from_server_args(...)``); rewrites
+``self.<tokenizer|processor|mm_processor|async_dynamic_batch_tokenizer>``
+references on TM + TokenizerControlMixin to go through
+``self.raw_tokenizer_wrapper.<field>``. The next commit is pure
+cut/paste: drop the now-orphan ``init_tokenizer_and_processor`` and
+``InputFormat`` from TM, plus mechanical external-caller prefix rewrites.
+"""
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
