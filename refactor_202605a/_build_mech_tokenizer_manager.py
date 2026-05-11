@@ -58,8 +58,6 @@ ORDER: list[str] = [
     # Stage 4 — control (session first; splits init_request_dispatcher)
     "introduce-session-controller-prep",
     "introduce-session-controller-move",
-    "introduce-pause-controller-prep",
-    "introduce-pause-controller-move",
     "introduce-weight-disk-update-controller-prep",
     "introduce-weight-disk-update-controller-move",
     "introduce-lora-controller-prep",

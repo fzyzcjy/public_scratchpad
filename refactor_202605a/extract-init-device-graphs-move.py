@@ -84,7 +84,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
-        addition="from sglang.srt.model_executor import device_graphs\n",
+        addition="from sglang.srt.model_executor.model_runner_components import device_graphs\n",
     )
     mr.write_text(text)
 
@@ -103,7 +103,7 @@ def transform(wt: Path) -> None:
     wu_text = insert_after(
         wu_text,
         anchor="from sglang.srt.platforms import current_platform\n",
-        addition="from sglang.srt.model_executor import device_graphs\n",
+        addition="from sglang.srt.model_executor.model_runner_components import device_graphs\n",
     )
     wu.write_text(wu_text)
 

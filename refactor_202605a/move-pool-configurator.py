@@ -60,13 +60,15 @@ def transform(wt: Path) -> None:
     new.write_text(old.read_text())
     old.unlink()
 
-    # 2) Rewrite imports in the rest of the codebase.
+    # 2) Rewrite imports in the rest of the codebase. Broader-than-import
+    # replace so it also picks up mock.patch target strings (e.g. in
+    # test_pool_configurator.py line 24).
     for rel in _IMPORTERS:
         f = wt / rel
         text = f.read_text()
         text = text.replace(
-            "from sglang.srt.model_executor.pool_configurator",
-            "from sglang.srt.model_executor.model_runner_components.pool_configurator",
+            "sglang.srt.model_executor.pool_configurator",
+            "sglang.srt.model_executor.model_runner_components.pool_configurator",
         )
         f.write_text(text)
 

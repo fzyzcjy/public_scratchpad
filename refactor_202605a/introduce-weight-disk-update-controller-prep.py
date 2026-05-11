@@ -50,10 +50,10 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 SKELETON = '''from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, List, Optional
 
-from sglang.srt.managers.tokenizer_manager_components.pause_controller import PauseController
 from sglang.srt.server_args import ServerArgs
 from sglang.srt.utils.aio_rwlock import RWLock
 
@@ -70,7 +70,9 @@ class WeightDiskUpdateController:
     """update_weights_from_disk endpoint + UpdateWeightFromDiskReqOutput dispatcher handler."""
 
     send_to_scheduler: Any
-    pause_controller: PauseController
+    abort_request: Callable[..., None]
+    is_pause_getter: Callable[[], bool]
+    is_pause_cond: asyncio.Condition
     model_update_lock: RWLock
     server_args: ServerArgs
     auto_create_handle_loop: Callable[[], None]
@@ -145,6 +147,19 @@ def _rewrite_body(body_text: str) -> str:
     )
     body_text = body_text.replace(
         "self.model_path = model_path", "self.server_args.model_path = model_path"
+    )
+
+    # PauseController stayed unextracted (too coupled with other TM state to
+    # be a clean independent class). The 3 fields ``abort_request`` /
+    # ``is_pause`` / ``is_pause_cond`` that WDU needs are injected as Callable
+    # kwargs / shared refs on WeightDiskUpdateController. Body forms:
+    #   self.abort_request(abort_all=True)  →  self.abort_request(abort_all=True)
+    #     (same call; ``abort_request`` is now a Callable field on WDU, not TM's method)
+    #   self.is_pause                       →  self.is_pause_getter()
+    #   self.is_pause_cond                  →  self.is_pause_cond (shared ref, same name)
+    body_text = body_text.replace("self.is_pause_cond", "self.is_pause_cond")
+    body_text = body_text.replace(
+        "is_paused = self.is_pause", "is_paused = self.is_pause_getter()"
     )
 
     # Cross-call rewrites within the wd-controller cluster (4 TM methods + 1 mixin
@@ -235,7 +250,9 @@ def transform(wt: Path) -> None:
             "        # Weight disk update controller\n"
             "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
-            "            pause_controller=self.pause_controller,\n"
+            "            abort_request=self.abort_request,\n"
+            "            is_pause_getter=lambda: self.is_pause,\n"
+            "            is_pause_cond=self.is_pause_cond,\n"
             "            model_update_lock=self.model_update_lock,\n"
             "            server_args=self.server_args,\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
