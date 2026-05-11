@@ -5,10 +5,9 @@ Reshape ``ModelRunner.update_weights_from_disk`` toward becoming a
 ``WeightUpdater`` method:
 
 - Signature: ``@staticmethod`` + ``self: WeightUpdater`` first param.
-- Body: ``self.X`` → ``self._mr.X`` (WeightUpdater only exposes
-  ``tp_rank`` / ``_model_update_group`` at this point, neither in body).
-- ``WeightUpdater``: add ``model_runner_ref`` ctor kwarg + ``_mr`` field.
-- ``ModelRunner.__init__``: pass ``model_runner_ref=self``.
+- Body: ``self.X`` → ``self._mr.X`` (WeightUpdater exposes ``tp_rank`` /
+  ``_mr`` / ``_model_update_group`` from ``introduce-weight-updater``;
+  none appears in this body).
 - Internal caller (inside update_expert_location, same file): class-qualified.
 - External callers (tp_worker.py, eagle_worker_v2.py): class-qualified, with
   a local ``import ModelRunner`` on the line above to dodge the
@@ -38,7 +37,6 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     ew = wt / "python/sglang/srt/speculative/eagle_worker_v2.py"
 
@@ -52,38 +50,15 @@ def transform(wt: Path) -> None:
         "    def update_weights_from_disk(\n        self,\n",
         "    @staticmethod\n    def update_weights_from_disk(\n        self: \"WeightUpdater\",\n",
     )
-    # Blanket self.X → self._mr.X in body. WeightUpdater exposes only
-    # tp_rank / _model_update_group at this point; neither appears here.
+    # Blanket self.X → self._mr.X in body. WeightUpdater exposes tp_rank /
+    # _mr / _model_update_group at this point; none appears in this body.
     method = method.replace("self.", "self._mr.")
     text = "".join(lines[:start]) + method + "".join(lines[end:])
     mr.write_text(text)
 
-    # 2) WeightUpdater ctor: add model_runner_ref + _mr.
-    text = wu.read_text()
-    text = replace_call_site(
-        text,
-        old=(
-            "    def __init__(self, *, tp_rank: int):\n"
-            "        self.tp_rank = tp_rank\n"
-            "        self._model_update_group: dict = {}\n"
-        ),
-        new=(
-            "    def __init__(self, *, tp_rank: int, model_runner_ref):\n"
-            "        self.tp_rank = tp_rank\n"
-            "        self._model_update_group: dict = {}\n"
-            "        self._mr = model_runner_ref\n"
-        ),
-    )
-    wu.write_text(text)
-
-    # 3) ModelRunner ctor: pass model_runner_ref=self + rewrite the inline
-    # internal caller (still inside ModelRunner — no local import needed).
+    # 2) Rewrite the inline internal caller (still inside ModelRunner --
+    # no local import needed).
     text = mr.read_text()
-    text = replace_call_site(
-        text,
-        old="        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank)\n",
-        new="        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n",
-    )
     text = replace_call_site(
         text,
         old=(
@@ -104,7 +79,7 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
-    # 4) External callers: local import + class-qualified call.
+    # 3) External callers: local import + class-qualified call.
     text = tw.read_text()
     text = replace_call_site(
         text,

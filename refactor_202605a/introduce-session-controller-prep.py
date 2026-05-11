@@ -57,19 +57,16 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict
 
-
-@dataclass(slots=True, kw_only=True)
-class SessionControllerConfig:
-    enable_streaming_session: bool
+from sglang.srt.server_args import ServerArgs
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class SessionController:
     """open_session / close_session endpoints + OpenSessionReqOutput dispatcher handler."""
 
     send_to_scheduler: Any
     auto_create_handle_loop: Callable[[], None]
-    config: SessionControllerConfig
+    server_args: ServerArgs
     session_futures: Dict[str, asyncio.Future] = field(default_factory=dict)
 '''
 
@@ -120,16 +117,12 @@ NEW_HANDLE_HEADER = '''    @staticmethod
 
 
 def _rewrite_method(text: str, class_name: str, method_name: str, new_header: str) -> str:
-    """Replace [decorator..signature) of class_name.method_name with new_header;
-    apply body rewrites (server_args.enable_streaming_session → config.*).
-    Body stays in source class."""
+    """Replace [decorator..signature) of class_name.method_name with new_header.
+    Body stays byte-equivalent (``self.server_args.X`` reads still work since
+    SessionController now carries ``server_args`` as a field)."""
     s, body_s, e = _method_ranges(text, class_name, method_name)
     lines = text.splitlines(keepends=True)
     body_text = "".join(lines[body_s:e])
-    body_text = body_text.replace(
-        "self.server_args.enable_streaming_session",
-        "self.config.enable_streaming_session",
-    )
     return "".join(lines[:s]) + new_header + body_text + "".join(lines[e:])
 
 
@@ -178,7 +171,6 @@ def transform(wt: Path) -> None:
         addition=(
             "from sglang.srt.managers.tokenizer_manager_components.session_controller import (\n"
             "    SessionController,\n"
-            "    SessionControllerConfig,\n"
             ")\n"
         ),
     )
@@ -206,9 +198,7 @@ def transform(wt: Path) -> None:
         "        self.session_controller = SessionController(\n"
         "            send_to_scheduler=self.send_to_scheduler,\n"
         "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-        "            config=SessionControllerConfig(\n"
-        "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
-        "            ),\n"
+        "            server_args=self.server_args,\n"
         "        )\n"
     )
     text = text[: _m.end()] + addition + text[_m.end() :]

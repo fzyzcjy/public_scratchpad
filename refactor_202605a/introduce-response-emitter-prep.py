@@ -47,15 +47,10 @@ from typing import Callable, Dict
 from sglang.srt.managers.tokenizer_manager_components.lora_controller import LoraController
 from sglang.srt.managers.tokenizer_manager_components.request_log_manager import RequestLogManager
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
+from sglang.srt.server_args import ServerArgs
 
 
-@dataclass(slots=True, kw_only=True)
-class ResponseEmitterConfig:
-    incremental_streaming_output: bool
-    enable_lora: bool
-
-
-@dataclass(slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ResponseEmitter:
     """Drains rid_to_state[rid].out_list and yields per-request dicts to HTTP clients."""
 
@@ -63,7 +58,7 @@ class ResponseEmitter:
     lora_controller: LoraController
     request_log_manager: RequestLogManager
     abort_request: Callable[..., None]
-    config: ResponseEmitterConfig
+    server_args: ServerArgs
 '''
 
 
@@ -140,7 +135,6 @@ def transform(wt: Path) -> None:
         addition=(
             "from sglang.srt.managers.tokenizer_manager_components.response_emitter import (\n"
             "    ResponseEmitter,\n"
-            "    ResponseEmitterConfig,\n"
             ")\n"
         ),
     )
@@ -159,10 +153,7 @@ def transform(wt: Path) -> None:
             "            lora_controller=self.lora_controller,\n"
             "            request_log_manager=self.request_log_manager,\n"
             "            abort_request=self.abort_request,\n"
-            "            config=ResponseEmitterConfig(\n"
-            "                incremental_streaming_output=self.server_args.incremental_streaming_output,\n"
-            "                enable_lora=self.server_args.enable_lora,\n"
-            "            ),\n"
+            "            server_args=self.server_args,\n"
             "        )\n"
             "\n"
             "        # Session controller\n"
@@ -177,17 +168,8 @@ def transform(wt: Path) -> None:
     text = _retype_method(text, "_wait_one_response", NEW_WAIT_HEADER)
     text = _retype_method(text, "create_abort_task", NEW_CREATE_ABORT_HEADER)
 
-    # Body rewrites: server_args.X → config.X. Inside the now-staticmethod
-    # bodies, `self` is a ResponseEmitter, so these references must hit the
-    # config dataclass field.
-    text = text.replace(
-        "                is_stream and self.server_args.incremental_streaming_output\n",
-        "                is_stream and self.config.incremental_streaming_output\n",
-    )
-    text = text.replace(
-        "            if self.server_args.enable_lora and state.obj.lora_path:\n",
-        "            if self.config.enable_lora and state.obj.lora_path:\n",
-    )
+    # Body keeps ``self.server_args.X`` references — ResponseEmitter carries
+    # ``server_args`` as a field, so no rewrite needed.
 
     # Sibling-method self-calls (still on TokenizerManager class as
     # @staticmethod): explicit TokenizerManager.<method>(self, ...) form.

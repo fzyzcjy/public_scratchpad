@@ -66,7 +66,7 @@ def transform(wt: Path) -> None:
     sm = wt / "python/sglang/srt/managers/scheduler_update_weights_mixin.py"
 
     # Reshape the 3 methods (still in ModelRunner). WeightExporter already
-    # has ``model_runner_ref`` + ``_mr`` from ``introduce-weight-exporter``.
+    # has ``_mr`` (and other fields) from ``introduce-weight-exporter``.
     text = mr.read_text()
     for name in _METHOD_NAMES:
         text = _reshape_one(text, method_name=name)

@@ -59,13 +59,6 @@ from sglang.srt.utils.aio_rwlock import RWLock
 
 
 @dataclass(slots=True, kw_only=True)
-class WeightDiskUpdateControllerConfig:
-    dp_size: int
-    initial_load_format: str
-    checkpoint_engine_wait_weights_before_ready: bool
-
-
-@dataclass(slots=True, kw_only=True)
 class WeightDiskUpdateController:
     """update_weights_from_disk endpoint + UpdateWeightFromDiskReqOutput dispatcher handler."""
 
@@ -76,13 +69,12 @@ class WeightDiskUpdateController:
     model_update_lock: RWLock
     server_args: ServerArgs
     auto_create_handle_loop: Callable[[], None]
-    config: WeightDiskUpdateControllerConfig
     initial_weights_loaded: bool = True
     model_update_result: Optional[Awaitable[Any]] = None
     model_update_tmp: List[Any] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.config.checkpoint_engine_wait_weights_before_ready:
+        if self.server_args.checkpoint_engine_wait_weights_before_ready:
             self.initial_weights_loaded = False
 '''
 
@@ -139,9 +131,8 @@ NEW_HEADERS = {
 
 def _rewrite_body(body_text: str) -> str:
     """Apply body rewrites: facade-field re-routing + intra-cluster cross-call class-qualification."""
-    # Field re-routing onto controller config / server_args (controller has no
-    # served_model_name / model_path attrs; ServerArgs owns them).
-    body_text = body_text.replace("self.server_args.dp_size", "self.config.dp_size")
+    # Field re-routing onto server_args (controller has no served_model_name /
+    # model_path attrs; ServerArgs owns them). server_args reads themselves stay.
     body_text = body_text.replace(
         "self.served_model_name = ", "self.server_args.served_model_name = "
     )

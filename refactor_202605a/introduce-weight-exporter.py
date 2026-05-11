@@ -53,6 +53,8 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 HEADER = '''from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 import torch.distributed as dist
@@ -63,21 +65,15 @@ from sglang.srt.utils.network import NetworkAddress
 logger = logging.getLogger(__name__)
 
 
+# Mutable ``_weights_send_group`` dict prevents ``frozen=True``; explicit
+# Rule-5 exception per the dataclass-defaults sprint-wide rule.
+@dataclass(slots=True, kw_only=True)
 class WeightExporter:
-
-    def __init__(
-        self,
-        *,
-        tp_rank: int,
-        tp_size: int,
-        gpu_id: int,
-        model_runner_ref,
-    ):
-        self.tp_rank = tp_rank
-        self.tp_size = tp_size
-        self.gpu_id = gpu_id
-        self._weights_send_group: dict = {}
-        self._mr = model_runner_ref
+    tp_rank: int
+    tp_size: int
+    gpu_id: int
+    _mr: Any  # ModelRunner — kept untyped to avoid TYPE_CHECKING import here
+    _weights_send_group: dict = field(default_factory=dict)
 
 '''
 
@@ -125,11 +121,11 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old=(
-            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n"
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, _mr=self)\n"
             "        self._weights_send_group = {}\n"
         ),
         new=(
-            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, model_runner_ref=self)\n"
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, _mr=self)\n"
             "        self.init_weight_exporter()\n"
         ),
     )
@@ -139,7 +135,7 @@ def transform(wt: Path) -> None:
         "            tp_rank=self.tp_rank,\n"
         "            tp_size=self.tp_size,\n"
         "            gpu_id=self.gpu_id,\n"
-        "            model_runner_ref=self,\n"
+        "            _mr=self,\n"
         "        )\n"
         "\n"
     )

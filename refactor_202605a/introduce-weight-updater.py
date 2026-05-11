@@ -56,6 +56,8 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 HEADER = '''from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 
@@ -65,11 +67,13 @@ from sglang.srt.utils.network import NetworkAddress
 logger = logging.getLogger(__name__)
 
 
+# Mutable ``_model_update_group`` dict prevents ``frozen=True``; explicit
+# Rule-5 exception per the dataclass-defaults sprint-wide rule.
+@dataclass(slots=True, kw_only=True)
 class WeightUpdater:
-
-    def __init__(self, *, tp_rank: int):
-        self.tp_rank = tp_rank
-        self._model_update_group: dict = {}
+    tp_rank: int
+    _mr: Any  # ModelRunner — kept untyped to avoid TYPE_CHECKING import here
+    _model_update_group: dict = field(default_factory=dict)
 
 '''
 
@@ -113,7 +117,7 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        # For weight updates\n"
-            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank)\n"
+            "        self.weight_updater = WeightUpdater(tp_rank=self.tp_rank, _mr=self)\n"
             "        self._weights_send_group = {}\n"
         ),
     )
