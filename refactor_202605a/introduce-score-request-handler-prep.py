@@ -176,10 +176,20 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
+    # First owner-class composition: anchor on the (now-early) init_request_dispatcher
+    # call and insert AFTER it so subsequent owner-class wiring can chain.
     text = replace_call_site(
         text,
-        old="        # Init request dispatcher\n        self.init_request_dispatcher()",
+        old=(
+            "        # Init request dispatcher (called early so owner-class ctors can\n"
+            "        # pass dispatcher=self._result_dispatcher as a kwarg).\n"
+            "        self.init_request_dispatcher()\n"
+        ),
         new=(
+            "        # Init request dispatcher (called early so owner-class ctors can\n"
+            "        # pass dispatcher=self._result_dispatcher as a kwarg).\n"
+            "        self.init_request_dispatcher()\n"
+            "\n"
             "        # Score request handler\n"
             "        self.score_request_handler = ScoreRequestHandler(\n"
             "            tokenizer=self.tokenizer,\n"
@@ -191,9 +201,6 @@ def transform(wt: Path) -> None:
             "                model_config=self.model_config,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
         ),
     )
     tm.write_text(text)

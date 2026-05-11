@@ -156,18 +156,7 @@ SCHEDULER_INIT_INSERT = """\
             spec_algorithm=self.spec_algorithm,
             disaggregation_mode=self.disaggregation_mode,
             enable_hicache_storage=lambda: self.enable_hicache_storage,
-            load_inquirer_get_loads=lambda req: self.load_inquirer.get_loads(
-                req,
-                running_batch=self.running_batch,
-                waiting_queue=self.waiting_queue,
-                stats=self.metrics_reporter.stats,
-                spec_total_num_accepted_tokens=self.metrics_reporter.spec_total_num_accepted_tokens,
-                spec_total_num_forward_ct=self.metrics_reporter.spec_total_num_forward_ct,
-                disagg_prefill_bootstrap_queue=getattr(self, "disagg_prefill_bootstrap_queue", None),
-                disagg_prefill_inflight_queue=getattr(self, "disagg_prefill_inflight_queue", None),
-                disagg_decode_prealloc_queue=getattr(self, "disagg_decode_prealloc_queue", None),
-                disagg_decode_transfer_queue=getattr(self, "disagg_decode_transfer_queue", None),
-            ),
+            load_inquirer_get_loads=lambda req: self.load_inquirer.get_loads(req),
         )
 
 """

@@ -190,9 +190,15 @@ def transform(wt: Path) -> None:
         ),
     )
 
+    # Composition wiring. Anchor on the previous owner-class' marker
+    # (RequestMetricsRecorder, the last Stage-3 prep before Stage 4) and insert
+    # BEFORE it so each subsequent owner-class commit prepends its own block.
     text = replace_call_site(
         text,
-        old="        # Init request dispatcher\n        self.init_request_dispatcher()",
+        old=(
+            "        # Request metrics recorder\n"
+            "        self.request_metrics_recorder = RequestMetricsRecorder(\n"
+        ),
         new=(
             "        # Session controller\n"
             "        self.session_controller = SessionController(\n"
@@ -204,8 +210,8 @@ def transform(wt: Path) -> None:
             "            ),\n"
             "        )\n"
             "\n"
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
+            "        # Request metrics recorder\n"
+            "        self.request_metrics_recorder = RequestMetricsRecorder(\n"
         ),
     )
 
