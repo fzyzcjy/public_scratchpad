@@ -76,13 +76,6 @@ ORDER: list[str] = [
     "kvc-migrate-init-pools",
     "kvc-migrate-configure",
     "kvc-drop-mixin-inheritance",
-    "dg-mech-rename",
-    "kw-mech-rename",
-    "ha-mech-drop-is-draft-worker",
-    "nem-mech-rename",
-    "nem-mech-frozen",
-    "rwt-mech-rename",
-    "rwt-mech-slots",
     "fix-mla-ci-workflow",
 ]
 

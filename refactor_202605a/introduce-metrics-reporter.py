@@ -519,13 +519,26 @@ def transform(wt: Path) -> None:
     )
     pre.write_text(text)
 
-    # Update dllm/mixin/scheduler.py: 1 callsite.
+    # Update dllm/mixin/scheduler.py: 1 callsite + 1 local import.
     text = dllm.read_text()
     text = text.replace(
         "        self.report_prefill_stats(",
         "        self.metrics_reporter.report_prefill_stats(",
     )
+    text = text.replace(
+        "from sglang.srt.observability.scheduler_metrics_mixin import PrefillStats",
+        "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import PrefillStats",
+    )
     dllm.write_text(text)
+
+    # Update schedule_batch.py: TYPE_CHECKING import of PrefillStats.
+    schedule_batch = wt / "python/sglang/srt/managers/schedule_batch.py"
+    text = schedule_batch.read_text()
+    text = text.replace(
+        "from sglang.srt.observability.scheduler_metrics_mixin import PrefillStats",
+        "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import PrefillStats",
+    )
+    schedule_batch.write_text(text)
 
 
 if __name__ == "__main__":

@@ -170,6 +170,118 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
+    # Absorbed from rwt-mech-rename + rwt-mech-slots: shorter names (class
+    # name carries ``RemoteInstance`` semantic) and ``@dataclass(slots,
+    # kw_only)`` form. Not frozen — engine/session_id/weight_info/_nixl_manager
+    # are lifecycle fields written across multiple methods after construction.
+    _rename_and_slot_transport(wt)
+
+
+_INSIDE_RWT_SUBS = [
+    # field renames (longest first so suffix subs do not half-rewrite the longer)
+    ("self.remote_instance_transfer_engine_session_id", "self.session_id"),
+    ("self.remote_instance_transfer_engine_weight_info", "self.weight_info"),
+    ("self.remote_instance_transfer_engine", "self.engine"),
+    # method def lines
+    ("def remote_instance_init_transfer_engine", "def init_engine"),
+    ("def _register_to_engine_info_bootstrap", "def register_to_bootstrap"),
+    ("def _publish_modelexpress_metadata", "def publish_to_modelexpress"),
+    # internal method calls
+    ("self.remote_instance_init_transfer_engine(", "self.init_engine("),
+    ("self._register_to_engine_info_bootstrap(", "self.register_to_bootstrap("),
+    ("self._publish_modelexpress_metadata(", "self.publish_to_modelexpress("),
+]
+
+
+_OUTSIDE_RWT_SUBS = [
+    (
+        "remote_instance_weight_transport.remote_instance_transfer_engine_session_id",
+        "remote_instance_weight_transport.session_id",
+    ),
+    (
+        "remote_instance_weight_transport.remote_instance_transfer_engine_weight_info",
+        "remote_instance_weight_transport.weight_info",
+    ),
+    (
+        "remote_instance_weight_transport.remote_instance_init_transfer_engine",
+        "remote_instance_weight_transport.init_engine",
+    ),
+    (
+        "remote_instance_weight_transport.remote_instance_transfer_engine",
+        "remote_instance_weight_transport.engine",
+    ),
+    (
+        "remote_instance_weight_transport._register_to_engine_info_bootstrap",
+        "remote_instance_weight_transport.register_to_bootstrap",
+    ),
+    (
+        "remote_instance_weight_transport._publish_modelexpress_metadata",
+        "remote_instance_weight_transport.publish_to_modelexpress",
+    ),
+]
+
+
+def _rename_and_slot_transport(wt: Path) -> None:
+    src = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+    text = src.read_text()
+    for old, new in _INSIDE_RWT_SUBS:
+        text = text.replace(old, new)
+    # Apply rwt-mech-slots: replace handwritten __init__ with dataclass form.
+    text = insert_after(
+        text,
+        anchor="from sglang.srt.utils.network import NetworkAddress, get_local_ip_auto\n",
+        addition=(
+            "from dataclasses import dataclass\n"
+            "from typing import Any, Optional\n"
+        ),
+    )
+    text = replace_call_site(
+        text,
+        old=(
+            "class RemoteInstanceWeightTransport:\n"
+            "\n"
+            "    def __init__(\n"
+            "        self,\n"
+            "        *,\n"
+            "        server_args: ServerArgs,\n"
+            "        model: torch.nn.Module,\n"
+            "        tp_rank: int,\n"
+            "        gpu_id: int,\n"
+            "    ):\n"
+            "        self.server_args = server_args\n"
+            "        self.model = model\n"
+            "        self.tp_rank = tp_rank\n"
+            "        self.gpu_id = gpu_id\n"
+            "        self.engine = None\n"
+            "        self.session_id = \"\"\n"
+            "        self.weight_info = None\n"
+            "        self._nixl_manager = None\n"
+        ),
+        new=(
+            "# Lifecycle fields (engine / session_id / weight_info / _nixl_manager)\n"
+            "# are written across multiple methods after construction — explicit R5\n"
+            "# exception, hence `slots=True, kw_only=True` without `frozen=True`.\n"
+            "@dataclass(slots=True, kw_only=True)\n"
+            "class RemoteInstanceWeightTransport:\n"
+            "    server_args: ServerArgs\n"
+            "    model: torch.nn.Module\n"
+            "    tp_rank: int\n"
+            "    gpu_id: int\n"
+            "    engine: Optional[Any] = None\n"
+            '    session_id: str = ""\n'
+            "    weight_info: Optional[dict[str, tuple[int, int, int]]] = None\n"
+            "    _nixl_manager: Optional[Any] = None\n"
+        ),
+    )
+    src.write_text(text)
+
+    mr = wt / "python/sglang/srt/model_executor/model_runner.py"
+    text = mr.read_text()
+    for old, new in _OUTSIDE_RWT_SUBS:
+        text = text.replace(old, new)
+    mr.write_text(text)
+
+
 if __name__ == "__main__":
     run_pr(
         transform=transform,

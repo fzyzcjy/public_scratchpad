@@ -193,6 +193,12 @@ def transform(wt: Path) -> None:
 
     mr.write_text(text)
 
+    # Absorbed from kw-mech-rename: verb-leading reads truer than bare noun
+    # (the function runs the autotune; it is not the autotune itself).
+    kw_text = kw.read_text()
+    kw_text = kw_text.replace("_flashinfer_autotune(", "_run_flashinfer_autotune(")
+    kw.write_text(kw_text)
+
 if __name__ == "__main__":
     run_pr(
         transform=transform,

@@ -32,6 +32,7 @@ Usage:
 # dependencies = ["typer"]
 # ///
 
+import re
 import sys
 from pathlib import Path
 
@@ -338,6 +339,68 @@ def transform(wt: Path) -> None:
     )
 
     mr.write_text(text)
+
+    # Absorbed from ha-mech-drop-is-draft-worker: the kwarg is reachable via
+    # ``model_config.is_draft_model`` (already a ModelConfig field), so the
+    # kwarg on ``mamba2_config`` / ``mambaish_config`` was redundant.
+    _drop_is_draft_worker(wt)
+
+
+def _drop_call_kwarg(text: str) -> str:
+    """Inside every ``mamba2_config(...)`` / ``mambaish_config(...)`` call
+    body, drop the ``, is_draft_worker=<expr>`` substring (handles both
+    inline and black-wrapped multi-line forms)."""
+    def repl(m: "re.Match") -> str:
+        return re.sub(
+            r",\s*is_draft_worker=[a-zA-Z0-9_.\[\]]+\s*",
+            "",
+            m.group(0),
+        )
+
+    return re.sub(
+        r"\bmam(?:ba2|baish)_config\([^()]*\)",
+        repl,
+        text,
+        flags=re.DOTALL,
+    )
+
+
+_FILES_DROP_KWARG = [
+    "python/sglang/srt/configs/hybrid_arch.py",
+    "python/sglang/srt/layers/attention/attention_registry.py",
+    "python/sglang/srt/layers/attention/hybrid_linear_attn_backend.py",
+    "python/sglang/srt/managers/scheduler.py",
+    "python/sglang/srt/model_executor/model_runner.py",
+    "python/sglang/srt/model_executor/pool_configurator.py",
+    "python/sglang/srt/model_executor/model_runner_kv_cache_mixin.py",
+    "python/sglang/srt/speculative/eagle_worker.py",
+    "python/sglang/srt/speculative/eagle_worker_v2.py",
+    "python/sglang/srt/speculative/frozen_kv_mtp_worker.py",
+]
+
+
+def _drop_is_draft_worker(wt: Path) -> None:
+    # 1) hybrid_arch.py: drop signature kwarg + replace body usage.
+    ha = wt / "python/sglang/srt/configs/hybrid_arch.py"
+    text = ha.read_text()
+    text = text.replace("    *,\n    is_draft_worker: bool,\n", "")
+    text = text.replace(
+        "if isinstance(config, NemotronHConfig) and is_draft_worker:",
+        "if isinstance(config, NemotronHConfig) and model_config.is_draft_model:",
+    )
+    text = _drop_call_kwarg(text)
+    ha.write_text(text)
+
+    # 2) Drop kwarg at every other caller. Skip files that may not exist on
+    # the current chain (e.g. the mixin file deleted by
+    # ``kvc-drop-mixin-inheritance``).
+    for relpath in _FILES_DROP_KWARG:
+        if relpath == "python/sglang/srt/configs/hybrid_arch.py":
+            continue
+        path = wt / relpath
+        if not path.exists():
+            continue
+        path.write_text(_drop_call_kwarg(path.read_text()))
 
 
 if __name__ == "__main__":

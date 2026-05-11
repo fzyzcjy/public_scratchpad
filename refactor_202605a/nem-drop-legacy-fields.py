@@ -54,9 +54,9 @@ def transform(wt: Path) -> None:
             "        # Legacy double-track fields kept for now; Scheduler / CudaGraphRunner\n"
             "        # still read them. PRs 2 and 3 of this chain migrate those callers\n"
             "        # to ``self.ngram_embedding_manager`` and then drop the fields below.\n"
-            "        self.use_ngram_embedding = self.ngram_embedding_manager.use_ngram_embedding\n"
-            "        if self.ngram_embedding_manager.use_ngram_embedding:\n"
-            "            self.token_table = self.ngram_embedding_manager.token_table\n"
+            "        self.use_ngram_embedding = self.ngram_embedding_manager.enabled\n"
+            "        if self.ngram_embedding_manager.enabled:\n"
+            "            self.token_table = self.ngram_embedding_manager.table\n"
         ),
         new="",
     )

@@ -281,6 +281,12 @@ def transform(wt: Path) -> None:
     )
     mr.write_text(text)
 
+    # Absorbed from dg-mech-rename: factory function reads truer as ``create_*``.
+    for path in [dg, mr]:
+        text = path.read_text()
+        text = text.replace("init_piecewise_cuda_graphs", "create_piecewise_cuda_graphs")
+        path.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(

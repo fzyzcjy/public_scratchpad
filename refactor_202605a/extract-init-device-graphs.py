@@ -172,6 +172,12 @@ def transform(wt: Path) -> None:
     )
     wu.write_text(wu_text)
 
+    # Absorbed from dg-mech-rename: factory functions read truer as ``create_*``.
+    for path in [dg, mr, wu]:
+        text = path.read_text()
+        text = text.replace("init_device_graphs", "create_device_graphs")
+        path.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(
