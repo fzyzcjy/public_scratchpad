@@ -49,7 +49,7 @@ from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ScoreResult:
     scores: List[List[float]]
     prompt_tokens: int = 0

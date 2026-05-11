@@ -224,7 +224,6 @@ def transform(wt: Path) -> None:
         addition=(
             "from sglang.srt.managers.tokenizer_manager_components.weight_disk_update_controller import (\n"
             "    WeightDiskUpdateController,\n"
-            "    WeightDiskUpdateControllerConfig,\n"
             ")\n"
         ),
     )
@@ -247,11 +246,6 @@ def transform(wt: Path) -> None:
             "            model_update_lock=self.model_update_lock,\n"
             "            server_args=self.server_args,\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-            "            config=WeightDiskUpdateControllerConfig(\n"
-            "                dp_size=self.server_args.dp_size,\n"
-            "                initial_load_format=self.server_args.load_format,\n"
-            "                checkpoint_engine_wait_weights_before_ready=self.server_args.checkpoint_engine_wait_weights_before_ready,\n"
-            "            ),\n"
             "        )\n"
             "\n"
             "        # Session controller\n"

@@ -104,9 +104,9 @@ class SchedulerLoadInquirer:
 
     disaggregation_mode: Any
     ps: Any
+    server_args: Any
     max_total_num_tokens: int
     max_running_requests: int
-    enable_lora: bool
     pool_stats_observer: Any
     tp_worker: Any
     token_to_kv_pool_allocator: Any
@@ -128,9 +128,9 @@ SCHEDULER_INIT_INSERT = """\
         self.load_inquirer = SchedulerLoadInquirer(
             disaggregation_mode=self.disaggregation_mode,
             ps=self.ps,
+            server_args=self.server_args,
             max_total_num_tokens=self.max_total_num_tokens,
             max_running_requests=self.max_running_requests,
-            enable_lora=self.enable_lora,
             pool_stats_observer=self.pool_stats_observer,
             tp_worker=self.tp_worker,
             token_to_kv_pool_allocator=self.token_to_kv_pool_allocator,
@@ -202,8 +202,8 @@ BODY_GETTER_REPLACEMENTS = [
         "                    accept_rate=self.get_stats().spec_accept_rate,",
     ),
     (
-        "            if hasattr(self, \"lora_scheduler\") and self.lora_scheduler is not None:",
         "            if self.enable_lora:",
+        "            if self.server_args.enable_lora:",
     ),
     (
         "                    slots_used=self.stats.lora_pool_slots_used,",

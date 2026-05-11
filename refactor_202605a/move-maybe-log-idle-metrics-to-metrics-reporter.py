@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """Cross-mixin move: cut ``_maybe_log_idle_metrics`` from
 ``SchedulerRuntimeCheckerMixin`` and paste it into the
-``SchedulerMetricsReporter`` class body. Body reads of mode-conditional
-Scheduler state are rewritten to ``self.get_X()`` Callable getter calls —
-the getter fields were added to the ``SchedulerMetricsReporter`` ctor in the
-C14 prep commit. Pool-stats sibling reads (``self.get_pool_stats()`` /
-``self._streaming_session_count()`` / ``self._session_held_tokens()``) are
-rewritten to the post-C9 form (``self.pool_stats_observer.X()``), since the
-mixin file was skipped by C9's body-rewrite pass (which only touched
-``scheduler.py``).
+``SchedulerMetricsReporter`` class body. Body reads of Scheduler state
+are rewritten to ``self.scheduler.X`` form, matching the back-reference
+ctor introduced in the C14 prep commit. Pool-stats sibling reads
+(``self.get_pool_stats()`` / ``self._streaming_session_count()`` /
+``self._session_held_tokens()``) are rewritten to the post-C9 form
+(``self.scheduler.pool_stats_observer.X()``).
 
 The sole caller in ``Scheduler.on_idle`` (now on the Scheduler main class
 since C8) is rewired from ``self._maybe_log_idle_metrics()`` →
@@ -37,15 +35,13 @@ ID = "move-maybe-log-idle-metrics-to-metrics-reporter"
 SUBJECT = "Hand idle-metrics logging over to SchedulerMetricsReporter"
 BODY = """\
 Cut ``_maybe_log_idle_metrics`` from ``SchedulerRuntimeCheckerMixin`` and
-paste it into ``SchedulerMetricsReporter`` body. Body reads of
-mode-conditional Scheduler state (``running_batch`` / ``grammar_manager``
-/ ``disaggregation_mode`` / 4 disagg queues) become ``self.get_X()``
-Callable getter calls — the getter fields were already added to the
-reporter ctor in the C14 prep commit. Pool-stats sibling reads
-(``self.get_pool_stats()`` / ``self._streaming_session_count()`` /
-``self._session_held_tokens()``) are rewritten to the post-C9 form
-(``self.pool_stats_observer.X()``), which C9 skipped here because its
-rewrite pass only touched ``scheduler.py``.
+paste it into ``SchedulerMetricsReporter`` body. Body reads of Scheduler
+state (``running_batch`` / ``waiting_queue`` / ``grammar_manager`` /
+``disaggregation_mode`` / 4 disagg queues / ``enable_priority_scheduling``)
+become ``self.scheduler.X``, matching the back-reference ctor introduced
+in the C14 prep commit. Pool-stats sibling reads (``self.get_pool_stats()``
+/ ``self._streaming_session_count()`` / ``self._session_held_tokens()``)
+are rewritten to the post-C9 form (``self.scheduler.pool_stats_observer.X()``).
 
 Single caller (in ``Scheduler.on_idle``, hoisted to the Scheduler main
 class by C8) is updated: ``self._maybe_log_idle_metrics()`` →
@@ -62,41 +58,59 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # ``SchedulerMetricsReporter``. Each (old, new) pair MUST appear in the body
 # at least once (no silent no-ops).
 #
-# Reporter already owns ``waiting_queue`` / ``stats`` / ``metrics_collector``
-# / ``enable_priority_scheduling`` / ``current_scheduler_metrics_enabled``
-# as direct ctor / init_metrics fields, so those reads stay as ``self.X``.
+# Reporter owns ``stats`` / ``metrics_collector`` /
+# ``current_scheduler_metrics_enabled`` (direct ctor / init_metrics fields),
+# so those reads stay as ``self.X``. Everything else is a Scheduler field
+# accessed via the ``scheduler`` back-reference.
 BODY_SUBSTITUTIONS = [
-    # Pool-stats sibling reads — C9 didn't rewrite the mixin file, only
-    # ``scheduler.py``. Apply the equivalent post-C9 form here.
-    ("self.get_pool_stats()", "self.pool_stats_observer.get_pool_stats()"),
+    # Pool-stats sibling reads — pool_stats_observer is on Scheduler (C9
+    # introduced it as a sister class), reached via the back-reference.
+    (
+        "self.get_pool_stats()",
+        "self.scheduler.pool_stats_observer.get_pool_stats()",
+    ),
     (
         "self.stats.num_streaming_sessions = self._streaming_session_count()",
-        "self.stats.num_streaming_sessions = self.pool_stats_observer.streaming_session_count()",
+        "self.stats.num_streaming_sessions = self.scheduler.pool_stats_observer.streaming_session_count()",
     ),
     (
         "self.stats.streaming_session_held_tokens = self._session_held_tokens()",
-        "self.stats.streaming_session_held_tokens = self.pool_stats_observer.session_held_tokens()",
+        "self.stats.streaming_session_held_tokens = self.scheduler.pool_stats_observer.session_held_tokens()",
     ),
-    # Mutable scheduler state — route through Callable getters (added to the
-    # reporter ctor in the C14 prep commit).
-    ("self.running_batch.reqs", "self.get_running_batch().reqs"),
-    ("len(self.grammar_manager)", "len(self.get_grammar_manager())"),
-    ("self.disaggregation_mode", "self.get_disaggregation_mode()"),
+    # Scheduler-owned state — route through the back-reference.
+    ("self.running_batch.reqs", "self.scheduler.running_batch.reqs"),
+    ("len(self.grammar_manager)", "len(self.scheduler.grammar_manager)"),
+    (
+        "priority_enabled = self.enable_priority_scheduling",
+        "priority_enabled = self.scheduler.enable_priority_scheduling",
+    ),
+    (
+        "self.waiting_queue, priority_enabled",
+        "self.scheduler.waiting_queue, priority_enabled",
+    ),
+    (
+        "if self.disaggregation_mode == DisaggregationMode.PREFILL:",
+        "if self.scheduler.disaggregation_mode == DisaggregationMode.PREFILL:",
+    ),
+    (
+        "if self.disaggregation_mode == DisaggregationMode.DECODE:",
+        "if self.scheduler.disaggregation_mode == DisaggregationMode.DECODE:",
+    ),
     (
         "self.disagg_prefill_bootstrap_queue.queue",
-        "self.get_disagg_prefill_bootstrap_queue().queue",
+        "self.scheduler.disagg_prefill_bootstrap_queue.queue",
     ),
     (
-        "self.disagg_prefill_inflight_queue",
-        "self.get_disagg_prefill_inflight_queue()",
+        "self.disagg_prefill_inflight_queue, priority_enabled",
+        "self.scheduler.disagg_prefill_inflight_queue, priority_enabled",
     ),
     (
         "self.disagg_decode_prealloc_queue.queue",
-        "self.get_disagg_decode_prealloc_queue().queue",
+        "self.scheduler.disagg_decode_prealloc_queue.queue",
     ),
     (
         "self.disagg_decode_transfer_queue.queue",
-        "self.get_disagg_decode_transfer_queue().queue",
+        "self.scheduler.disagg_decode_transfer_queue.queue",
     ),
 ]
 

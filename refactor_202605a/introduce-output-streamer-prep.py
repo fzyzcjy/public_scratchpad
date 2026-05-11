@@ -124,7 +124,6 @@ class SchedulerOutputStreamer:
     ps: Any
     server_args: Any
     is_generation: bool
-    stream_interval: int
     spec_algorithm: Any
     disaggregation_mode: Any
     enable_hicache_storage: Callable[[], bool]
@@ -140,7 +139,6 @@ SCHEDULER_INIT_INSERT = """\
             ps=self.ps,
             server_args=self.server_args,
             is_generation=self.is_generation,
-            stream_interval=self.stream_interval,
             spec_algorithm=self.spec_algorithm,
             disaggregation_mode=self.disaggregation_mode,
             enable_hicache_storage=lambda: self.enable_hicache_storage,
@@ -295,6 +293,15 @@ def transform(wt: Path) -> None:
             f"self.{m}(",
             f"self.{m}(self.output_streamer, ",
         )
+
+    # Drop ``stream_interval`` ctor field → read via
+    # ``self.server_args.stream_interval``. The single occurrence in this
+    # mixin lives inside ``_stream_output_generation`` (a method being
+    # moved); no other reference exists at base of mech_preflight, so a
+    # plain text.replace is scope-safe.
+    text = text.replace(
+        "self.stream_interval", "self.server_args.stream_interval"
+    )
 
     # Add TYPE_CHECKING import for the new TargetClass so the
     # ``self: "SchedulerOutputStreamer"`` annotation resolves under pyflakes.

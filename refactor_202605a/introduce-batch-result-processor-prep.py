@@ -138,8 +138,6 @@ class SchedulerBatchResultProcessor:
 
     is_generation: bool
     disaggregation_mode: Any
-    enable_hisparse: bool
-    enable_metrics: bool
     enable_overlap: bool
     enable_overlap_mlx: bool
     server_args: Any
@@ -167,8 +165,6 @@ SCHEDULER_INIT_INSERT = """\
         self.batch_result_processor = SchedulerBatchResultProcessor(
             is_generation=self.is_generation,
             disaggregation_mode=self.disaggregation_mode,
-            enable_hisparse=self.enable_hisparse,
-            enable_metrics=self.enable_metrics,
             enable_overlap=self.enable_overlap,
             enable_overlap_mlx=self.enable_overlap_mlx,
             server_args=self.server_args,
@@ -313,6 +309,18 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "self.metrics_reporter.update_spec_metrics(",
         "self.update_spec_metrics(",
+    )
+
+    # Drop ctor flag fields → read via ``self.server_args.X``. All
+    # occurrences of ``self.enable_hisparse`` / ``self.enable_metrics`` in
+    # this mixin live inside the 11 methods being moved (verified at base
+    # of mech_preflight; no other methods on the mixin reference them), so
+    # a plain text.replace is scope-safe here.
+    text = text.replace(
+        "self.enable_hisparse", "self.server_args.enable_hisparse"
+    )
+    text = text.replace(
+        "self.enable_metrics", "self.server_args.enable_metrics"
     )
 
     # 5. Caller form: ``self.<m>(self.batch_result_processor, <rest>)`` for

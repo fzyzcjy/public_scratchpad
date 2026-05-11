@@ -1,22 +1,32 @@
 #!/usr/bin/env python3
 """Inplace prep for ``introduce-metrics-reporter``: build the
 ``SchedulerMetricsReporter`` class skeleton **at the target path**
-(``managers/scheduler_components/metrics_reporter.py``) with a Callable-
-injection ctor, instantiate on ``Scheduler``, type-flip the 15 mixin
-methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``,
-rewrite body reads of mutable Scheduler scalars through Callable
-getters, qualify internal sibling calls as
+(``managers/scheduler_components/metrics_reporter.py``) with a slim
+back-reference ctor (5 fields), instantiate on ``Scheduler``, type-flip
+the 15 mixin methods to ``@staticmethod`` with
+``self: "SchedulerMetricsReporter"``, rewrite body reads of Scheduler
+fields to ``self.scheduler.X`` (preserving reporter-owned fields),
+qualify internal sibling calls as
 ``SchedulerMetricsMixin.<sibling>(self, ...)``, and rewrite Scheduler /
 mixin / disagg / dllm callers into the static-bound sister form
 ``self.<method>(self.metrics_reporter, ...)``.
 
+R4 exception note: ``SchedulerMetricsReporter`` is allowed to hold a
+``scheduler: Scheduler`` back-reference because metrics is a read-only
+panoramic observer — replacing every ``self.scheduler.X`` access with a
+Callable getter (the alternative) is just back-reference in disguise,
+and obscures the fact that the reporter genuinely needs to see most of
+Scheduler's surface to emit complete metrics. Other sister classes do
+NOT get this exemption.
+
 After this commit:
 
   * ``managers/scheduler_components/metrics_reporter.py`` exists with
-    the class skeleton (header imports + ctor).
+    the class skeleton (header imports + slim ctor).
   * ``observability/scheduler_metrics_mixin.py`` still hosts
     ``PrefillStats``, module constants, and the 15 methods (now all
-    ``@staticmethod`` typed for the new class).
+    ``@staticmethod`` typed for the new class, with body reads of
+    Scheduler fields routed through ``self.scheduler.X``).
   * Scheduler owns ``self.metrics_reporter`` and routes hot-path callers
     through it via ``self.<method>(self.metrics_reporter, ...)`` —
     exactly the form pool-stats-observer-prep / load-inquirer-prep use.
@@ -27,30 +37,6 @@ mixin, paste them into the target class / module, strip
 ``@staticmethod`` + typeflip + sibling-call qualifier, drop the mixin
 file, rewrite 3 external import paths, and collapse caller form
 ``self.foo(self.metrics_reporter, ...)`` → ``self.metrics_reporter.foo(...)``.
-
-Pragmatic deviations documented:
-
-- Callable injection for 4 mutable scalars (``running_batch`` /
-  ``forward_ct`` / ``running_mbs`` / ``last_batch``).
-- Ownership migration: ``num_retracted_reqs`` / ``num_paused_reqs``
-  move from Scheduler-owned to reporter-owned. Neither is separable
-  into a pre-prep commit because both move TO ``SchedulerMetricsReporter``
-  which does not exist before this commit; the prep is precisely where
-  the class is born.
-- ``init_metrics`` body is *not* inlined into the ctor — instead the
-  ctor calls ``SchedulerMetricsMixin.init_metrics(self, tp_rank,
-  pp_rank, dp_rank)`` qualified form; ``install_device_timer_on_runners``
-  immediately after. In ``-move`` the qualified prefix gets stripped to
-  plain ``self.init_metrics(...)`` after the method body lands inside
-  ``SchedulerMetricsReporter``.
-- ``metrics_collector`` ownership routing (option b): the
-  ``SchedulerMetricsCollector`` is still constructed during the
-  inlined-on-Scheduler early-fields block (because ``init_model_worker``
-  reads ``self.metrics_collector`` to call ``emit_constants`` before
-  the reporter exists). The reporter ctor receives the same instance
-  via ``metrics_collector=`` kwarg and re-exposes as
-  ``self.metrics_reporter.metrics_collector``. Post-init Scheduler call
-  sites route through the reporter.
 """
 
 # /// script
@@ -58,6 +44,7 @@ Pragmatic deviations documented:
 # dependencies = ["typer"]
 # ///
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -73,14 +60,20 @@ BODY = """\
 Inplace prep for the ``introduce-metrics-reporter`` mech move.
 
 - Create ``managers/scheduler_components/metrics_reporter.py`` with an
-  empty ``SchedulerMetricsReporter`` class skeleton (header imports +
-  ctor only; methods land in the upcoming ``-move`` commit).
-- Ctor stashes deps + Callable getters (``get_running_batch`` /
-  ``get_forward_ct`` / ``get_running_mbs`` / ``get_last_batch``) for the
-  4 mutable Scheduler scalars referenced by reporter methods, then runs
-  the original ``init_metrics`` body via
+  empty ``SchedulerMetricsReporter`` class skeleton (slim ctor only;
+  methods land in the upcoming ``-move`` commit). The ctor takes a
+  ``scheduler: "Scheduler"`` back-reference plus ``tp_rank`` /
+  ``pp_rank`` / ``dp_rank`` / ``metrics_collector`` (5 kwargs total).
+- R4 exception documented in the class docstring: the metrics reporter
+  is a panoramic read-only observer and is the only sister class
+  allowed to hold a ``scheduler`` back-reference; every other sister
+  class must stick to explicit field injection.
+- ``__post_init__`` runs the original ``init_metrics`` body via
   ``SchedulerMetricsMixin.init_metrics(self, tp_rank, pp_rank, dp_rank)``
-  qualified call (and ``install_device_timer_on_runners`` likewise).
+  qualified call (and ``install_device_timer_on_runners`` likewise) —
+  the methods still live on the mixin file during prep, and the
+  qualified prefix collapses to ``self.init_metrics(...)`` in the move
+  commit once the bodies are pasted onto the reporter class itself.
 - Instantiate ``self.metrics_reporter = SchedulerMetricsReporter(...)``
   in ``Scheduler.__init__`` after ``self.kv_events_publisher``.
 - Replace ``self.init_metrics(tp_rank, pp_rank, dp_rank)`` in
@@ -99,10 +92,10 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
   rewires to ``self.metrics_reporter.num_retracted_reqs = ...``.
 - In ``SchedulerMetricsMixin`` (still at the old path), convert all
   15 methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``
-  typed first param. Body reads of mutable Scheduler scalars rewrite to
-  ``self.get_X()`` Callable form. Internal sibling calls rewrite to
-  ``SchedulerMetricsMixin.<sibling>(self, ...)`` qualified form so
-  Python doesn't drop the ``self`` arg on a ``@staticmethod`` lookup.
+  typed first param. Body reads of Scheduler fields rewrite to
+  ``self.scheduler.X`` form (driven by an AST-based reporter-owned
+  whitelist; sibling method calls stay as ``self.<m>(...)`` and are
+  separately qualified to ``SchedulerMetricsMixin.<m>(self, ...)``).
 - Hot-path Scheduler / mixin / disagg / dllm callers rewrite from
   ``self.foo(args)`` → ``self.foo(self.metrics_reporter, args)`` —
   the static-bound sister form. In ``-move`` this collapses to
@@ -133,7 +126,7 @@ from __future__ import annotations  # noqa: F401
 
 import logging  # noqa: F401
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional  # noqa: F401
+from typing import TYPE_CHECKING, Any, Optional  # noqa: F401
 
 from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
 from sglang.srt.observability.scheduler_metrics_mixin import (  # noqa: F401
@@ -154,48 +147,21 @@ NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True)
 class SchedulerMetricsReporter:
     """Prometheus / Stats hot-path. Composition target on Scheduler
-    (``self.metrics_reporter``)."""
+    (``self.metrics_reporter``).
 
-    ps: Any
-    server_args: Any
-    disaggregation_mode: Any
-    spec_algorithm: Any
-    metrics_collector: Any
-    enable_priority_scheduling: bool
-    enable_lora: Any
-    enable_hierarchical_cache: bool
-    max_running_requests: int
-    max_total_num_tokens: int
+    R4 exception: this is the ONLY sister class that holds a
+    ``scheduler: Scheduler`` back-reference. Metric emission is a
+    read-only panoramic observer over Scheduler state — forcing every
+    field access through Callable getters (the alternative) is
+    back-reference in disguise and obscures the genuine "see most of
+    Scheduler" requirement. Other sister classes do not get this
+    exemption."""
+
+    scheduler: "Scheduler"
     tp_rank: int
     pp_rank: int
-    dp_rank: Any
-    attn_tp_rank: int
-    moe_ep_rank: int
-    device: str
-    model_config: Any
-    max_running_requests_under_SLO: Any
-    waiting_queue: Any
-    grammar_manager: Any
-    mm_receiver: Any
-    tree_cache: Any
-    tp_worker: Any
-    draft_worker: Any
-    disagg_prefill_bootstrap_queue: Any
-    disagg_prefill_inflight_queue: Any
-    disagg_decode_prealloc_queue: Any
-    disagg_decode_transfer_queue: Any
-    kv_events_publisher: Any
-    pool_stats_observer: Any
-    get_running_batch: Callable
-    get_forward_ct: Callable
-    get_running_mbs: Callable
-    get_last_batch: Callable
-    get_grammar_manager: Callable
-    get_disaggregation_mode: Callable
-    get_disagg_prefill_bootstrap_queue: Callable
-    get_disagg_prefill_inflight_queue: Callable
-    get_disagg_decode_prealloc_queue: Callable
-    get_disagg_decode_transfer_queue: Callable
+    dp_rank: Optional[int]
+    metrics_collector: Any
 
     def __post_init__(self) -> None:
         # Owned counters (ownership migration from Scheduler).
@@ -215,48 +181,11 @@ class SchedulerMetricsReporter:
 
 SCHEDULER_INIT_INSERT = """\
         self.metrics_reporter = SchedulerMetricsReporter(
-            ps=self.ps,
-            server_args=self.server_args,
-            disaggregation_mode=DisaggregationMode(self.server_args.disaggregation_mode),
-            spec_algorithm=self.spec_algorithm,
+            scheduler=self,
+            tp_rank=tp_rank,
+            pp_rank=pp_rank,
+            dp_rank=dp_rank,
             metrics_collector=self.metrics_collector,
-            enable_priority_scheduling=self.enable_priority_scheduling,
-            enable_lora=self.enable_lora,
-            enable_hierarchical_cache=self.enable_hierarchical_cache,
-            max_running_requests=self.max_running_requests,
-            max_total_num_tokens=self.max_total_num_tokens,
-            tp_rank=self.ps.tp_rank,
-            pp_rank=self.ps.pp_rank,
-            dp_rank=self.ps.dp_rank,
-            attn_tp_rank=self.ps.attn_tp_rank,
-            moe_ep_rank=self.ps.moe_ep_rank,
-            device=self.device,
-            model_config=self.model_config,
-            max_running_requests_under_SLO=getattr(
-                self, "max_running_requests_under_SLO", None
-            ),
-            waiting_queue=self.waiting_queue,
-            grammar_manager=self.grammar_manager,
-            mm_receiver=self.mm_receiver,
-            tree_cache=self.tree_cache,
-            tp_worker=self.tp_worker,
-            draft_worker=self.draft_worker,
-            disagg_prefill_bootstrap_queue=self.disagg_prefill_bootstrap_queue,
-            disagg_prefill_inflight_queue=self.disagg_prefill_inflight_queue,
-            disagg_decode_prealloc_queue=self.disagg_decode_prealloc_queue,
-            disagg_decode_transfer_queue=self.disagg_decode_transfer_queue,
-            kv_events_publisher=self.kv_events_publisher,
-            pool_stats_observer=self.pool_stats_observer,
-            get_running_batch=lambda: self.running_batch,
-            get_forward_ct=lambda: self.forward_ct,
-            get_running_mbs=lambda: self.running_mbs,
-            get_last_batch=lambda: self.last_batch,
-            get_grammar_manager=lambda: self.grammar_manager,
-            get_disaggregation_mode=lambda: self.disaggregation_mode,
-            get_disagg_prefill_bootstrap_queue=lambda: self.disagg_prefill_bootstrap_queue,
-            get_disagg_prefill_inflight_queue=lambda: self.disagg_prefill_inflight_queue,
-            get_disagg_decode_prealloc_queue=lambda: self.disagg_decode_prealloc_queue,
-            get_disagg_decode_transfer_queue=lambda: self.disagg_decode_transfer_queue,
         )
         # Aliases so call sites that historically read self.X (when init_metrics
         # set those fields directly on Scheduler) still resolve.
@@ -346,13 +275,141 @@ SIBLING_CALLS = [
 ]
 
 
-# Body Callable-getter substitutions for mutable scheduler scalars.
-BODY_GETTER_REPLACEMENTS = [
-    ("self.running_batch", "self.get_running_batch()"),
-    ("self.forward_ct", "self.get_forward_ct()"),
-    ("self.running_mbs", "self.get_running_mbs()"),
-    ("self.last_batch", "self.get_last_batch()"),
-]
+# Reporter-owned attributes (NOT rewritten to ``self.scheduler.X`` in the
+# body-rewrite pass). Comprises:
+#   * The 5 ctor kwargs (``scheduler`` / ``tp_rank`` / ``pp_rank`` /
+#     ``dp_rank`` / ``metrics_collector``).
+#   * The 2 ownership-migrated counters (``num_retracted_reqs`` /
+#     ``num_paused_reqs``) set in ``__post_init__``.
+#   * Every ``self.X = ...`` assignment inside ``init_metrics`` / the other
+#     14 typeflipped methods (gathered by inspecting the post-chain reporter
+#     class — these are the fields the reporter genuinely owns).
+#   * The 15 method names themselves (so ``self.<method>(...)`` calls stay
+#     as instance method calls and are separately qualified by
+#     ``_qualify_sibling_calls`` rather than getting rewritten to
+#     ``self.scheduler.<method>(...)``).
+REPORTER_OWNED_ATTRS = frozenset({
+    # Ctor kwargs
+    "scheduler",
+    "tp_rank",
+    "pp_rank",
+    "dp_rank",
+    "metrics_collector",
+    # __post_init__ counters
+    "num_retracted_reqs",
+    "num_paused_reqs",
+    # init_metrics-assigned state
+    "forward_ct_decode",
+    "num_generated_tokens",
+    "last_decode_stats_tic",
+    "last_prefill_stats_tic",
+    "last_gen_throughput",
+    "last_input_throughput",
+    "step_time_dict",
+    "stats",
+    "_graph_backend_label",
+    "spec_num_accepted_tokens",
+    "spec_num_forward_ct",
+    "spec_total_num_accepted_tokens",
+    "spec_total_num_forward_ct",
+    "kv_transfer_speed_gb_s",
+    "kv_transfer_latency_ms",
+    "enable_metrics",
+    "is_stats_logging_rank",
+    "current_scheduler_metrics_enabled",
+    "enable_mfu_metrics",
+    "fwd_occupancy",
+    "forward_pass_device_timer",
+    "scheduler_status_logger",
+    # _init_estimated_perf_constants-assigned state
+    "_linear_flops_per_token",
+    "_attn_dot_flops_coeff",
+    "_kv_cache_bytes_per_token",
+    "_weight_read_bytes_per_token",
+    "_qkv_act_bytes_per_token",
+    "_ffn_act_bytes_per_token",
+    "_prefill_attn_act_read_per_token",
+    "_decode_q_read_bytes_per_token",
+    # update_device_timer / reset_device_timer_window state
+    "_device_timer_window_batch_count",
+    "_device_timer_window_gpu_time",
+    "_device_timer_window_start",
+    "_mfu_log_flops",
+    "_mfu_log_read_bytes",
+    "_mfu_log_write_bytes",
+} | set(METHODS_TO_FLIP))
+
+
+def _rewrite_self_to_scheduler_back_ref(method_text: str) -> str:
+    """AST-based body rewrite: every ``self.X`` read where ``X`` is NOT in
+    ``REPORTER_OWNED_ATTRS`` becomes ``self.scheduler.X``. Also rewrites
+    ``getattr(self, "X", default)`` → ``getattr(self.scheduler, "X", default)``
+    when ``X`` is a Scheduler field.
+
+    The method is parsed as a wrapper module (``def __wrapper__(): <method>``)
+    so we always have a valid parse. Replacements are applied bottom-up by
+    source position to avoid invalidating later offsets.
+    """
+    # Wrap so the method body parses as a module.
+    wrapped = "class _W:\n" + method_text
+    tree = ast.parse(wrapped)
+    # Collect (start_offset, end_offset, new_text) replacements.
+    replacements: list[tuple[int, int, str]] = []
+
+    # Convert (lineno, col_offset) → byte offset within ``wrapped``.
+    lines = wrapped.splitlines(keepends=True)
+    line_starts = [0]
+    for ln in lines:
+        line_starts.append(line_starts[-1] + len(ln))
+
+    def pos(lineno: int, col_offset: int) -> int:
+        return line_starts[lineno - 1] + col_offset
+
+    for node in ast.walk(tree):
+        # Case 1: ``self.X`` (an ast.Attribute whose value is ast.Name('self'))
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "self"
+            and node.attr not in REPORTER_OWNED_ATTRS
+        ):
+            # node spans from value.col_offset through node.end_col_offset, but
+            # we only want to replace the ``self`` part with ``self.scheduler``.
+            s = pos(node.value.lineno, node.value.col_offset)
+            e = s + len("self")
+            # Skip if the text doesn't literally say "self" (defensive).
+            if wrapped[s:e] == "self":
+                replacements.append((s, e, "self.scheduler"))
+
+        # Case 2: ``getattr(self, "X", ...)`` where the X string is in the
+        # call's second positional arg. The first positional arg is
+        # ast.Name('self'); we want to replace that with ``self.scheduler``.
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "self"
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+            and node.args[1].value not in REPORTER_OWNED_ATTRS
+        ):
+            name_node = node.args[0]
+            s = pos(name_node.lineno, name_node.col_offset)
+            e = s + len("self")
+            if wrapped[s:e] == "self":
+                replacements.append((s, e, "self.scheduler"))
+
+    # Apply bottom-up so earlier offsets stay valid.
+    replacements.sort(key=lambda r: r[0], reverse=True)
+    out = wrapped
+    for s, e, new in replacements:
+        out = out[:s] + new + out[e:]
+
+    # Strip the ``class _W:\n`` wrapper prefix.
+    assert out.startswith("class _W:\n")
+    return out[len("class _W:\n"):]
 
 
 def _qualify_sibling_calls(method_text: str) -> str:
@@ -378,8 +435,8 @@ def _qualify_sibling_calls(method_text: str) -> str:
 
 def _typeflip_method(text: str, *, method_name: str) -> str:
     """Type-flip a SchedulerMetricsMixin method to @staticmethod with
-    ``self: "SchedulerMetricsReporter"``. Apply body getter substitutions
-    and qualify sibling calls."""
+    ``self: "SchedulerMetricsReporter"``. Then run the back-reference
+    body-rewrite and qualify sibling calls."""
     s, e = find_method_lines(
         text, class_name="SchedulerMetricsMixin", method_name=method_name
     )
@@ -388,20 +445,15 @@ def _typeflip_method(text: str, *, method_name: str) -> str:
     # Replace the existing ``self: Scheduler`` annotation with
     # ``self: "SchedulerMetricsReporter"`` and prepend the decorator.
     new_method = method_text.replace("self: Scheduler", 'self: "SchedulerMetricsReporter"')
-    # If the original method had bare ``self`` (no Scheduler annotation),
-    # add the new annotation. We expect every method in this mixin to use
-    # ``self: Scheduler`` per the existing convention, so this is a no-op
-    # fallback.
     # Prepend @staticmethod decorator.
     if not new_method.lstrip().startswith("@staticmethod"):
         new_method = "    @staticmethod\n" + new_method
-    # Body callable-getter substitutions.
-    for old, new in BODY_GETTER_REPLACEMENTS:
-        new_method = new_method.replace(old, new)
-    # Some replacements over-fire (e.g. ``self.forward_ct_decode`` becomes
-    # ``self.get_forward_ct()_decode``); undo those.
-    new_method = new_method.replace("self.get_forward_ct()_decode", "self.forward_ct_decode")
-    # Qualify sibling calls.
+    # Body rewrite: self.X (X = Scheduler field) → self.scheduler.X.
+    new_method = _rewrite_self_to_scheduler_back_ref(new_method)
+    # Qualify sibling calls (after back-ref rewrite; the sibling names are
+    # in REPORTER_OWNED_ATTRS so the back-ref pass leaves them as
+    # ``self.<sibling>(...)``, then this pass turns them into
+    # ``SchedulerMetricsMixin.<sibling>(self, ...)``).
     new_method = _qualify_sibling_calls(new_method)
     return "".join(lines[:s]) + new_method + "".join(lines[e:])
 
@@ -418,31 +470,14 @@ def transform(wt: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(TARGET_FILE_HEADER + NEW_CLASS_SKELETON)
 
-    # 2. In the mixin file, type-flip each of the 15 methods to @staticmethod
-    #    with self: "SchedulerMetricsReporter". Iterate bottom-up so earlier
-    #    line ranges are not invalidated by later edits.
+    # 2. PRE-typeflip: strip the duplicate ``SchedulerMetricsCollector``
+    # construction from ``init_metrics`` BEFORE the body-rewrite pass, so the
+    # anchor matches the unrewritten ``self.X`` form. Scheduler.__init__ now
+    # builds + owns the collector (option b) and forwards it via the reporter
+    # ctor kwarg; if init_metrics also constructs, the second
+    # SchedulerMetricsCollector(...) re-registers Prometheus metrics and
+    # crashes with ``Duplicated timeseries``.
     text = src.read_text()
-    # AST traversal: locate each method, type-flip in place. find_method_lines
-    # re-parses each time so iteration order doesn't matter, but bottom-up is
-    # safer when in-place edits change byte counts.
-    import ast
-    tree = ast.parse(text)
-    method_lineno = {}
-    for cls in ast.walk(tree):
-        if isinstance(cls, ast.ClassDef) and cls.name == "SchedulerMetricsMixin":
-            for node in cls.body:
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    method_lineno[node.name] = node.lineno
-            break
-    ordered = sorted(METHODS_TO_FLIP, key=lambda m: method_lineno.get(m, 0), reverse=True)
-    for name in ordered:
-        text = _typeflip_method(text, method_name=name)
-
-    # 2.5 Strip the duplicate ``SchedulerMetricsCollector`` construction from
-    # ``init_metrics``. Scheduler.__init__ now builds + owns the collector
-    # (option b) and forwards it via the reporter ctor kwarg; if init_metrics
-    # also constructs, the second SchedulerMetricsCollector(...) re-registers
-    # Prometheus metrics and crashes with ``Duplicated timeseries``.
     text = replace_call_site(
         text,
         old=(
@@ -489,9 +524,25 @@ def transform(wt: Path) -> None:
         old="    SchedulerMetricsCollector,\n",
         new="",
     )
+
+    # 3. Type-flip each of the 15 methods to @staticmethod with
+    #    self: "SchedulerMetricsReporter" AND apply the back-reference body
+    #    rewrite. Iterate bottom-up so earlier line ranges are not invalidated
+    #    by later edits.
+    tree = ast.parse(text)
+    method_lineno = {}
+    for cls in ast.walk(tree):
+        if isinstance(cls, ast.ClassDef) and cls.name == "SchedulerMetricsMixin":
+            for node in cls.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    method_lineno[node.name] = node.lineno
+            break
+    ordered = sorted(METHODS_TO_FLIP, key=lambda m: method_lineno.get(m, 0), reverse=True)
+    for name in ordered:
+        text = _typeflip_method(text, method_name=name)
     src.write_text(text)
 
-    # 3. Scheduler: import + ctor instantiation + early-fields block +
+    # 4. Scheduler: import + ctor instantiation + early-fields block +
     #    drop num_retracted/num_paused init + caller rewrites.
     text = sched.read_text()
     # Add the SchedulerMetricsReporter + SchedulerMetricsCollector imports
@@ -595,7 +646,7 @@ def transform(wt: Path) -> None:
     # which ``self.metrics_collector`` resolves correctly on the reporter.
     sched.write_text(text)
 
-    # 4. Output processor mixin callsites — static-bound sister form.
+    # 5. Output processor mixin callsites — static-bound sister form.
     text = output_mixin.read_text()
     text = re.sub(
         r"(        )self\.report_prefill_stats\(",
@@ -614,7 +665,7 @@ def transform(wt: Path) -> None:
     )
     output_mixin.write_text(text)
 
-    # 5. Disaggregation prefill.
+    # 6. Disaggregation prefill.
     text = prefill.read_text()
     text = re.sub(
         r"(        )self\.report_prefill_stats\(",
@@ -623,7 +674,7 @@ def transform(wt: Path) -> None:
     )
     prefill.write_text(text)
 
-    # 6. dllm mixin.
+    # 7. dllm mixin.
     text = dllm.read_text()
     text = re.sub(
         r"(        )self\.report_prefill_stats\(",

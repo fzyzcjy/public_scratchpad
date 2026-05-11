@@ -47,7 +47,7 @@ from sglang.srt.managers.tokenizer_manager_components.request_metrics_recorder i
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OutputProcessorConfig:
     weight_version: Optional[str]
     batch_notify_size: int
@@ -61,7 +61,7 @@ class OutputProcessorConfig:
     served_model_name: str
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class OutputProcessor:
     """Consumes BatchStrOutput / BatchTokenIDOutput / BatchEmbeddingOutput from scheduler."""
 
@@ -72,7 +72,6 @@ class OutputProcessor:
     lora_controller: LoraController
     send_to_scheduler: Any
     config: OutputProcessorConfig
-    pending_notify: int = 0
 '''
 
 
