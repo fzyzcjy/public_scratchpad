@@ -56,6 +56,10 @@ def transform(wt: Path) -> None:
         kw.write_text(kw_text)
 
     fn1 = _cut_and_dedent(mr, "kernel_warmup")
+    # ``kernel_warmup`` body has a class-qualified call to
+    # ``ModelRunner._run_flashinfer_autotune(...)`` (prep-stage scaffolding).
+    # Strip the qualifier — both functions now live in this module.
+    fn1 = fn1.replace("ModelRunner._run_flashinfer_autotune(", "_run_flashinfer_autotune(")
     append_to_file(kw, fn1)
     fn2 = _cut_and_dedent(mr, "_run_flashinfer_autotune")
     append_to_file(kw, fn2)

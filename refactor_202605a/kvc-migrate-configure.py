@@ -144,7 +144,7 @@ def _global_subs(body: str) -> str:
     body = body.replace("(self: ModelRunner, ", "(self, ")
     body = body.replace("(self: ModelRunner)", "(self)")
     body = re.sub(
-        r"mambaish_config\(\s*self\.model_config,\s*is_draft_worker=self\.is_draft_worker\s*\)",
+        r"mambaish_config\(\s*self\.model_config\s*\)",
         "self.mambaish_config",
         body,
     )

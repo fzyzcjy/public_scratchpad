@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Mechanical move for ``introduce-load-inquirer``: cut ``get_loads``
-@staticmethod from ``SchedulerMetricsMixin``, paste it into the
-``SchedulerLoadInquirer`` class body. Drop ``@staticmethod``, simplify
+and ``_get_num_pending_tokens`` (both @staticmethod after prep) from
+``SchedulerMetricsMixin``, paste them into the ``SchedulerLoadInquirer``
+class body. Drop ``@staticmethod``, simplify
 ``self: "SchedulerLoadInquirer"`` → bare ``self``, rewrite callers from
-``self.get_loads(self.load_inquirer, ...)`` →
-``self.load_inquirer.get_loads(...)``.
+``self.<method>(self.load_inquirer, ...)`` →
+``self.load_inquirer.<method>(...)``.
 """
 
 # /// script
@@ -21,13 +22,14 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-load-inquirer-move"
-SUBJECT = "Move get_loads into SchedulerLoadInquirer class body"
+SUBJECT = "Move get_loads + _get_num_pending_tokens into SchedulerLoadInquirer class body"
 BODY = """\
 Mechanical cut + paste for the ``introduce-load-inquirer`` mech move.
 
-Cut ``get_loads`` (@staticmethod after prep) from
-``SchedulerMetricsMixin`` and paste it into ``SchedulerLoadInquirer``
-class body in ``scheduler_components/load_inquirer.py``.
+Cut ``get_loads`` and ``_get_num_pending_tokens`` (both @staticmethod
+after prep) from ``SchedulerMetricsMixin`` and paste them into
+``SchedulerLoadInquirer`` class body in
+``scheduler_components/load_inquirer.py``.
 
 Drop ``@staticmethod`` decorator; simplify ``self: SchedulerLoadInquirer``
 type annotation to bare ``self``. Body otherwise byte-identical.
@@ -36,6 +38,7 @@ Callers updated (pure prefix transformation):
 - RPC dispatch lambda in ``Scheduler.init_request_dispatcher``
 - ``stream_output_generation`` in
   ``scheduler_output_processor_mixin.py``
+- ``_get_new_batch_prefill_raw`` in ``Scheduler``
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -48,17 +51,11 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     return text
 
 
-def transform(wt: Path) -> None:
-    src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
-    sched = wt / "python/sglang/srt/managers/scheduler.py"
-    output_mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/load_inquirer.py"
-
-    # Cut get_loads.
+def _cut_method_to_target(src: Path, target: Path, *, method_name: str) -> None:
     s, e = find_method_lines(
         src.read_text(),
         class_name="SchedulerMetricsMixin",
-        method_name="get_loads",
+        method_name=method_name,
     )
     block = cut_lines(src, s, e)
     block = _strip_staticmethod_typeflip(block, target_class="SchedulerLoadInquirer")
@@ -67,16 +64,28 @@ def transform(wt: Path) -> None:
     rtext = rtext.rstrip() + "\n\n" + block.rstrip() + "\n"
     target.write_text(rtext)
 
+
+def transform(wt: Path) -> None:
+    src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
+    sched = wt / "python/sglang/srt/managers/scheduler.py"
+    output_mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/load_inquirer.py"
+
+    # Cut _get_num_pending_tokens first (preserves line numbers for get_loads).
+    _cut_method_to_target(src, target, method_name="_get_num_pending_tokens")
+    _cut_method_to_target(src, target, method_name="get_loads")
+
     # Caller rewrites — use the robust helper (handles single-line and
     # multi-line black-formatted calls alike).
     for f in (sched, output_mixin):
         ftext = f.read_text()
-        try:
-            ftext = rewrite_method_call_site(
-                ftext, method_name="get_loads", target_attr="load_inquirer"
-            )
-        except ValueError:
-            pass
+        for method_name in ("get_loads", "_get_num_pending_tokens"):
+            try:
+                ftext = rewrite_method_call_site(
+                    ftext, method_name=method_name, target_attr="load_inquirer"
+                )
+            except ValueError:
+                pass
         f.write_text(ftext)
 
 

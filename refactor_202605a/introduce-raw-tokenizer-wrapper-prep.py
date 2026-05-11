@@ -23,20 +23,20 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-HEADER = '''from __future__ import annotations
+HEADER = '''from __future__ import annotations  # noqa: F401
 
-import logging
-import os
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Optional
+import logging  # noqa: F401
+import os  # noqa: F401
+from dataclasses import dataclass  # noqa: F401
+from enum import Enum  # noqa: F401
+from typing import Any, Optional  # noqa: F401
 
-from sglang.srt.configs.model_config import ModelConfig
-from sglang.srt.environ import envs
-from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer
-from sglang.srt.managers.multimodal_processor import get_mm_processor, import_processors
-from sglang.srt.server_args import ServerArgs
-from sglang.srt.utils.hf_transformers_utils import (
+from sglang.srt.configs.model_config import ModelConfig  # noqa: F401
+from sglang.srt.environ import envs  # noqa: F401
+from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer  # noqa: F401
+from sglang.srt.managers.multimodal_processor import get_mm_processor, import_processors  # noqa: F401
+from sglang.srt.server_args import ServerArgs  # noqa: F401
+from sglang.srt.utils.hf_transformers_utils import (  # noqa: F401
     get_processor,
     get_tokenizer,
     get_tokenizer_from_processor,

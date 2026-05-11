@@ -86,6 +86,29 @@ building the class + ctor is precisely what this prep does. Both
 block-moves are structurally intrinsic to introducing the class and
 cannot be hoisted into an earlier commit. No
 ``introduce-metrics-reporter-pre-prep1`` / ``-pre-prep2`` are created.
+
+``metrics_collector`` ownership routing (option b): the
+``SchedulerMetricsCollector`` is still instantiated inline on
+``Scheduler`` (the early-inline block, before ``init_model_worker``,
+because ``init_model_worker`` reads ``self.metrics_collector`` to call
+``emit_constants``). The reporter ctor receives the same instance via
+its ``metrics_collector=`` kwarg and re-exposes it as
+``self.metrics_reporter.metrics_collector``. Post-init callsites on
+``Scheduler`` route through the reporter
+(``self.metrics_reporter.metrics_collector.X(...)``) so ownership reads
+as reporter-held even though construction stays on Scheduler. Option
+(a) — moving reporter creation earlier and splitting the ctor — was
+considered and rejected: it would require either a two-phase ctor or
+duplicating the engine_type/labels assembly, and buys little because
+the collector itself is conceptually a passive sink. The
+``init_model_worker`` early ``emit_constants`` callsite is the one
+exception that keeps reading ``self.metrics_collector`` directly: it
+fires before the reporter is constructed, so routing it through
+``self.metrics_reporter`` would ``AttributeError`` at runtime. Kwarg
+passes (``metrics_collector=self.metrics_collector`` in the request
+receiver, batch result processor, etc.) also keep the direct form —
+they pass the field object, not a method call, and rewriting them buys
+nothing.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -415,6 +438,25 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "            self.num_retracted_reqs = len(retracted_reqs)\n",
         "            self.metrics_reporter.num_retracted_reqs = len(retracted_reqs)\n",
+    )
+    # Route post-init metrics_collector method calls through the reporter so
+    # ownership reads as reporter-held (option b). The early emit_constants
+    # callsite inside ``init_model_worker`` is intentionally NOT rewritten:
+    # it fires before ``self.metrics_reporter`` is constructed and would
+    # AttributeError at runtime. Kwarg passes
+    # (``metrics_collector=self.metrics_collector``) are also left alone —
+    # they hand off the field object, not a method call.
+    text = text.replace(
+        "                self.metrics_collector.increment_retracted_reqs(\n",
+        "                self.metrics_reporter.metrics_collector.increment_retracted_reqs(\n",
+    )
+    text = text.replace(
+        "            or time.perf_counter() <= self.metrics_collector.last_log_time + 30\n",
+        "            or time.perf_counter() <= self.metrics_reporter.metrics_collector.last_log_time + 30\n",
+    )
+    text = text.replace(
+        "        self.metrics_collector.log_stats(self.stats)\n",
+        "        self.metrics_reporter.metrics_collector.log_stats(self.stats)\n",
     )
     # Patch the reporter ctor body in the mixin file to call
     # install_device_timer_on_runners after init_metrics.

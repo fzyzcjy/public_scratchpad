@@ -385,16 +385,16 @@ class SchedulerInvariantChecker:
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations
+from __future__ import annotations  # noqa: F401
 
-import warnings
-from typing import List, Tuple
+import warnings  # noqa: F401
+from typing import List, Tuple  # noqa: F401
 
-from sglang.srt.environ import envs
-from sglang.srt.managers.scheduler_components.pool_stats_observer import (
+from sglang.srt.environ import envs  # noqa: F401
+from sglang.srt.managers.scheduler_components.pool_stats_observer import (  # noqa: F401
     PoolStats,
 )
-from sglang.srt.utils.common import ceil_align, raise_error_or_warn
+from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401
 
 
 '''

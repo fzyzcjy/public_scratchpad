@@ -90,11 +90,11 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # Target file: PoolStats dataclass moves verbatim (cut + paste). Class
 # skeleton: ctor + fields only. The methods land here in the move commit.
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations
+from __future__ import annotations  # noqa: F401
 
-import dataclasses
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+import dataclasses  # noqa: F401
+from dataclasses import dataclass  # noqa: F401
+from typing import List, Optional, Tuple  # noqa: F401
 
 
 # ``SchedulerStats`` is referenced only for the ``update_scheduler_stats``

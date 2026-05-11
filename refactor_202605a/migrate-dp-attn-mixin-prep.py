@@ -52,7 +52,7 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-ADAPTER_HEADER = '''from __future__ import annotations
+ADAPTER_HEADER = '''from __future__ import annotations  # noqa: F401
 
 
 class SchedulerDPAttnAdapter:

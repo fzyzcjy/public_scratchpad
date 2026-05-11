@@ -62,9 +62,9 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-WEIGHT_UPDATER_HEADER = '''from __future__ import annotations
+WEIGHT_UPDATER_HEADER = '''from __future__ import annotations  # noqa: F401
 
-from typing import Callable
+from typing import Callable  # noqa: F401
 
 
 class SchedulerWeightUpdaterManager:

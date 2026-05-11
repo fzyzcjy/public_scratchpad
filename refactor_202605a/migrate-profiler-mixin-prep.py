@@ -75,13 +75,13 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-PROFILER_MANAGER_HEADER = '''from __future__ import annotations
+PROFILER_MANAGER_HEADER = '''from __future__ import annotations  # noqa: F401
 
-from pathlib import Path
-from typing import List, Optional
+from pathlib import Path  # noqa: F401
+from typing import List, Optional  # noqa: F401
 
-from sglang.srt.environ import envs
-from sglang.srt.utils.profile_utils import ProfileManager
+from sglang.srt.environ import envs  # noqa: F401
+from sglang.srt.utils.profile_utils import ProfileManager  # noqa: F401
 
 
 class SchedulerProfilerManager:

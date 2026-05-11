@@ -56,9 +56,12 @@ def transform(wt: Path) -> None:
     uwd = _cut(mr, "update_weights_from_distributed")
 
     # Collapse the inner cross-method call (now living in WeightUpdater).
-    uwd = uwd.replace(
-        "ModelRunner._update_bucketed_weights_from_distributed(self, ",
+    # Pre-commit may line-wrap the long call; use regex to tolerate both forms.
+    import re
+    uwd = re.sub(
+        r"ModelRunner\._update_bucketed_weights_from_distributed\(\s*self,\s*",
         "self._update_bucketed_weights_from_distributed(",
+        uwd,
     )
 
     # Bring in FlattenedTensorBucket for the body.

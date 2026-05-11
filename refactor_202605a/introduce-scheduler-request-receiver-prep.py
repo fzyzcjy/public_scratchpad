@@ -62,23 +62,23 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-RECEIVER_HEADER = '''from __future__ import annotations
+RECEIVER_HEADER = '''from __future__ import annotations  # noqa: F401
 
-from http import HTTPStatus
-from typing import Any, Callable, List, Optional, Union
+from http import HTTPStatus  # noqa: F401
+from typing import Any, Callable, List, Optional, Union  # noqa: F401
 
-import zmq
-from torch.distributed import barrier
+import zmq  # noqa: F401
+from torch.distributed import barrier  # noqa: F401
 
-from sglang.srt.disaggregation.utils import prepare_abort
-from sglang.srt.managers.io_struct import (
+from sglang.srt.disaggregation.utils import prepare_abort  # noqa: F401
+from sglang.srt.managers.io_struct import (  # noqa: F401
     BatchTokenizedEmbeddingReqInput,
     BatchTokenizedGenerateReqInput,
     TokenizedEmbeddingReqInput,
     TokenizedGenerateReqInput,
 )
-from sglang.srt.managers.mm_utils import has_shm_features, unwrap_shm_features
-from sglang.srt.utils import broadcast_pyobj, point_to_point_pyobj
+from sglang.srt.managers.mm_utils import has_shm_features, unwrap_shm_features  # noqa: F401
+from sglang.srt.utils import broadcast_pyobj, point_to_point_pyobj  # noqa: F401
 
 
 class SchedulerRequestReceiver:

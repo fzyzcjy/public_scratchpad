@@ -48,10 +48,13 @@ def _cut_method(mr: Path, method_name: str) -> str:
     assert lines[0].strip() == "@staticmethod"
     body = "".join(lines[1:])
     body = body.replace('        self: "WeightUpdater",\n', "        self,\n")
-    # Collapse cross-method call (now both methods in WU).
-    body = body.replace(
-        "ModelRunner._update_weights_from_flattened_bucket(self, ",
+    # Collapse cross-method call (now both methods in WU). Pre-commit may
+    # line-wrap the long call.
+    import re
+    body = re.sub(
+        r"ModelRunner\._update_weights_from_flattened_bucket\(\s*self,\s*",
         "self._update_weights_from_flattened_bucket(",
+        body,
     )
     return body
 

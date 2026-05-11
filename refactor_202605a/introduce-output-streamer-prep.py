@@ -85,23 +85,23 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations
+from __future__ import annotations  # noqa: F401
 
-import logging
-from typing import Any, Callable, Dict, List, Optional
+import logging  # noqa: F401
+from typing import Any, Callable, Dict, List, Optional  # noqa: F401
 
-import torch
-import zmq
+import torch  # noqa: F401
+import zmq  # noqa: F401
 
-from sglang.srt.disaggregation.utils import DisaggregationMode
-from sglang.srt.environ import envs
-from sglang.srt.managers.io_struct import (
+from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
+from sglang.srt.environ import envs  # noqa: F401
+from sglang.srt.managers.io_struct import (  # noqa: F401
     BatchEmbeddingOutput,
     BatchTokenIDOutput,
     GetLoadsReqInput,
     GetLoadsReqOutput,
 )
-from sglang.srt.managers.schedule_batch import BaseFinishReason, Req
+from sglang.srt.managers.schedule_batch import BaseFinishReason, Req  # noqa: F401
 
 
 logger = logging.getLogger(__name__)

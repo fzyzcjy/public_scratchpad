@@ -59,7 +59,6 @@ ORDER: list[str] = [
     "introduce-pool-stats-observer-move",
     "introduce-invariant-checker-prep",
     "introduce-invariant-checker-move",
-    "move-num-pending-tokens-to-scheduler-main",  # single (doc exception)
     "introduce-kv-events-publisher-pre-rename",
     "introduce-kv-events-publisher-prep",
     "introduce-kv-events-publisher-move",

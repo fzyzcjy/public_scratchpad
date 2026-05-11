@@ -65,14 +65,14 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 # Target file: header + dataclass + empty class skeleton (no methods).
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations
+from __future__ import annotations  # noqa: F401
 
-import dataclasses
-import time
-from dataclasses import dataclass
-from typing import Optional
+import dataclasses  # noqa: F401
+import time  # noqa: F401
+from dataclasses import dataclass  # noqa: F401
+from typing import Optional  # noqa: F401
 
-from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch
+from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch  # noqa: F401
 
 
 # ``SchedulerStats`` referenced only as a type hint in ``emit_kv_metrics`` —

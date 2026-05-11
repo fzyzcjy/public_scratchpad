@@ -48,13 +48,17 @@ def _cut(mr: Path, method_name: str) -> str:
     body = body.replace('        self: "RemoteInstanceWeightTransport",\n', "        self,\n")
     body = body.replace('(self: "RemoteInstanceWeightTransport"', "(self")
     # Inner cross-method calls: now in target class, collapse to self.X(...).
-    body = body.replace(
-        "ModelRunner._build_nixl_worker_metadata(self, ",
+    # Pre-commit may line-wrap the call across multiple lines.
+    import re
+    body = re.sub(
+        r"ModelRunner\._build_nixl_worker_metadata\(\s*self,\s*",
         "self._build_nixl_worker_metadata(",
+        body,
     )
-    body = body.replace(
-        "ModelRunner._build_transfer_engine_worker_metadata(self, ",
+    body = re.sub(
+        r"ModelRunner\._build_transfer_engine_worker_metadata\(\s*self,\s*",
         "self._build_transfer_engine_worker_metadata(",
+        body,
     )
     return body
 
