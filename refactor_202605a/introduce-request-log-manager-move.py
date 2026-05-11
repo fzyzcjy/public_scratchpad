@@ -123,14 +123,14 @@ def transform(wt: Path) -> None:
     multi = wt / "python/sglang/srt/managers/multi_tokenizer_mixin.py"
     if multi.exists():
         t = multi.read_text()
-        t = t.replace(
-            "TokenizerManager.dump_requests_before_crash(\n"
-            "            func.__self__.request_log_manager,\n"
-            "            rid_to_state=func.__self__.rid_to_state,\n"
-            "        )",
-            "func.__self__.request_log_manager.dump_requests_before_crash(\n"
-            "            rid_to_state=func.__self__.rid_to_state,\n"
-            "        )",
+        # Regex variant of the same rewrite — tolerates any indent on the
+        # ``func.__self__.request_log_manager,`` line. The previous literal
+        # hardcoded 12-space indent but black actually emits 16 sp inside the
+        # surrounding ``if isinstance(...)`` block, so the literal was a no-op.
+        t = _re.sub(
+            r"TokenizerManager\.dump_requests_before_crash\(\s*func\.__self__\.request_log_manager,\s*",
+            "func.__self__.request_log_manager.dump_requests_before_crash(",
+            t,
         )
         multi.write_text(t)
 

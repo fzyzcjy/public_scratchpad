@@ -156,6 +156,8 @@ def transform(wt: Path) -> None:
             "_global_state.tokenizer_manager",
         ),
     ]
+    import re as _re
+
     for ep, prefix in entrypoint_specs:
         ep_text = ep.read_text()
         for method in (
@@ -163,9 +165,11 @@ def transform(wt: Path) -> None:
             "load_lora_adapter",
             "unload_lora_adapter",
         ):
-            ep_text = ep_text.replace(
-                f"TokenizerManager.{method}({prefix}.lora_controller, ",
+            # Absorb both single-line and black-wrapped multi-line forms.
+            ep_text = _re.sub(
+                rf"TokenizerManager\.{_re.escape(method)}\(\s*{_re.escape(prefix)}\.lora_controller,\s*",
                 f"{prefix}.lora_controller.{method}(",
+                ep_text,
             )
         ep.write_text(ep_text)
 

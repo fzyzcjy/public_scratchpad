@@ -180,12 +180,15 @@ def transform(wt: Path) -> None:
     body_text = body_text.replace("self.model_config", "model_config")
     text = "".join(lines[:s]) + NEW_INIT_TOKENIZER_HEADER + body_text + "".join(lines[e:])
 
-    # ---- 4. Insert @property facade after init_request_dispatcher method
-    # (last method block before ``class SignalHandler``).
+    # ---- 4. Insert @property facade at the end of ``class TokenizerManager``
+    # body. Anchor on the first module-level definition that follows the class
+    # (``class ServerStatus(Enum):``) and insert BEFORE it — the indented
+    # @property block stays inside TM's class body; the unindented anchor line
+    # closes the class scope.
     text = replace_call_site(
         text,
-        old="class SignalHandler:\n",
-        new=PROPERTY_FACADE.lstrip("\n") + "\nclass SignalHandler:\n",
+        old="class ServerStatus(Enum):\n",
+        new=PROPERTY_FACADE.lstrip("\n") + "\nclass ServerStatus(Enum):\n",
     )
 
     tm.write_text(text)

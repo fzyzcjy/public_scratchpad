@@ -152,21 +152,26 @@ def transform(wt: Path) -> None:
     )
     control_mixin.write_text(text)
 
-    # ---- Caller prefix replacement in entrypoints ----
+    # ---- Caller prefix replacement in entrypoints. Use regex to absorb both
+    # single-line and black-wrapped multi-line forms.
+    import re as _re
+
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
 
     text = engine.read_text()
-    text = text.replace(
-        "TokenizerManager.update_weights_from_disk(self.tokenizer_manager.weight_disk_update_controller, ",
+    text = _re.sub(
+        r"TokenizerManager\.update_weights_from_disk\(\s*self\.tokenizer_manager\.weight_disk_update_controller,\s*",
         "self.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
+        text,
     )
     engine.write_text(text)
 
     text = http_server.read_text()
-    text = text.replace(
-        "TokenizerManager.update_weights_from_disk(_global_state.tokenizer_manager.weight_disk_update_controller, ",
+    text = _re.sub(
+        r"TokenizerManager\.update_weights_from_disk\(\s*_global_state\.tokenizer_manager\.weight_disk_update_controller,\s*",
         "_global_state.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
+        text,
     )
     http_server.write_text(text)
 

@@ -73,8 +73,6 @@ ORDER: list[str] = [
     "introduce-response-emitter-move",
     # Stage 6 — _handle_batch_request 切段
     "extract-handle-batch-request-wait-yield",
-    # Stage 8 — module-level cleanup
-    "cleanup-tm-module-leftovers",
     # Stage 7 — MM 分支抽出 (deferred — script TBD; non-canonical complexity per plan §V2.6)
     # "mmp-extract-tokenize-branch",
 ]

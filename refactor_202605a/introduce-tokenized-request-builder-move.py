@@ -81,6 +81,36 @@ def transform(wt: Path) -> None:
     )
     tm.write_text(text)
 
+    # Test-file rewrite: ``_resolve_embed_overrides`` is a staticmethod moved
+    # to TokenizedRequestBuilder. Tests calling ``TokenizerManager._resolve_embed_overrides(...)``
+    # must now call ``TokenizedRequestBuilder._resolve_embed_overrides(...)``.
+    test_file = wt / "test/registered/prefill_only/test_embed_overrides.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        t = t.replace(
+            "TokenizerManager._resolve_embed_overrides",
+            "TokenizedRequestBuilder._resolve_embed_overrides",
+        )
+        # Doc-comment reference at top of file.
+        t = t.replace(
+            "- TokenizerManager._resolve_embed_overrides (tokenizer_manager.py)",
+            "- TokenizedRequestBuilder._resolve_embed_overrides (tokenized_request_builder.py)",
+        )
+        t = t.replace(
+            "# TokenizerManager._resolve_embed_overrides",
+            "# TokenizedRequestBuilder._resolve_embed_overrides",
+        )
+        # Add the TokenizedRequestBuilder import alongside the existing
+        # TokenizerManager import (which may stay if other code uses it).
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
+            "from sglang.srt.managers.tokenized_request_builder import (\n"
+            "    TokenizedRequestBuilder,\n"
+            ")\n"
+            "from sglang.srt.managers.tokenizer_manager import TokenizerManager\n",
+        )
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(
