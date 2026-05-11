@@ -68,6 +68,13 @@ def transform(wt: Path) -> None:
     # single-line forms.
     class_body = class_body.replace('self: "ScoreRequestHandler",', "self,")
     class_body = class_body.replace('self: "ScoreRequestHandler"', "self")
+    # Internal cross-method calls were rewritten by prep to the class-qualified
+    # form ``TokenizerManagerScoreMixin.<method>(self, ...)``. After move,
+    # methods are regular instance methods on ScoreRequestHandler — flip the
+    # qualifier so lint resolves and runtime dispatch lands on the new class.
+    class_body = class_body.replace(
+        "TokenizerManagerScoreMixin.", "ScoreRequestHandler."
+    )
 
     # ---- 2. Append into the handler module + add the extra imports the
     # moved body needs.

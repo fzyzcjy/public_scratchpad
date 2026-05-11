@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines
+from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-move"
@@ -49,11 +49,29 @@ logger = logging.getLogger(__name__)
 '''
 
 
+_MOVED_METHODS = (
+    "update_weights_from_disk",
+    "_update_model_path_info",
+    "_wait_for_model_update_from_disk",
+    "_handle_update_weights_from_disk_req_output",
+    "_update_weight_version_if_provided",
+)
+
+
 def _strip_static_prefix(body: str) -> str:
-    """Remove @staticmethod decorator and replace self: "WeightDiskUpdateController" → plain self."""
+    """Remove @staticmethod decorator, replace self: "WeightDiskUpdateController" → plain self,
+    and flip intra-class qualifier on cross-method calls (prep rewrote them to
+    ``TokenizerManager.<m>(self, ...)`` / ``TokenizerControlMixin.<m>(self, ...)``;
+    after move both classes' methods live on WeightDiskUpdateController)."""
     body = body.replace("    @staticmethod\n", "", 1)
     body = body.replace('self: "WeightDiskUpdateController",', "self,")
     body = body.replace('self: "WeightDiskUpdateController"\n', "self\n")
+    body = rewrite_intra_class_calls(
+        body,
+        source_classes=["TokenizerManager", "TokenizerControlMixin"],
+        target_class="WeightDiskUpdateController",
+        methods=list(_MOVED_METHODS),
+    )
     return body
 
 

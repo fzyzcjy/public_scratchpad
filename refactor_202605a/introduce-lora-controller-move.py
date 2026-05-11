@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines
+from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
 ID = "introduce-lora-controller-move"
@@ -33,7 +33,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 EXTRA_IMPORTS = '''import logging
-from typing import Union
+from typing import Optional, Union
 
 import fastapi
 
@@ -59,22 +59,21 @@ def _strip_static_prefix(body: str) -> str:
     """
     body = body.replace("    @staticmethod\n", "", 1)
     body = body.replace('self: "LoraController",', "self,")
-    # Intra-cluster cross-call prefix replacement.
-    body = body.replace(
-        "await TokenizerManager._unload_lora_adapter_locked(\n                            self,\n",
-        "await self._unload_lora_adapter_locked(\n",
-    )
-    body = body.replace(
-        "return await TokenizerManager._unload_lora_adapter_locked(self, obj)",
-        "return await self._unload_lora_adapter_locked(obj)",
-    )
-    body = body.replace(
-        "await TokenizerManager._resolve_lora_path(self, obj)",
-        "await self._resolve_lora_path(obj)",
-    )
-    body = body.replace(
-        "load_result = await TokenizerManager.load_lora_adapter(\n                self,\n",
-        "load_result = await self.load_lora_adapter(\n",
+    # Intra-cluster cross-method calls: prep rewrote ``self.<m>(...)`` to
+    # ``TokenizerManager.<m>(self, ...)``. After the move all 6 methods live
+    # on LoraController, so flip the class qualifier.
+    body = rewrite_intra_class_calls(
+        body,
+        source_classes=["TokenizerManager", "TokenizerControlMixin"],
+        target_class="LoraController",
+        methods=[
+            "_unload_lora_adapter_locked",
+            "load_lora_adapter",
+            "load_lora_adapter_from_tensors",
+            "unload_lora_adapter",
+            "_validate_and_resolve_lora",
+            "_resolve_lora_path",
+        ],
     )
     return body
 

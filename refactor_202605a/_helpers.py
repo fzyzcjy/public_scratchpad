@@ -184,6 +184,23 @@ def rewrite_method_call_site(text: str, *, method_name: str, target_attr: str) -
     return text
 
 
+def rewrite_intra_class_calls(
+    body: str, *, source_classes: list[str], target_class: str, methods: list[str]
+) -> str:
+    """For each ``method`` in ``methods``, rewrite ``<src>.<method>(`` →
+    ``<target_class>.<method>(`` for every ``<src>`` in ``source_classes``.
+
+    Used by owner-class move scripts: prep stage rewrites intra-class self-calls
+    to ``OldClass.<m>(self, ...)`` (so the body still works while the methods
+    are still on OldClass via @staticmethod with self typing). After the move,
+    the methods live on the new owner class, so the qualifier must flip.
+    """
+    for m in methods:
+        for src in source_classes:
+            body = body.replace(f"{src}.{m}(", f"{target_class}.{m}(")
+    return body
+
+
 def dedent_method_to_function(method_text: str) -> str:
     """Strip 4 leading spaces from each line — converts ``    def foo`` → ``def foo``."""
     out = []
