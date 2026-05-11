@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #1 of ``SchedulerRuntimeCheckerMixin``: introduce
 ``SchedulerPoolStatsObserver`` at
-``scheduler_components/observability/pool_stats_observer.py``.
+``scheduler_components/pool_stats_observer.py``.
 
 12 stats methods + the ``PoolStats`` dataclass move to the new class. 7
 privacy flips (drop leading ``_``): ``_streaming_session_count``,
@@ -41,7 +41,7 @@ BODY = """\
 Pull 12 stats methods + the ``PoolStats`` dataclass out of
 ``SchedulerRuntimeCheckerMixin`` into a new class
 ``SchedulerPoolStatsObserver`` at
-``scheduler_components/observability/pool_stats_observer.py``.
+``scheduler_components/pool_stats_observer.py``.
 
 Privacy flips (7) drop the leading ``_``:
 ``_streaming_session_count`` / ``_active_pool_idxs`` / 5 ``_session_held_*``.
@@ -318,7 +318,7 @@ def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_runtime_checker_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     metrics_mixin = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/pool_stats_observer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/pool_stats_observer.py"
 
     src_text = src.read_text()
 
@@ -364,9 +364,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.profiler_manager import (\n    SchedulerProfilerManager,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.profiler_manager import (\n    SchedulerProfilerManager,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n"
+            "from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n"
             "    PoolStats,\n"
             "    SchedulerPoolStatsObserver,\n"
             ")\n"
@@ -468,7 +468,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.utils.watchdog import WatchdogRaw\n",
-        addition="\nfrom sglang.srt.managers.scheduler_components.observability.pool_stats_observer import PoolStats\n",
+        addition="\nfrom sglang.srt.managers.scheduler_components.pool_stats_observer import PoolStats\n",
     )
     src.write_text(text)
 
@@ -478,7 +478,7 @@ def transform(wt: Path) -> None:
         ttext = test_pause.read_text()
         ttext = ttext.replace(
             "from sglang.srt.managers.scheduler_runtime_checker_mixin import PoolStats\n",
-            "from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import PoolStats\n",
+            "from sglang.srt.managers.scheduler_components.pool_stats_observer import PoolStats\n",
         )
         test_pause.write_text(ttext)
 

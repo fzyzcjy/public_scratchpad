@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #2 of ``SchedulerRuntimeCheckerMixin``: introduce
 ``SchedulerInvariantChecker`` at
-``scheduler_components/observability/invariant_checker.py``.
+``scheduler_components/invariant_checker.py``.
 
 10 check methods move out. ``self.last_batch`` / ``self.running_batch`` reads
 inside the method bodies become per-call ``last_batch`` / ``running_batch``
@@ -34,7 +34,7 @@ SUBJECT = "Introduce SchedulerInvariantChecker (split #2 of runtime_checker mixi
 BODY = """\
 Pull 10 check methods out of ``SchedulerRuntimeCheckerMixin`` into a new
 ``SchedulerInvariantChecker`` at
-``scheduler_components/observability/invariant_checker.py``. Scheduler holds
+``scheduler_components/invariant_checker.py``. Scheduler holds
 it as ``self.invariant_checker``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): 8 configs + 3 collaborators + 1
@@ -366,7 +366,7 @@ import warnings
 from typing import List, Tuple
 
 from sglang.srt.environ import envs
-from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (
+from sglang.srt.managers.scheduler_components.pool_stats_observer import (
     PoolStats,
 )
 from sglang.srt.utils.common import ceil_align, raise_error_or_warn
@@ -397,7 +397,7 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_runtime_checker_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/invariant_checker.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/invariant_checker.py"
 
     src_text = src.read_text()
 
@@ -465,9 +465,9 @@ def transform(wt: Path) -> None:
     # scheduler.py).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.invariant_checker import (\n"
+            "from sglang.srt.managers.scheduler_components.invariant_checker import (\n"
             "    SchedulerInvariantChecker,\n"
             ")\n"
             "from sglang.srt.utils.watchdog import WatchdogRaw\n"

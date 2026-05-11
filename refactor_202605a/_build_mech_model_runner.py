@@ -76,7 +76,6 @@ ORDER: list[str] = [
     "kvc-migrate-init-pools",
     "kvc-migrate-configure",
     "kvc-drop-mixin-inheritance",
-    "fix-mla-ci-workflow",
 ]
 
 

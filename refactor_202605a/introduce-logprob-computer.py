@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #1 of ``SchedulerOutputProcessorMixin``: 9 logprob methods move
 to ``SchedulerLogprobComputer`` at
-``scheduler_components/output/logprob_computer.py``.
+``scheduler_components/logprob_computer.py``.
 
 Ctor narrow kwargs: ``server_args``, ``model_config`` (2 only — logprob is
 near-stateless).
@@ -34,7 +34,7 @@ SUBJECT = "Introduce SchedulerLogprobComputer (split #1 of output_processor mixi
 BODY = """\
 Pull 9 logprob methods out of ``SchedulerOutputProcessorMixin`` into a new
 ``SchedulerLogprobComputer`` class at
-``scheduler_components/output/logprob_computer.py``. Scheduler holds it as
+``scheduler_components/logprob_computer.py``. Scheduler holds it as
 ``self.logprob_computer``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): ``server_args`` + ``model_config``
@@ -97,9 +97,9 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/output/logprob_computer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_computer.py"
 
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/output/__init__.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
 
@@ -152,9 +152,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.output.logprob_computer import (\n"
+            "from sglang.srt.managers.scheduler_components.logprob_computer import (\n"
             "    SchedulerLogprobComputer,\n"
             ")\n"
         ),

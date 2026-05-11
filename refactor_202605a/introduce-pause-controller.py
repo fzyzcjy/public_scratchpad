@@ -3,7 +3,7 @@
 
 Move 4 methods (pause_generation / continue_generation / abort_request /
 _handle_abort_req) plus 2 fields (is_pause, is_pause_cond) from
-TokenizerManager into a new managers/control/pause_controller.py module.
+TokenizerManager into a new managers/pause_controller.py module.
 
 PauseController.__post_init__ registers AbortReq on the dispatcher
 (created early in #15).
@@ -40,7 +40,7 @@ BODY = """\
 Move 4 methods (pause_generation, continue_generation, abort_request,
 _handle_abort_req) from TokenizerManager into a new
 @dataclass(slots=True, kw_only=True) PauseController in
-managers/control/pause_controller.py. is_pause / is_pause_cond fields
+managers/pause_controller.py. is_pause / is_pause_cond fields
 move along with them.
 
 frozen=False because is_pause mutates. __post_init__ registers AbortReq
@@ -115,7 +115,7 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
     multi_mixin = wt / "python/sglang/srt/managers/multi_tokenizer_mixin.py"
-    new = wt / "python/sglang/srt/managers/control/pause_controller.py"
+    new = wt / "python/sglang/srt/managers/pause_controller.py"
 
     # Cut bottom-up.
     method_names = (
@@ -174,7 +174,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.control.pause_controller import (\n"
+            "from sglang.srt.managers.pause_controller import (\n"
             "    PauseController,\n"
             "    PauseControllerConfig,\n"
             ")\n"

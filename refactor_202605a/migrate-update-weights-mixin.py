@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Migrate ``SchedulerUpdateWeightsMixin`` to ``SchedulerWeightUpdaterManager``
-at ``scheduler_components/control/weight_updater.py`` (composition).
+at ``scheduler_components/weight_updater.py`` (composition).
 
 - Ctor takes 4 narrow协作者 kwargs + 2 Callable kwargs (``flush_cache`` /
   ``is_fully_idle``, both god-class methods on Scheduler — per CLAUDE.md ch4
@@ -41,7 +41,7 @@ SUBJECT = "Migrate SchedulerUpdateWeightsMixin to SchedulerWeightUpdaterManager 
 BODY = """\
 Move ``SchedulerUpdateWeightsMixin`` (12 methods + 2 module-level helpers) to
 ``SchedulerWeightUpdaterManager`` at
-``scheduler_components/control/weight_updater.py``. Scheduler holds it as
+``scheduler_components/weight_updater.py``. Scheduler holds it as
 ``self.weight_updater``.
 
 Ctor takes narrow typed kwargs per CLAUDE.md ch4: 4 collaborators
@@ -153,8 +153,8 @@ RPC_DISPATCH_REPLACEMENTS = [
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_update_weights_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/control/__init__.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/control/weight_updater.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/weight_updater.py"
 
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
@@ -197,9 +197,9 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.scheduling.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.control.weight_updater import (\n"
+            "from sglang.srt.managers.scheduler_components.weight_updater import (\n"
             "    SchedulerWeightUpdaterManager,\n"
             ")\n"
         ),

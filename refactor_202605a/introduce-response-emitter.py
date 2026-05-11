@@ -5,7 +5,7 @@ Move 4 methods (_wait_one_response / create_abort_task /
 _handle_abort_finish_reason / _coalesce_streaming_chunks) from
 TokenizerManager into a new
 @dataclass(slots=True, kw_only=True) ResponseEmitter in
-managers/outputs/response_emitter.py.
+managers/response_emitter.py.
 
 _handle_batch_request stays on facade in this commit; its wait+yield
 segment migration is the next commit (extract-handle-batch-request-wait-yield).
@@ -37,7 +37,7 @@ SUBJECT = "Introduce ResponseEmitter and move client-side wait/abort methods"
 BODY = """\
 Move 4 methods from TokenizerManager into a new
 @dataclass(slots=True, kw_only=True) ResponseEmitter in
-managers/outputs/response_emitter.py:
+managers/response_emitter.py:
 
   _wait_one_response, create_abort_task, _handle_abort_finish_reason,
   _coalesce_streaming_chunks
@@ -72,11 +72,11 @@ from fastapi import BackgroundTasks
 
 from sglang.srt.environ import envs
 from sglang.srt.managers import logprob_ops
-from sglang.srt.managers.control.lora_controller import LoraController
-from sglang.srt.managers.control.pause_controller import PauseController
+from sglang.srt.managers.lora_controller import LoraController
+from sglang.srt.managers.pause_controller import PauseController
 from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput
-from sglang.srt.managers.observability.request_log_manager import RequestLogManager
-from sglang.srt.managers.observability.request_metrics_recorder import (
+from sglang.srt.managers.request_log_manager import RequestLogManager
+from sglang.srt.managers.request_metrics_recorder import (
     RequestMetricsRecorder,
 )
 from sglang.srt.managers.request_state import ReqState
@@ -108,7 +108,7 @@ class ResponseEmitter:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/outputs/response_emitter.py"
+    new = wt / "python/sglang/srt/managers/response_emitter.py"
 
     method_names = (
         "_wait_one_response",
@@ -146,7 +146,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.outputs.response_emitter import (\n"
+            "from sglang.srt.managers.response_emitter import (\n"
             "    ResponseEmitter,\n"
             "    ResponseEmitterConfig,\n"
             ")\n"

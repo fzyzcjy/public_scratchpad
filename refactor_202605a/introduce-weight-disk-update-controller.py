@@ -27,7 +27,7 @@ _update_model_path_info, _wait_for_model_update_from_disk,
 _handle_update_weights_from_disk_req_output) plus
 _update_weight_version_if_provided from TokenizerControlMixin into a new
 @dataclass(slots=True, kw_only=True) WeightDiskUpdateController in
-managers/control/weight_disk_update_controller.py.
+managers/weight_disk_update_controller.py.
 
 Fields:
   send_to_scheduler / dispatcher (registers UpdateWeightFromDiskReqOutput)
@@ -59,7 +59,7 @@ import fastapi
 
 from typing import Callable
 
-from sglang.srt.managers.control.pause_controller import PauseController
+from sglang.srt.managers.pause_controller import PauseController
 from sglang.srt.managers.io_struct import (
     UpdateWeightFromDiskReqInput,
     UpdateWeightFromDiskReqOutput,
@@ -107,7 +107,7 @@ class WeightDiskUpdateController:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/control/weight_disk_update_controller.py"
+    new = wt / "python/sglang/srt/managers/weight_disk_update_controller.py"
 
     # Cut bottom-up from facade.
     method_names = (
@@ -183,7 +183,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.control.weight_disk_update_controller import (\n"
+            "from sglang.srt.managers.weight_disk_update_controller import (\n"
             "    WeightDiskUpdateController,\n"
             "    WeightDiskUpdateControllerConfig,\n"
             ")\n"

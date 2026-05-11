@@ -2,7 +2,7 @@
 """Introduce TokenizedRequestBuilder owner class.
 
 Move _create_tokenized_object + _resolve_embed_overrides from
-TokenizerManager to a new managers/inputs/tokenized_request_builder.py
+TokenizerManager to a new managers/tokenized_request_builder.py
 module. The builder is dataclass-shaped (frozen=False, slots=True per
 md ch4 R5 (iii)) because fake_bootstrap_room_counter mutates per-call.
 
@@ -39,7 +39,7 @@ BODY = """\
 Move _create_tokenized_object (~100 LOC) and _resolve_embed_overrides
 (staticmethod helper) from TokenizerManager into a new
 @dataclass(frozen=False, slots=True, kw_only=True) TokenizedRequestBuilder
-class in managers/inputs/tokenized_request_builder.py.
+class in managers/tokenized_request_builder.py.
 
 Fields:
   tokenizer (Optional[Any])
@@ -106,7 +106,7 @@ class TokenizedRequestBuilder:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/inputs/tokenized_request_builder.py"
+    new = wt / "python/sglang/srt/managers/tokenized_request_builder.py"
 
     # Cut bottom-up so earlier ranges stay valid.
     s, e = find_method_lines(
@@ -164,7 +164,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.inputs.tokenized_request_builder import (\n"
+            "from sglang.srt.managers.tokenized_request_builder import (\n"
             "    TokenizedRequestBuilder,\n"
             "    TokenizedRequestBuilderConfig,\n"
             ")\n"

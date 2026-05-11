@@ -34,7 +34,7 @@ Move 4 tokenize-orchestration methods (_tokenize_one_request /
 _batch_tokenize_and_process / _should_use_batch_tokenization /
 _batch_has_text) from TokenizerManager into a new
 @dataclass(frozen=True, slots=True, kw_only=True) RequestPreparer in
-managers/inputs/request_preparer.py.
+managers/request_preparer.py.
 
 Per md ch3.1 PR1 form: method names keep their leading underscore;
 RequestPreparer takes already-extracted owner classes by direct injection
@@ -65,10 +65,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 from sglang.srt.managers.embed_types import PositionalEmbeds  # noqa: F401  (used by sub-pipeline imports)
-from sglang.srt.managers.inputs.multimodal_processor import MultimodalProcessor
-from sglang.srt.managers.inputs.raw_tokenizer_wrapper import RawTokenizerWrapper
-from sglang.srt.managers.inputs.request_validator import RequestValidator
-from sglang.srt.managers.inputs.tokenized_request_builder import TokenizedRequestBuilder
+from sglang.srt.managers.multimodal_processor import MultimodalProcessor
+from sglang.srt.managers.raw_tokenizer_wrapper import RawTokenizerWrapper
+from sglang.srt.managers.request_validator import RequestValidator
+from sglang.srt.managers.tokenized_request_builder import TokenizedRequestBuilder
 from sglang.srt.managers.io_struct import (
     EmbeddingReqInput,
     GenerateReqInput,
@@ -110,7 +110,7 @@ class RequestPreparer:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/inputs/request_preparer.py"
+    new = wt / "python/sglang/srt/managers/request_preparer.py"
 
     # Cut bottom-up.
     method_names = (
@@ -153,7 +153,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.inputs.request_preparer import (\n"
+            "from sglang.srt.managers.request_preparer import (\n"
             "    RequestPreparer,\n"
             "    RequestPreparerConfig,\n"
             ")\n"

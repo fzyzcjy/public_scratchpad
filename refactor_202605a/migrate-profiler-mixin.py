@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Migrate ``SchedulerProfilerMixin`` to ``SchedulerProfilerManager`` at
-``scheduler_components/observability/profiler_manager.py`` (composition).
+``scheduler_components/profiler_manager.py`` (composition).
 
 - Ctor takes narrow typed kwargs (``ps``, ``dp_tp_cpu_group``) and replicates
   ``init_profiler`` body inside ``__init__``. The original ``init_profiler``
@@ -36,7 +36,7 @@ ID = "migrate-profiler-mixin"
 SUBJECT = "Migrate SchedulerProfilerMixin to SchedulerProfilerManager (composition)"
 BODY = """\
 Move ``SchedulerProfilerMixin`` (7 methods) to a new ``SchedulerProfilerManager``
-class at ``scheduler_components/observability/profiler_manager.py``. Scheduler
+class at ``scheduler_components/profiler_manager.py``. Scheduler
 holds it as ``self.profiler_manager``.
 
 The ctor takes narrow typed kwargs and replicates the original
@@ -153,8 +153,8 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_profiler_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/observability/__init__.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/profiler_manager.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/profiler_manager.py"
 
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
@@ -300,9 +300,9 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.scheduling.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.profiler_manager import (\n"
+            "from sglang.srt.managers.scheduler_components.profiler_manager import (\n"
             "    SchedulerProfilerManager,\n"
             ")\n"
         ),
@@ -348,7 +348,7 @@ def transform(wt: Path) -> None:
         "from sglang.srt.managers.scheduler_profiler_mixin import SchedulerProfilerMixin\n"
         "\n"
         "        sig = inspect.signature(SchedulerProfilerMixin.init_profile)\n",
-        "from sglang.srt.managers.scheduler_components.observability.profiler_manager import (\n"
+        "from sglang.srt.managers.scheduler_components.profiler_manager import (\n"
         "            SchedulerProfilerManager,\n"
         "        )\n"
         "\n"

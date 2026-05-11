@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #2 of ``SchedulerOutputProcessorMixin``: 6 stream methods move
 to ``SchedulerOutputStreamer`` at
-``scheduler_components/output/output_streamer.py``.
+``scheduler_components/output_streamer.py``.
 
 Ctor narrow kwargs: 2 collaborators (send_to_detokenizer, tree_cache) + 6
 configs (ps, server_args, is_generation, stream_interval, spec_algorithm,
@@ -43,7 +43,7 @@ SUBJECT = "Introduce SchedulerOutputStreamer (split #2 of output_processor mixin
 BODY = """\
 Pull 6 stream methods out of ``SchedulerOutputProcessorMixin`` into
 ``SchedulerOutputStreamer`` at
-``scheduler_components/output/output_streamer.py``. Scheduler holds it as
+``scheduler_components/output_streamer.py``. Scheduler holds it as
 ``self.output_streamer``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): 2 collaborators + 6 configs + 2
@@ -171,7 +171,7 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/output/output_streamer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/output_streamer.py"
 
     src_text = src.read_text()
 
@@ -263,9 +263,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.output.logprob_computer import (\n    SchedulerLogprobComputer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.logprob_computer import (\n    SchedulerLogprobComputer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.output.output_streamer import (\n"
+            "from sglang.srt.managers.scheduler_components.output_streamer import (\n"
             "    SchedulerOutputStreamer,\n"
             ")\n"
         ),

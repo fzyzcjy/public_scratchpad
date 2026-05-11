@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #3 of ``SchedulerMetricsMixin``: the remaining 14 reporter
 methods + ``PrefillStats`` dataclass move to ``SchedulerMetricsReporter`` at
-``scheduler_components/observability/metrics_reporter.py``. The metrics
+``scheduler_components/metrics_reporter.py``. The metrics
 mixin file is then deleted.
 
 - Ctor narrow kwargs (per CLAUDE.md ch4): server_args + 4 typed configs +
@@ -37,7 +37,7 @@ SUBJECT = "Introduce SchedulerMetricsReporter (split #3 of metrics mixin); delet
 BODY = """\
 Pull the remaining 14 methods + ``PrefillStats`` dataclass out of
 ``SchedulerMetricsMixin`` into ``SchedulerMetricsReporter`` at
-``scheduler_components/observability/metrics_reporter.py``. Scheduler holds
+``scheduler_components/metrics_reporter.py``. Scheduler holds
 it as ``self.metrics_reporter``. The metrics mixin file is deleted.
 
 Ctor narrow kwargs (per CLAUDE.md ch4):
@@ -229,7 +229,7 @@ def transform(wt: Path) -> None:
     output_mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     pre = wt / "python/sglang/srt/disaggregation/prefill.py"
     dllm = wt / "python/sglang/srt/dllm/mixin/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/metrics_reporter.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/metrics_reporter.py"
 
     text = src.read_text()
 
@@ -321,9 +321,9 @@ def transform(wt: Path) -> None:
     # metrics_reporter module (scheduler.py uses both as module-level refs).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import (\n"
+            "from sglang.srt.managers.scheduler_components.metrics_reporter import (\n"
             "    RECORD_STEP_TIME,\n"
             "    PrefillStats,\n"
             ")\n"
@@ -331,9 +331,9 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.load_inquirer import (\n    SchedulerLoadInquirer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import (\n"
+            "from sglang.srt.managers.scheduler_components.metrics_reporter import (\n"
             "    SchedulerMetricsReporter,\n"
             ")\n"
             "from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector\n"
@@ -527,7 +527,7 @@ def transform(wt: Path) -> None:
     )
     text = text.replace(
         "from sglang.srt.observability.scheduler_metrics_mixin import PrefillStats",
-        "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import PrefillStats",
+        "from sglang.srt.managers.scheduler_components.metrics_reporter import PrefillStats",
     )
     dllm.write_text(text)
 
@@ -536,7 +536,7 @@ def transform(wt: Path) -> None:
     text = schedule_batch.read_text()
     text = text.replace(
         "from sglang.srt.observability.scheduler_metrics_mixin import PrefillStats",
-        "from sglang.srt.managers.scheduler_components.observability.metrics_reporter import PrefillStats",
+        "from sglang.srt.managers.scheduler_components.metrics_reporter import PrefillStats",
     )
     schedule_batch.write_text(text)
 

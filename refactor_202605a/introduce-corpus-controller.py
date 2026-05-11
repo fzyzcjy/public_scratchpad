@@ -25,7 +25,7 @@ BODY = """\
 Move 3 external-corpus methods (add_external_corpus / remove_external_corpus
 / list_external_corpora) from TokenizerControlMixin into a new
 @dataclass(frozen=True, slots=True, kw_only=True) CorpusController in
-managers/control/corpus_controller.py.
+managers/corpus_controller.py.
 
 3 communicators are injected from facade post-init via attribute lookup
 (facade fields are populated inside init_communicators).
@@ -81,7 +81,7 @@ class CorpusController:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/control/corpus_controller.py"
+    new = wt / "python/sglang/srt/managers/corpus_controller.py"
 
     method_names = (
         "add_external_corpus",
@@ -134,7 +134,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.control.corpus_controller import (\n"
+            "from sglang.srt.managers.corpus_controller import (\n"
             "    CorpusController,\n"
             "    CorpusControllerConfig,\n"
             ")\n"

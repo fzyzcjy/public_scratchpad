@@ -2,7 +2,7 @@
 """Introduce ``SchedulerRequestReceiver`` and move ``recv_requests`` /
 ``recv_limit_reached`` / ``_split_work_and_control_reqs`` off Scheduler.
 
-- New file ``scheduler_components/ingress/request_receiver.py``.
+- New file ``scheduler_components/request_receiver.py``.
 - Ctor accepts ``narrow kwargs`` per CLAUDE.md ch4 (no ``scheduler_ref``):
   16 协作者/配置 + 1 Callable (``stream_output``). The Callable is needed
   because ``stream_output`` lives on ``SchedulerOutputProcessorMixin`` until
@@ -44,7 +44,7 @@ BODY = """\
 Move ``recv_requests`` (~157 LOC), ``recv_limit_reached`` (~5 LOC) and
 ``_split_work_and_control_reqs`` (~29 LOC) off Scheduler into a new owner
 class ``SchedulerRequestReceiver`` in
-``scheduler_components/ingress/request_receiver.py``.
+``scheduler_components/request_receiver.py``.
 
 The ctor uses narrow typed kwargs per CLAUDE.md ch4 (no ``scheduler_ref``
 back-reference): 16 collaborators / configs + 1 ``stream_output: Callable``.
@@ -219,8 +219,8 @@ def _make_caller_replacement(target: str) -> str:
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     pp_mixin = wt / "python/sglang/srt/managers/scheduler_pp_mixin.py"
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/ingress/__init__.py"
-    receiver = wt / "python/sglang/srt/managers/scheduler_components/ingress/request_receiver.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+    receiver = wt / "python/sglang/srt/managers/scheduler_components/request_receiver.py"
 
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
@@ -258,9 +258,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.setup import kv_cache\n",
+        anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.ingress.request_receiver import (\n"
+            "from sglang.srt.managers.scheduler_components.request_receiver import (\n"
             "    SchedulerRequestReceiver,\n"
             ")\n"
         ),

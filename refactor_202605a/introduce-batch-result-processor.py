@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #3 of ``SchedulerOutputProcessorMixin``: the remaining 11
 process / collect methods move to ``SchedulerBatchResultProcessor`` at
-``scheduler_components/output/batch_result_processor.py``. The
+``scheduler_components/batch_result_processor.py``. The
 output_processor mixin file is then deleted.
 
 Ctor narrow kwargs: 8 configs + 7 collaborators + 2 sisters
@@ -33,7 +33,7 @@ SUBJECT = "Introduce SchedulerBatchResultProcessor (split #3 of output_processor
 BODY = """\
 Pull the remaining 11 process/collect methods out of
 ``SchedulerOutputProcessorMixin`` into ``SchedulerBatchResultProcessor`` at
-``scheduler_components/output/batch_result_processor.py``. Scheduler holds
+``scheduler_components/batch_result_processor.py``. Scheduler holds
 it as ``self.batch_result_processor``. The output_processor mixin file is
 deleted.
 
@@ -192,7 +192,7 @@ def transform(wt: Path) -> None:
     pre = wt / "python/sglang/srt/disaggregation/prefill.py"
     dec = wt / "python/sglang/srt/disaggregation/decode.py"
     dllm = wt / "python/sglang/srt/dllm/mixin/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/output/batch_result_processor.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/batch_result_processor.py"
 
     src_text = src.read_text()
 
@@ -294,9 +294,9 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.output.output_streamer import (\n    SchedulerOutputStreamer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.output_streamer import (\n    SchedulerOutputStreamer,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.output.batch_result_processor import (\n"
+            "from sglang.srt.managers.scheduler_components.batch_result_processor import (\n"
             "    SchedulerBatchResultProcessor,\n"
             ")\n"
         ),

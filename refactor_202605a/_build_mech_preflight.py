@@ -25,9 +25,9 @@ TARGET = "tom_refactor_202605a/primary/mech_preflight"
 
 COMMITS: list[tuple[str, list[str], str]] = [
     # (identifier, [source_commits], subject)
-    ("convert-self-x-to-locals", ["upstream/tom_refactor/0"],
+    ("convert-self-x-to-locals", ["tom_refactor/0"],
      "Convert local-only self.X attributes to locals"),
-    ("drop-dead-prefill-locals", ["upstream/tom_refactor/1"],
+    ("drop-dead-prefill-locals", ["tom_refactor/1"],
      "Remove dead self.adder/can_run_list/running_bs writes in Scheduler._get_new_batch_prefill_raw"),
     ("drop-unused-tm-fields", ["f9bc80737d"],
      "Remove unused fields in TokenizerManager"),
@@ -44,11 +44,11 @@ COMMITS: list[tuple[str, list[str], str]] = [
      'Replace getattr(self, "max_prefill_tokens") with direct access'),
     ("direct-is-generation", ["6d3e0cd142"],
      'Replace getattr(self, "is_generation") with direct access in score mixin'),
-    ("cache-linear-attn-registry", ["upstream/tom_refactor/6"],
+    ("cache-linear-attn-registry", ["tom_refactor/6"],
      "Cache _linear_attn_registry_cache with sentinel"),
-    ("drop-hisparse-guard", ["upstream/tom_refactor/7"],
+    ("drop-hisparse-guard", ["tom_refactor/7"],
      "Delete dead hasattr guard for hisparse_coordinator"),
-    ("init-forward-pass-timer", ["upstream/tom_refactor/8"],
+    ("init-forward-pass-timer", ["tom_refactor/8"],
      "Convert forward_pass_device_timer to None-init"),
     # /9 chronological order: lift first, then init-conditional refinement.
     ("lift-running-batch-mbs", ["5ffc549417"],
@@ -59,15 +59,15 @@ COMMITS: list[tuple[str, list[str], str]] = [
      'Drop redundant hasattr(self, "metrics_collector") guard'),
     ("direct-model-config", ["b064c6ac63"],
      'Replace getattr(self, "model_config") with direct access in score mixin'),
-    ("fix-lora-loads", ["upstream/tom_refactor/11"],
+    ("fix-lora-loads", ["tom_refactor/11"],
      "Fix LoRA pool not appearing in /v1/loads"),
-    ("annotate-dead-slo-field", ["upstream/tom_refactor/12"],
+    ("annotate-dead-slo-field", ["tom_refactor/12"],
      "Annotate dead max_running_requests_under_SLO"),
     ("init-forward-ct-cur-batch", ["5a90678b7f"],
      "Initialize forward_ct and cur_batch before starting watchdog daemon"),
     ("direct-watchdog-defenses", ["f5c278e9b4", "f702369b7e"],
      "Replace getattr defenses on scheduler in create_scheduler_watchdog with direct access"),
-    ("add-mechanical-refactor-verify-skill", ["upstream/tom_refactor/14"],
+    ("add-mechanical-refactor-verify-skill", ["tom_refactor/14"],
      "Add mechanical-refactor-verify skill from miles"),
     # /15 chronological order: parallel-state introduced first (with autofix +
     # py3.10 slots squashed in), then disagg-prefill rank fix on top.
@@ -75,9 +75,9 @@ COMMITS: list[tuple[str, list[str], str]] = [
      "Bundle Scheduler rank/size fields into a frozen ParallelState"),
     ("fix-disagg-prefill-rank", ["b40369adef"],
      "Fix stale self.tp_rank/pp_rank in SchedulerDisaggregationPrefillMixin"),
-    ("inject-parallel-state-profiler", ["upstream/tom_refactor/16"],
+    ("inject-parallel-state-profiler", ["tom_refactor/16"],
      "Inject ParallelState into ProfilerV2"),
-    ("fix-trace-filename-collision", ["upstream/tom_refactor/17"],
+    ("fix-trace-filename-collision", ["tom_refactor/17"],
      "Fix V2 trace filename collisions when DP/PP/EP enabled"),
 ]
 
@@ -153,11 +153,37 @@ def tag_new_chain_head(head_sha: str) -> None:
     run(["git", "push", "origin", f"refs/tags/{tag_name}"], cwd=REPO)
 
 
+def apply_fix_mla_ci_workflow() -> None:
+    """Inline transform: retarget the sgl-kernel mla test to test/manual.
+
+    Upstream commit ``5fbec0e445`` moved ``test_mla_deepseek_v3.py`` from
+    ``test/registered/mla`` to ``test/manual/mla`` but the kernel workflow
+    still hard-codes the old path. Without this every PR's
+    ``call-sgl-kernel-tests / sgl-kernel-mla-test`` job fast-fails and
+    cascades through ``check-stage-health``. Lives on preflight so the
+    later refactor chains (and any other branch rebased on preflight)
+    inherit a CI that actually exercises the chain.
+    """
+    id = "fix-mla-ci-workflow"
+    subject = "Fix sgl-kernel CI: retarget mla test to test/manual after main file move"
+    print(f"\n=== {id} ===", flush=True)
+    path = WT / ".github/workflows/pr-test-sgl-kernel.yml"
+    text = path.read_text()
+    old = "          cd test/registered/mla\n"
+    new = "          cd test/manual/mla\n"
+    if old not in text:
+        raise RuntimeError(f"mla workflow anchor not found in {path}")
+    path.write_text(text.replace(old, new))
+    run(["git", "add", str(path)], cwd=WT)
+    run(["git", "commit", "-m", commit_message(id=id, subject=subject), "--quiet"], cwd=WT)
+
+
 def main() -> None:
     make_worktree()
     for id, sources, subject in COMMITS:
         print(f"\n=== {id} ===", flush=True)
         cherry_pick_and_commit(id=id, sources=sources, subject=subject)
+    apply_fix_mla_ci_workflow()
     print("\n=== done. final HEAD ===", flush=True)
     run(["git", "log", "--oneline", "-30"], cwd=WT)
     backup_old_chain_head()

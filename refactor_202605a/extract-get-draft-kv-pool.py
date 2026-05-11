@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Cut `_get_draft_kv_pool` method from Scheduler; paste as a free function
-``get_draft_kv_pool`` in ``scheduler_components/setup/kv_cache.py`` (new
+``get_draft_kv_pool`` in ``scheduler_components/kv_cache.py`` (new
 package). Update 2 callers and add an import.
 
 - Method body reads 4 self.X fields (`draft_worker`, `spec_algorithm`,
@@ -35,11 +35,11 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-get-draft-kv-pool"
-SUBJECT = "Extract _get_draft_kv_pool to scheduler_components/setup/kv_cache.py"
+SUBJECT = "Extract _get_draft_kv_pool to scheduler_components/kv_cache.py"
 BODY = """\
 Move ``_get_draft_kv_pool`` off Scheduler into a new free function
 ``get_draft_kv_pool`` in
-``python/sglang/srt/managers/scheduler_components/setup/kv_cache.py``. Body is
+``python/sglang/srt/managers/scheduler_components/kv_cache.py``. Body is
 unchanged except ``self.X`` reads (4 fields: draft_worker, spec_algorithm,
 enable_overlap, server_args) become keyword-only parameters. Drop the
 underscore prefix per the privacy convention for methods that move out to a
@@ -64,8 +64,8 @@ from typing import Any, Optional, Tuple
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
-    setup_init = wt / "python/sglang/srt/managers/scheduler_components/setup/__init__.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/setup/kv_cache.py"
+    setup_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
 
     # Create the new package skeleton.
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
@@ -136,7 +136,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.scheduler_input_blocker import SchedulerInputBlocker\n",
-        addition="from sglang.srt.managers.scheduler_components.setup import kv_cache\n",
+        addition="from sglang.srt.managers.scheduler_components import kv_cache\n",
     )
 
     sched.write_text(text)

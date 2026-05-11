@@ -3,7 +3,7 @@
 
 Move _handle_batch_output (~247 LOC) from TokenizerManager into a new
 @dataclass(slots=True, kw_only=True) OutputProcessor in
-managers/outputs/output_processor.py. Body internal control flow stays;
+managers/output_processor.py. Body internal control flow stays;
 only self.X references rewire to fields on OutputProcessor.
 
 PR1 form per md ch3.1: single ``handle_batch_output`` method (privacy
@@ -34,7 +34,7 @@ ID = "introduce-output-processor"
 SUBJECT = "Introduce OutputProcessor and move _handle_batch_output"
 BODY = """\
 Move _handle_batch_output (247 LOC) from TokenizerManager into a new
-managers/outputs/output_processor.py module as a method
+managers/output_processor.py module as a method
 ``handle_batch_output`` of @dataclass(slots=True, kw_only=True)
 OutputProcessor (privacy flip per design — was facade-private, now
 new class public API).
@@ -69,15 +69,15 @@ import torch
 
 from sglang.srt.constants import HEALTH_CHECK_RID_PREFIX
 from sglang.srt.managers import logprob_ops, request_tracing, spec_decoding_meta
-from sglang.srt.managers.control.lora_controller import LoraController
+from sglang.srt.managers.lora_controller import LoraController
 from sglang.srt.managers.io_struct import (
     BatchEmbeddingOutput,
     BatchStrOutput,
     BatchTokenIDOutput,
     WatchLoadUpdateReq,
 )
-from sglang.srt.managers.observability.request_log_manager import RequestLogManager
-from sglang.srt.managers.observability.request_metrics_recorder import (
+from sglang.srt.managers.request_log_manager import RequestLogManager
+from sglang.srt.managers.request_metrics_recorder import (
     RequestMetricsRecorder,
 )
 from sglang.srt.managers.request_state import ReqState
@@ -117,10 +117,7 @@ class OutputProcessor:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    out_dir = wt / "python/sglang/srt/managers/outputs"
-    # __init__.py created by define-scheduler-sender; just ensure dir.
-    out_dir.mkdir(exist_ok=True)
-    new = out_dir / "output_processor.py"
+    new = wt / "python/sglang/srt/managers/output_processor.py"
 
     s, e = find_method_lines(
         tm.read_text(), class_name="TokenizerManager", method_name="_handle_batch_output"
@@ -177,7 +174,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.outputs.output_processor import (\n"
+            "from sglang.srt.managers.output_processor import (\n"
             "    OutputProcessor,\n"
             "    OutputProcessorConfig,\n"
             ")\n"

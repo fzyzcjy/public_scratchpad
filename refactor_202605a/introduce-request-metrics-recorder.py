@@ -33,7 +33,7 @@ ID = "introduce-request-metrics-recorder"
 SUBJECT = "Introduce RequestMetricsRecorder and move metrics methods"
 BODY = """\
 Move collect_metrics + _request_has_grammar methods from TokenizerManager
-into a new managers/observability/request_metrics_recorder.py module as a
+into a new managers/request_metrics_recorder.py module as a
 @dataclass(slots=True, kw_only=True) RequestMetricsRecorder (frozen=False
 because metrics_collector is constructed in __post_init__).
 
@@ -118,7 +118,7 @@ class RequestMetricsRecorder:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/observability/request_metrics_recorder.py"
+    new = wt / "python/sglang/srt/managers/request_metrics_recorder.py"
 
     # Cut bottom-up.
     s, e = find_method_lines(
@@ -176,7 +176,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.observability.request_metrics_recorder import RequestMetricsRecorder\n",
+        addition="from sglang.srt.managers.request_metrics_recorder import RequestMetricsRecorder\n",
     )
 
     # ===== Wire construction =====

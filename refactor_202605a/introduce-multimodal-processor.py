@@ -43,7 +43,7 @@ SUBJECT = "Introduce MultimodalProcessor and move EPD dispatch methods"
 BODY = """\
 Move _should_dispatch_to_encoder + _handle_epd_disaggregation_encode_request
 methods from TokenizerManager into a new @dataclass MultimodalProcessor in
-managers/inputs/multimodal_processor.py. Also move the conditional
+managers/multimodal_processor.py. Also move the conditional
 mm_receiver = create_mm_receiver(...) block out of init_disaggregation
 into the MultimodalProcessor.from_server_args classmethod factory.
 
@@ -131,7 +131,7 @@ class MultimodalProcessor:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/inputs/multimodal_processor.py"
+    new = wt / "python/sglang/srt/managers/multimodal_processor.py"
 
     # Cut bottom-up.
     s, e = find_method_lines(
@@ -216,7 +216,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.inputs.multimodal_processor import MultimodalProcessor\n",
+        addition="from sglang.srt.managers.multimodal_processor import MultimodalProcessor\n",
     )
 
     # Wire construction: AFTER raw_tokenizer_wrapper is built (it's a dependency)

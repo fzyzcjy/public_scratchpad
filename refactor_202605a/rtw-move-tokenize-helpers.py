@@ -48,7 +48,7 @@ HELPER_NAMES = (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    rtw = wt / "python/sglang/srt/managers/inputs/raw_tokenizer_wrapper.py"
+    rtw = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
 
     # Cut bottom-up so earlier line ranges stay valid: largest line numbers first.
     # find_method_lines returns the range each call; we cut last-defined first.

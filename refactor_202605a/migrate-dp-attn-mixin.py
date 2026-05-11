@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Migrate ``SchedulerDPAttnMixin`` to a sister-class composition form
-``SchedulerDPAttnAdapter`` at ``scheduler_components/scheduling/dp_attn_adapter.py``.
+``SchedulerDPAttnAdapter`` at ``scheduler_components/dp_attn_adapter.py``.
 The class ctor takes narrow typed kwargs (no ``scheduler_ref`` per CLAUDE.md
 ch4); the original file is deleted.
 
@@ -36,7 +36,7 @@ BODY = """\
 Move ``SchedulerDPAttnMixin`` (3 methods + dataclass + 2 module-level free
 functions) from ``scheduler_dp_attn_mixin.py`` to a new
 ``SchedulerDPAttnAdapter`` class at
-``scheduler_components/scheduling/dp_attn_adapter.py``. The class is no
+``scheduler_components/dp_attn_adapter.py``. The class is no
 longer a mixin: Scheduler holds it as ``self.dp_attn_adapter`` (composition).
 The ctor takes narrow typed kwargs (no ``scheduler_ref`` back-reference per
 CLAUDE.md ch4).
@@ -118,8 +118,8 @@ def transform(wt: Path) -> None:
     prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     decode = wt / "python/sglang/srt/disaggregation/decode.py"
     test_chunked = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
-    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/scheduling/__init__.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/scheduling/dp_attn_adapter.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/dp_attn_adapter.py"
 
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     pkg_init.write_text("")
@@ -176,9 +176,9 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.ingress.request_receiver import (\n    SchedulerRequestReceiver,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.request_receiver import (\n    SchedulerRequestReceiver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.scheduling.dp_attn_adapter import (\n"
+            "from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n"
             "    SchedulerDPAttnAdapter,\n"
             ")\n"
         ),

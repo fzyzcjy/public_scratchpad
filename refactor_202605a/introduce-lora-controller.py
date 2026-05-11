@@ -27,7 +27,7 @@ load_lora_adapter, load_lora_adapter_from_tensors, unload_lora_adapter,
 _unload_lora_adapter_locked, _validate_and_resolve_lora,
 _resolve_lora_path) from TokenizerManager + TokenizerControlMixin into a
 new @dataclass(slots=True, kw_only=True) LoraController in
-managers/control/lora_controller.py.
+managers/lora_controller.py.
 
 frozen=False because lora_ref_cache mutates over the lifecycle.
 update_lora_adapter_communicator is injected from facade post-init.
@@ -97,7 +97,7 @@ class LoraController:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/control/lora_controller.py"
+    new = wt / "python/sglang/srt/managers/lora_controller.py"
 
     # Cut from tokenizer_manager: init_lora, _validate_and_resolve_lora, _resolve_lora_path.
     # bottom-up.
@@ -158,7 +158,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.control.lora_controller import (\n"
+            "from sglang.srt.managers.lora_controller import (\n"
             "    LoraController,\n"
             "    LoraControllerConfig,\n"
             ")\n"

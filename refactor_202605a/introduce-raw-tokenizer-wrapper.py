@@ -38,7 +38,7 @@ SUBJECT = "Introduce RawTokenizerWrapper and move tokenizer/processor fields"
 BODY = """\
 Move ownership of four fields (tokenizer, processor, mm_processor,
 async_dynamic_batch_tokenizer) from TokenizerManager to a new frozen
-@dataclass RawTokenizerWrapper in managers/inputs/raw_tokenizer_wrapper.py.
+@dataclass RawTokenizerWrapper in managers/raw_tokenizer_wrapper.py.
 
 The init_tokenizer_and_processor method becomes the
 RawTokenizerWrapper.from_server_args classmethod factory (R5 (iii)).
@@ -235,10 +235,7 @@ def rewrite_self_field_refs(text: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    inputs_dir = wt / "python/sglang/srt/managers/inputs"
-    # __init__.py created by define-scheduler-sender; just ensure dir.
-    inputs_dir.mkdir(exist_ok=True)
-    new = inputs_dir / "raw_tokenizer_wrapper.py"
+    new = wt / "python/sglang/srt/managers/raw_tokenizer_wrapper.py"
     new.write_text(HEADER)
 
     # ===== Cut init_tokenizer_and_processor (its body lives inline in the new file) =====
@@ -287,7 +284,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
-        addition="from sglang.srt.managers.inputs.raw_tokenizer_wrapper import RawTokenizerWrapper\n",
+        addition="from sglang.srt.managers.raw_tokenizer_wrapper import RawTokenizerWrapper\n",
     )
 
     tm.write_text(text)

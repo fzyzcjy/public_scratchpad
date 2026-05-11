@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #2 of ``SchedulerMetricsMixin``: introduce
 ``SchedulerLoadInquirer`` at
-``scheduler_components/observability/load_inquirer.py``.
+``scheduler_components/load_inquirer.py``.
 
 Single method (``get_loads``) moves out. Ctor narrow kwargs (5 config + 1
 sister + 3 collaborators). Per-call kwargs added for runtime mutable state
@@ -33,7 +33,7 @@ SUBJECT = "Introduce SchedulerLoadInquirer (split #2 of metrics mixin)"
 BODY = """\
 Pull ``get_loads`` out of ``SchedulerMetricsMixin`` into a new
 ``SchedulerLoadInquirer`` at
-``scheduler_components/observability/load_inquirer.py``. Scheduler holds it
+``scheduler_components/load_inquirer.py``. Scheduler holds it
 as ``self.load_inquirer``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): 5 configs (disaggregation_mode,
@@ -286,7 +286,7 @@ def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     output_mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/load_inquirer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/load_inquirer.py"
 
     # Cut get_loads from metrics mixin.
     src_text = src.read_text()
@@ -304,9 +304,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.kv_events_publisher import (\n    SchedulerKvEventsPublisher,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.kv_events_publisher import (\n    SchedulerKvEventsPublisher,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.load_inquirer import (\n"
+            "from sglang.srt.managers.scheduler_components.load_inquirer import (\n"
             "    SchedulerLoadInquirer,\n"
             ")\n"
         ),

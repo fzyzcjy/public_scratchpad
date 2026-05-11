@@ -38,7 +38,7 @@ SUBJECT = "Introduce SessionController and split init_request_dispatcher"
 BODY = """\
 Move three methods (open_session, close_session, _handle_open_session_req_output)
 into a new @dataclass(slots=True, kw_only=True) SessionController in
-managers/control/session_controller.py. session_futures dict moves with
+managers/session_controller.py. session_futures dict moves with
 them.
 
 Reshapes facade __init__: a new self._result_dispatcher = TypeBasedDispatcher([...])
@@ -147,10 +147,7 @@ class SessionController:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    control_dir = wt / "python/sglang/srt/managers/control"
-    # __init__.py created by define-scheduler-sender; just ensure dir.
-    control_dir.mkdir(exist_ok=True)
-    new = control_dir / "session_controller.py"
+    new = wt / "python/sglang/srt/managers/session_controller.py"
 
     # Cut _handle_open_session_req_output from facade.
     s, e = find_method_lines(
@@ -252,7 +249,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.control.session_controller import (\n"
+            "from sglang.srt.managers.session_controller import (\n"
             "    SessionController,\n"
             "    SessionControllerConfig,\n"
             ")\n"

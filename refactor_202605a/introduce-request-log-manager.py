@@ -34,7 +34,7 @@ SUBJECT = "Introduce RequestLogManager and move dump methods"
 BODY = """\
 Move 4 dump methods (dump_requests, record_request_for_crash_dump,
 _dump_data_to_file, dump_requests_before_crash) from TokenizerManager into
-a new managers/observability/request_log_manager.py module as a
+a new managers/request_log_manager.py module as a
 @dataclass(slots=True, kw_only=True) RequestLogManager (frozen=False
 because dump_request_list / crash_dump_request_list / crash_dump_performed
 mutate over the lifecycle, and dump_requests_folder / threshold mutate
@@ -136,10 +136,7 @@ class RequestLogManager:
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    obs_dir = wt / "python/sglang/srt/managers/observability"
-    # __init__.py created by define-scheduler-sender; just ensure dir.
-    obs_dir.mkdir(exist_ok=True)
-    new = obs_dir / "request_log_manager.py"
+    new = wt / "python/sglang/srt/managers/request_log_manager.py"
 
     # Cut bottom-up.
     method_names = (
@@ -189,7 +186,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.observability.request_log_manager import RequestLogManager\n",
+        addition="from sglang.srt.managers.request_log_manager import RequestLogManager\n",
     )
 
     # Wire construction in __init__: insert before request_validator block.

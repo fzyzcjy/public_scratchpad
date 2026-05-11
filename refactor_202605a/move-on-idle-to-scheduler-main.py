@@ -84,7 +84,7 @@ def transform(wt: Path) -> None:
     # runtime_checker mixin).
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.setup import kv_cache\n",
+        anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
         addition="from sglang.srt.observability.metrics_collector import QueueCount\n",
     )
     sched.write_text(text)

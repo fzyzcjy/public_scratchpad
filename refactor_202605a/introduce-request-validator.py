@@ -42,7 +42,7 @@ Move 5 validate methods from TokenizerManager into a new
 @dataclass(frozen=True, slots=True, kw_only=True) RequestValidator class
 with a single RequestValidatorConfig field.
 
-The class lives in managers/inputs/request_validator.py. Body bodies
+The class lives in managers/request_validator.py. Body bodies
 rewrite self.X -> self.config.X for the dependent fields (context_len,
 num_reserved_tokens, is_generation, validate_total_tokens, allow_auto_truncate,
 enable_return_hidden_states, enable_custom_logit_processor,
@@ -122,7 +122,7 @@ CONFIG_FIELDS_SHORT = (
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/inputs/request_validator.py"
+    new = wt / "python/sglang/srt/managers/request_validator.py"
 
     # Cut bottom-up so earlier line ranges stay valid.
     method_names = (
@@ -208,7 +208,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.inputs.request_validator import (\n"
+            "from sglang.srt.managers.request_validator import (\n"
             "    RequestValidator,\n"
             "    RequestValidatorConfig,\n"
             ")\n"

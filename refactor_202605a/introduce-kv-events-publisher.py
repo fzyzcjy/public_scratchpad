@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #1 of ``SchedulerMetricsMixin``: introduce
 ``SchedulerKvEventsPublisher`` at
-``scheduler_components/observability/kv_events_publisher.py``.
+``scheduler_components/kv_events_publisher.py``.
 
 3 KV-events methods (``init_kv_events`` / ``_emit_kv_metrics`` /
 ``_publish_kv_events``) and the ``KvMetrics`` dataclass move to the new
@@ -46,7 +46,7 @@ SUBJECT = "Introduce SchedulerKvEventsPublisher (split #1 of metrics mixin)"
 BODY = """\
 Pull the 3 KV-events methods + ``KvMetrics`` dataclass out of
 ``SchedulerMetricsMixin`` into a new ``SchedulerKvEventsPublisher`` at
-``scheduler_components/observability/kv_events_publisher.py``. Scheduler
+``scheduler_components/kv_events_publisher.py``. Scheduler
 holds it as ``self.kv_events_publisher``.
 
 The original ``init_kv_events`` method is fully removed: its rank-gate +
@@ -173,7 +173,7 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/observability/kv_events_publisher.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
 
     src_text = src.read_text()
 
@@ -228,9 +228,9 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.observability.invariant_checker import (\n    SchedulerInvariantChecker,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.invariant_checker import (\n    SchedulerInvariantChecker,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.observability.kv_events_publisher import (\n"
+            "from sglang.srt.managers.scheduler_components.kv_events_publisher import (\n"
             "    SchedulerKvEventsPublisher,\n"
             ")\n"
         ),

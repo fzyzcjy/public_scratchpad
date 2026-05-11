@@ -108,7 +108,7 @@ WAIT_YIELD_EMITTER_METHOD = '''
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    emitter = wt / "python/sglang/srt/managers/outputs/response_emitter.py"
+    emitter = wt / "python/sglang/srt/managers/response_emitter.py"
 
     text = tm.read_text()
     text = replace_call_site(text, old=WAIT_YIELD_OLD, new=WAIT_YIELD_FACADE_NEW)
