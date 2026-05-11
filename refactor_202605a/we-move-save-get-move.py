@@ -39,7 +39,7 @@ _METHOD_NAMES = ("save_remote_model", "save_sharded_model", "get_weights_by_name
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    we = wt / "python/sglang/srt/model_executor/weight_exporter.py"
+    we = wt / "python/sglang/srt/model_executor/model_runner_components/weight_exporter.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     sm = wt / "python/sglang/srt/managers/scheduler_update_weights_mixin.py"
 

@@ -169,7 +169,7 @@ def transform(wt: Path) -> None:
     )
 
     _patch_file(
-        wt / "python/sglang/srt/model_executor/pool_configurator.py",
+        wt / "python/sglang/srt/model_executor/model_runner_components/pool_configurator.py",
         accessor="mr",
         function_names=["mambaish_config"],
         import_anchor="from sglang.srt.environ import envs\n",

@@ -48,7 +48,7 @@ def _cut(mr: Path, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
     # Cut bottom-up so earlier line ranges stay valid.

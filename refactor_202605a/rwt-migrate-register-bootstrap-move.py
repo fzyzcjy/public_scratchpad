@@ -28,7 +28,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+    transport = wt / "python/sglang/srt/model_executor/model_runner_components/remote_instance_weight_transport.py"
 
     s, e = find_method_lines(mr.read_text(), class_name="ModelRunner", method_name="_register_to_engine_info_bootstrap")
     method_text = cut_lines(mr, s, e)

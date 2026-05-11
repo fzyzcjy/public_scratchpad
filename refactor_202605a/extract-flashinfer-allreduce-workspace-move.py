@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move stage for extract-flashinfer-allreduce-workspace (MECH_COMMIT_SPLIT §"二段式"):
 
-Pure cut+paste of the prep'd staticmethod into ``model_executor/kernel_warmup.py``
+Pure cut+paste of the prep'd staticmethod into ``model_executor/model_runner_components/kernel_warmup.py``
 (co-located with the other ``kernel_warmup`` family functions). Body byte-equivalent.
 Call site prefix-strip + import.
 """
@@ -35,7 +35,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
+    kw = wt / "python/sglang/srt/model_executor/model_runner_components/kernel_warmup.py"
 
     s, e = find_method_lines(
         mr.read_text(),
@@ -61,12 +61,12 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old=(
-            "from sglang.srt.model_executor.kernel_warmup import (\n"
+            "from sglang.srt.model_executor.model_runner_components.kernel_warmup import (\n"
             "    kernel_warmup,\n"
             ")\n"
         ),
         new=(
-            "from sglang.srt.model_executor.kernel_warmup import (\n"
+            "from sglang.srt.model_executor.model_runner_components.kernel_warmup import (\n"
             "    _pre_initialize_flashinfer_allreduce_workspace,\n"
             "    kernel_warmup,\n"
             ")\n"

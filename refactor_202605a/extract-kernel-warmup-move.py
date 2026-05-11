@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move stage for extract-kernel-warmup (MECH_COMMIT_SPLIT §"二段式"):
 
-Cut+paste two staticmethods to ``model_executor/kernel_warmup.py``. Bodies
+Cut+paste two staticmethods to ``model_executor/model_runner_components/kernel_warmup.py``. Bodies
 byte-equivalent. Call sites prefix-strip.
 """
 
@@ -43,7 +43,7 @@ def _cut_and_dedent(mr: Path, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
+    kw = wt / "python/sglang/srt/model_executor/model_runner_components/kernel_warmup.py"
 
     # Add logger to target file if not present.
     kw_text = kw.read_text()
@@ -70,13 +70,13 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old=(
-            "from sglang.srt.model_executor.kernel_warmup import (\n"
+            "from sglang.srt.model_executor.model_runner_components.kernel_warmup import (\n"
             "    _flashinfer_autotune_cache_path,\n"
             "    _should_run_flashinfer_autotune,\n"
             ")\n"
         ),
         new=(
-            "from sglang.srt.model_executor.kernel_warmup import (\n"
+            "from sglang.srt.model_executor.model_runner_components.kernel_warmup import (\n"
             "    _flashinfer_autotune_cache_path,\n"
             "    _should_run_flashinfer_autotune,\n"
             "    kernel_warmup,\n"

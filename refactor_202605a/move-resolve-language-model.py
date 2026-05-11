@@ -69,7 +69,7 @@ def transform(wt: Path) -> None:
 
     # device_graphs caller (local import inside ``init_piecewise_cuda_graphs``,
     # added by ``extract-piecewise-cuda-graphs``): rewrite to the new home.
-    dg = wt / "python/sglang/srt/model_executor/device_graphs.py"
+    dg = wt / "python/sglang/srt/model_executor/model_runner_components/device_graphs.py"
     text = dg.read_text()
     text = replace_call_site(
         text,

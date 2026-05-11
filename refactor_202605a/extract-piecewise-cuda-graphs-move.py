@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move stage for extract-piecewise-cuda-graphs (MECH_COMMIT_SPLIT §"二段式"):
 
-Pure cut+paste to ``model_executor/device_graphs.py``. Body byte-equivalent.
+Pure cut+paste to ``model_executor/model_runner_components/device_graphs.py``. Body byte-equivalent.
 Call site prefix-strip. Adds the missing imports the body needs and breaks
 the import cycle on ``resolve_language_model`` with a local-import form.
 """
@@ -26,7 +26,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-piecewise-cuda-graphs-move"
-SUBJECT = "Move create_piecewise_cuda_graphs to model_executor.device_graphs (cut+paste)"
+SUBJECT = "Move create_piecewise_cuda_graphs to model_executor.model_runner_components.device_graphs (cut+paste)"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-piecewise-cuda-graphs-prep"
@@ -35,7 +35,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    dg = wt / "python/sglang/srt/model_executor/device_graphs.py"
+    dg = wt / "python/sglang/srt/model_executor/model_runner_components/device_graphs.py"
 
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="create_piecewise_cuda_graphs"

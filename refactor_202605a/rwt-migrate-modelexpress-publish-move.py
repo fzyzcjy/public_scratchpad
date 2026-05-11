@@ -65,7 +65,7 @@ def _cut(mr: Path, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+    transport = wt / "python/sglang/srt/model_executor/model_runner_components/remote_instance_weight_transport.py"
 
     # Add imports the bodies need.
     text = transport.read_text()

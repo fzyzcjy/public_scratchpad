@@ -38,7 +38,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
     ew = wt / "python/sglang/srt/speculative/eagle_worker_v2.py"
 

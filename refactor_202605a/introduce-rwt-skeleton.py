@@ -86,7 +86,7 @@ class RemoteInstanceWeightTransport:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    transport = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+    transport = wt / "python/sglang/srt/model_executor/model_runner_components/remote_instance_weight_transport.py"
 
     # ---- Cut remote_instance_init_transfer_engine; body refs original fields, ----
     # ---- so it pastes onto the transport class verbatim (just leading indent).  ----
@@ -103,9 +103,9 @@ def transform(wt: Path) -> None:
 
     text = insert_after(
         text,
-        anchor="from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig\n",
+        anchor="from sglang.srt.model_executor.model_runner_components.pool_configurator import MemoryPoolConfig\n",
         addition=(
-            "from sglang.srt.model_executor.remote_instance_weight_transport import (\n"
+            "from sglang.srt.model_executor.model_runner_components.remote_instance_weight_transport import (\n"
             "    RemoteInstanceWeightTransport,\n"
             ")\n"
         ),
@@ -224,7 +224,7 @@ _OUTSIDE_RWT_SUBS = [
 
 
 def _rename_and_slot_transport(wt: Path) -> None:
-    src = wt / "python/sglang/srt/model_executor/remote_instance_weight_transport.py"
+    src = wt / "python/sglang/srt/model_executor/model_runner_components/remote_instance_weight_transport.py"
     text = src.read_text()
     for old, new in _INSIDE_RWT_SUBS:
         text = text.replace(old, new)

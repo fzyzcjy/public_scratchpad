@@ -57,7 +57,7 @@ from sglang.srt.server_args import ServerArgs
 from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 
 if TYPE_CHECKING:
-    from sglang.srt.model_executor.pool_configurator import MemoryPoolConfig
+    from sglang.srt.model_executor.model_runner_components.pool_configurator import MemoryPoolConfig
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

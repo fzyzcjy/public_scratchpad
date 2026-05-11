@@ -2,7 +2,7 @@
 """Introduce ``WeightUpdater`` owner class and migrate the two
 weight-update-group lifecycle methods.
 
-- New file ``python/sglang/srt/model_executor/weight_updater.py`` with class
+- New file ``python/sglang/srt/model_executor/model_runner_components/weight_updater.py`` with class
   ``WeightUpdater``. Owns the ``_model_update_group: dict`` formerly on
   ModelRunner (Ch1 item 5: lifecycle-cohesive fields move to owner).
 - Methods ``init_weights_update_group`` and ``destroy_weights_update_group``
@@ -76,7 +76,7 @@ class WeightUpdater:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
     # Cut bottom-up so earlier line ranges stay valid.
@@ -102,7 +102,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.model_executor.cpu_graph_runner import CPUGraphRunner\n",
-        addition="from sglang.srt.model_executor.weight_updater import WeightUpdater\n",
+        addition="from sglang.srt.model_executor.model_runner_components.weight_updater import WeightUpdater\n",
     )
     text = replace_call_site(
         text,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move stage for extract-autotune-helpers (MECH_COMMIT_SPLIT §"二段式"):
 
-Cut+paste both staticmethods to the new file ``model_executor/kernel_warmup.py``.
+Cut+paste both staticmethods to the new file ``model_executor/model_runner_components/kernel_warmup.py``.
 Bodies byte-equivalent. Call sites prefix-strip.
 """
 
@@ -58,7 +58,7 @@ def _cut_and_dedent(mr: Path, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    kw = wt / "python/sglang/srt/model_executor/kernel_warmup.py"
+    kw = wt / "python/sglang/srt/model_executor/model_runner_components/kernel_warmup.py"
 
     kw.write_text(_HEADER)
 
@@ -79,7 +79,7 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
         addition=(
-            "from sglang.srt.model_executor.kernel_warmup import (\n"
+            "from sglang.srt.model_executor.model_runner_components.kernel_warmup import (\n"
             "    _flashinfer_autotune_cache_path,\n"
             "    _should_run_flashinfer_autotune,\n"
             ")\n"

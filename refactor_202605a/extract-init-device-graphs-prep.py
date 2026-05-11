@@ -32,7 +32,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
 
     # Reshape: rename + @staticmethod + signature + body to read-only form.
     text = mr.read_text()

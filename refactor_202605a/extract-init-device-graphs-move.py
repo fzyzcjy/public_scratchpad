@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Move stage for extract-init-device-graphs (MECH_COMMIT_SPLIT §"二段式"):
 
-Pure cut+paste to new file ``model_executor/device_graphs.py``. Body
+Pure cut+paste to new file ``model_executor/model_runner_components/device_graphs.py``. Body
 byte-equivalent. Call sites prefix-rewrite.
 """
 
@@ -25,7 +25,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-init-device-graphs-move"
-SUBJECT = "Move create_device_graphs to model_executor.device_graphs (cut+paste)"
+SUBJECT = "Move create_device_graphs to model_executor.model_runner_components.device_graphs (cut+paste)"
 BODY = ""
 AREA = "mech_model_runner"
 BASE = "tom_refactor_202605a/primary/mech_model_runner/extract-init-device-graphs-prep"
@@ -59,8 +59,8 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    dg = wt / "python/sglang/srt/model_executor/device_graphs.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    dg = wt / "python/sglang/srt/model_executor/model_runner_components/device_graphs.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
 
     s, e = find_method_lines(
         mr.read_text(), class_name="ModelRunner", method_name="create_device_graphs"

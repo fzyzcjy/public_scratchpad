@@ -2,7 +2,7 @@
 """Introduce ``WeightExporter`` owner class and migrate the two
 weights-send-group methods.
 
-- New file ``python/sglang/srt/model_executor/weight_exporter.py`` with class
+- New file ``python/sglang/srt/model_executor/model_runner_components/weight_exporter.py`` with class
   ``WeightExporter``. Owns the ``_weights_send_group: dict`` formerly on
   ModelRunner (Ch1 item 5: lifecycle-cohesive fields move to owner).
 - Methods ``init_weights_send_group_for_remote_instance`` and
@@ -84,7 +84,7 @@ class WeightExporter:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    we = wt / "python/sglang/srt/model_executor/weight_exporter.py"
+    we = wt / "python/sglang/srt/model_executor/model_runner_components/weight_exporter.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
     # Cut bottom-up so earlier line ranges stay valid.
@@ -113,8 +113,8 @@ def transform(wt: Path) -> None:
     text = mr.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.model_executor.weight_updater import WeightUpdater\n",
-        addition="from sglang.srt.model_executor.weight_exporter import WeightExporter\n",
+        anchor="from sglang.srt.model_executor.model_runner_components.weight_updater import WeightUpdater\n",
+        addition="from sglang.srt.model_executor.model_runner_components.weight_exporter import WeightExporter\n",
     )
     # Per MECH_COMMIT_SPLIT "长 ctor → init_X" rule, the multi-line ctor
     # lives in its own helper method.

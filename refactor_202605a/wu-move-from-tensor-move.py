@@ -61,7 +61,7 @@ def _cut_method(mr: Path, method_name: str) -> str:
 
 def transform(wt: Path) -> None:
     mr = wt / "python/sglang/srt/model_executor/model_runner.py"
-    wu = wt / "python/sglang/srt/model_executor/weight_updater.py"
+    wu = wt / "python/sglang/srt/model_executor/model_runner_components/weight_updater.py"
     tw = wt / "python/sglang/srt/managers/tp_worker.py"
 
     # Cut bottom-up so earlier line ranges stay valid: class, then 2 free
@@ -130,7 +130,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="sglang.srt.model_executor.model_runner._model_load_weights_direct",
-        new="sglang.srt.model_executor.weight_updater._model_load_weights_direct",
+        new="sglang.srt.model_executor.model_runner_components.weight_updater._model_load_weights_direct",
     )
     test_uwt.write_text(text)
 
@@ -140,7 +140,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="from sglang.srt.model_executor.model_runner import LocalSerializedTensor\n",
-        new="from sglang.srt.model_executor.weight_updater import LocalSerializedTensor\n",
+        new="from sglang.srt.model_executor.model_runner_components.weight_updater import LocalSerializedTensor\n",
     )
     ws_utils.write_text(text)
 
@@ -152,7 +152,7 @@ def transform(wt: Path) -> None:
         old='        "sglang.srt.model_executor.model_runner.",\n',
         new=(
             '        "sglang.srt.model_executor.model_runner.",\n'
-            '        "sglang.srt.model_executor.weight_updater.",\n'
+            '        "sglang.srt.model_executor.model_runner_components.weight_updater.",\n'
         ),
     )
     common.write_text(text)
