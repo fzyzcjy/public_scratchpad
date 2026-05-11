@@ -63,7 +63,7 @@ PROFILER_MANAGER_HEADER = '''from __future__ import annotations  # noqa: F401
 
 from dataclasses import dataclass
 from pathlib import Path  # noqa: F401
-from typing import Any, Callable, List, Optional  # noqa: F401
+from typing import TYPE_CHECKING, Any, Callable, List, Optional  # noqa: F401
 
 from sglang.srt.environ import envs  # noqa: F401
 from sglang.srt.utils.profile_utils import ProfileManager  # noqa: F401
