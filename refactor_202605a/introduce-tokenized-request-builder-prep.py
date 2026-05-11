@@ -86,13 +86,13 @@ def _method_ranges(text: str, class_name: str, method_name: str):
 NEW_CREATE_HEADER = '''    @staticmethod
     def _create_tokenized_object(
         self: "TokenizedRequestBuilder",
-        obj,
-        input_text,
-        input_ids,
-        input_embeds,
-        mm_inputs,
-        token_type_ids,
-    ):
+        obj: Union[GenerateReqInput, EmbeddingReqInput],
+        input_text: str,
+        input_ids: List[int],
+        input_embeds: Optional[Union[List[float], None]] = None,
+        mm_inputs=None,
+        token_type_ids: Optional[List[int]] = None,
+    ) -> Union[TokenizedGenerateReqInput, TokenizedEmbeddingReqInput]:
 '''
 
 

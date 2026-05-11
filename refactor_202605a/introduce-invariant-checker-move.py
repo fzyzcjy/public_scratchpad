@@ -119,9 +119,26 @@ def transform(wt: Path) -> None:
             method_name=name,
         )
         block = cut_lines(src, s, e)
-        block = _strip_staticmethod_typeflip(
-            block, target_class="SchedulerInvariantChecker"
-        )
+        if name == "_check_pool_invariant":
+            # _check_pool_invariant was a true @staticmethod in source mixin
+            # (not a typeflip-prep). Preserve its decorator. Only strip the
+            # sibling-call qualifier (none expected, but keep regex consistent).
+            import re as _re
+            block = _re.sub(
+                r"SchedulerRuntimeCheckerMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+                r"self.\1(",
+                block,
+                flags=_re.DOTALL,
+            )
+            block = _re.sub(
+                r"SchedulerRuntimeCheckerMixin\.(\w+)\(",
+                r"self.\1(",
+                block,
+            )
+        else:
+            block = _strip_staticmethod_typeflip(
+                block, target_class="SchedulerInvariantChecker"
+            )
         method_blocks.append(block)
     method_blocks.reverse()
 

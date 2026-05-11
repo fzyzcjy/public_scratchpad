@@ -102,7 +102,11 @@ def _method_ranges(text: str, class_name: str, method_name: str):
 NEW_HANDLE_HEADER = '''    @staticmethod
     async def _handle_batch_output(
         self: "OutputProcessor",
-        recv_obj,
+        recv_obj: Union[
+            BatchStrOutput,
+            BatchEmbeddingOutput,
+            BatchTokenIDOutput,
+        ],
     ):
 '''
 

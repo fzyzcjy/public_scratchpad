@@ -190,30 +190,36 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Composition wiring. Anchor on the previous owner-class' marker
-    # (RequestMetricsRecorder, the last Stage-3 prep before Stage 4) and insert
-    # BEFORE it so each subsequent owner-class commit prepends its own block.
-    text = replace_call_site(
-        text,
-        old=(
-            "        # Request metrics recorder\n"
-            "        self.request_metrics_recorder = RequestMetricsRecorder(\n"
-        ),
-        new=(
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
-            "            send_to_scheduler=self.send_to_scheduler,\n"
-            "            dispatcher=self._result_dispatcher,\n"
-            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-            "            config=SessionControllerConfig(\n"
-            "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
-            "            ),\n"
-            "        )\n"
-            "\n"
-            "        # Request metrics recorder\n"
-            "        self.request_metrics_recorder = RequestMetricsRecorder(\n"
-        ),
+    # Composition wiring. Anchor on the RequestMetricsRecorder block (closed by
+    # ``)\n\n``) and insert AFTER it. Going *after* keeps request_metrics_recorder
+    # above the Stage-4 controllers — subsequent preps (pause/wdu/lora/corpus)
+    # anchor on ``# Session controller`` and insert BEFORE it, so they end up
+    # between RequestMetricsRecorder and SessionController in textual order.
+    # That's required because PauseController's ctor takes
+    # ``metrics_collector=self.request_metrics_recorder.metrics_collector``.
+    import re as _re
+
+    _anchor_pat = _re.compile(
+        r"        # Request metrics recorder\n"
+        r"        self\.request_metrics_recorder = RequestMetricsRecorder\([^)]*?\)\n",
+        _re.DOTALL,
     )
+    _m = _anchor_pat.search(text)
+    if _m is None:
+        raise RuntimeError("RequestMetricsRecorder anchor not found")
+    addition = (
+        "\n"
+        "        # Session controller\n"
+        "        self.session_controller = SessionController(\n"
+        "            send_to_scheduler=self.send_to_scheduler,\n"
+        "            dispatcher=self._result_dispatcher,\n"
+        "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+        "            config=SessionControllerConfig(\n"
+        "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
+        "            ),\n"
+        "        )\n"
+    )
+    text = text[: _m.end()] + addition + text[_m.end() :]
 
     # Convert _handle_open_session_req_output to @staticmethod with
     # self: "SessionController" typing; body stays in TM.
