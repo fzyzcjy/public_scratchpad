@@ -45,6 +45,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 TRANSPORT_HEADER = '''from __future__ import annotations
 
 import logging
+from typing import Callable
 
 import torch
 
@@ -61,18 +62,24 @@ class RemoteInstanceWeightTransport:
         self,
         *,
         server_args: ServerArgs,
-        model: torch.nn.Module,
+        get_model: Callable[[], torch.nn.Module],
         tp_rank: int,
         gpu_id: int,
     ):
         self.server_args = server_args
-        self.model = model
+        self.get_model = get_model
         self.tp_rank = tp_rank
         self.gpu_id = gpu_id
         self.remote_instance_transfer_engine = None
         self.remote_instance_transfer_engine_session_id = ""
         self.remote_instance_transfer_engine_weight_info = None
         self._nixl_manager = None
+
+    @property
+    def model(self) -> torch.nn.Module:
+        # Always read through the getter — ModelRunner may swap ``self.model``
+        # during weight reload, so a captured object reference would go stale.
+        return self.get_model()
 
 '''
 
@@ -118,11 +125,13 @@ def transform(wt: Path) -> None:
         new="        self.init_remote_instance_weight_transport()\n",
     )
     # Insert the new init helper method just before ``_build_model_config``.
+    # ``model`` is a Callable getter so the transport always sees ModelRunner's
+    # current model (weight reload paths may replace ``self.model``).
     helper_method = (
         "    def init_remote_instance_weight_transport(self):\n"
         "        self.remote_instance_weight_transport = RemoteInstanceWeightTransport(\n"
         "            server_args=self.server_args,\n"
-        "            model=None,\n"
+        "            get_model=lambda: self.model,\n"
         "            tp_rank=self.tp_rank,\n"
         "            gpu_id=self.gpu_id,\n"
         "        )\n"
@@ -132,25 +141,6 @@ def transform(wt: Path) -> None:
         "    def _build_model_config(",
         helper_method + "    def _build_model_config(",
         1,
-    )
-
-    # After load_model populates self.model, propagate the ref onto the transport
-    # so /42's _build_nixl_worker_metadata can read self.model.named_parameters().
-    text = replace_call_site(
-        text,
-        old=(
-            "            self.model = self.loader.load_model(\n"
-            "                model_config=self.model_config,\n"
-            "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
-            "            )\n"
-        ),
-        new=(
-            "            self.model = self.loader.load_model(\n"
-            "                model_config=self.model_config,\n"
-            "                device_config=DeviceConfig(self.device, self.gpu_id),\n"
-            "            )\n"
-            "            self.remote_instance_weight_transport.model = self.model\n"
-        ),
     )
 
     # Sole call-site of remote_instance_init_transfer_engine.
@@ -244,7 +234,7 @@ def _rename_and_slot_transport(wt: Path) -> None:
         anchor="from sglang.srt.utils.network import NetworkAddress, get_local_ip_auto\n",
         addition=(
             "from dataclasses import dataclass\n"
-            "from typing import Any, Optional\n"
+            "from typing import Any, Callable, Optional\n"
         ),
     )
     text = replace_call_site(
@@ -256,18 +246,24 @@ def _rename_and_slot_transport(wt: Path) -> None:
             "        self,\n"
             "        *,\n"
             "        server_args: ServerArgs,\n"
-            "        model: torch.nn.Module,\n"
+            "        get_model: Callable[[], torch.nn.Module],\n"
             "        tp_rank: int,\n"
             "        gpu_id: int,\n"
             "    ):\n"
             "        self.server_args = server_args\n"
-            "        self.model = model\n"
+            "        self.get_model = get_model\n"
             "        self.tp_rank = tp_rank\n"
             "        self.gpu_id = gpu_id\n"
             "        self.engine = None\n"
             "        self.session_id = \"\"\n"
             "        self.weight_info = None\n"
             "        self._nixl_manager = None\n"
+            "\n"
+            "    @property\n"
+            "    def model(self) -> torch.nn.Module:\n"
+            "        # Always read through the getter — ModelRunner may swap ``self.model``\n"
+            "        # during weight reload, so a captured object reference would go stale.\n"
+            "        return self.get_model()\n"
         ),
         new=(
             "# Lifecycle fields (engine / session_id / weight_info / _nixl_manager)\n"
@@ -276,13 +272,19 @@ def _rename_and_slot_transport(wt: Path) -> None:
             "@dataclass(slots=True, kw_only=True)\n"
             "class RemoteInstanceWeightTransport:\n"
             "    server_args: ServerArgs\n"
-            "    model: torch.nn.Module\n"
+            "    get_model: Callable[[], torch.nn.Module]\n"
             "    tp_rank: int\n"
             "    gpu_id: int\n"
             "    engine: Optional[Any] = None\n"
             '    session_id: str = ""\n'
             "    weight_info: Optional[dict[str, tuple[int, int, int]]] = None\n"
             "    _nixl_manager: Optional[Any] = None\n"
+            "\n"
+            "    @property\n"
+            "    def model(self) -> torch.nn.Module:\n"
+            "        # Always read through the getter — ModelRunner may swap ``self.model``\n"
+            "        # during weight reload, so a captured object reference would go stale.\n"
+            "        return self.get_model()\n"
         ),
     )
     src.write_text(text)
