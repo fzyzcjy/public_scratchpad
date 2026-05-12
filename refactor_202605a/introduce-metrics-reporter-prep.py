@@ -407,6 +407,21 @@ def _rewrite_self_to_scheduler_back_ref(method_text: str) -> str:
     for s, e, new in replacements:
         out = out[:s] + new + out[e:]
 
+    # Safety net: AST positions for nodes inside f-strings (FormattedValue
+    # subtrees) are unreliable on Python <3.12, causing some self.X reads
+    # to be skipped. Apply a regex pass over the rewritten text to catch
+    # any remaining self.X references (excluding method calls and owned
+    # attrs). Already-rewritten self.scheduler.X is skipped because the
+    # leading "self" in that pattern is followed by ".scheduler", and
+    # REPORTER_OWNED_ATTRS contains "scheduler".
+    def _regex_repl(m: "re.Match") -> str:
+        attr = m.group(1)
+        if attr in REPORTER_OWNED_ATTRS:
+            return m.group(0)
+        return f"self.scheduler.{attr}"
+
+    out = re.sub(r"\bself\.(\w+)\b(?!\s*\()", _regex_repl, out)
+
     # Strip the ``class _W:\n`` wrapper prefix.
     assert out.startswith("class _W:\n")
     return out[len("class _W:\n"):]
