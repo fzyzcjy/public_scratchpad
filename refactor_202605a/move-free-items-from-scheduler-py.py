@@ -243,6 +243,9 @@ class IdleSleeper:
 
     sockets: Any
     last_empty_time: float = field(default_factory=real_time)
+    # Built in __post_init__; declared so slots=True permits attribute set.
+    poller: Any = None
+    empty_cache_interval: int = 0
 
     def __post_init__(self) -> None:
         self.poller = zmq.Poller()
