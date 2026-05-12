@@ -104,7 +104,7 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
 - Spec lifetime counters / ``last_gen_throughput`` / ``step_time_dict``
   Scheduler accessors route through ``self.metrics_reporter.X`` (option
   b ownership), and the load-inquirer ctor's lambdas for
-  ``get_spec_total_num_accepted_tokens`` / ``get_spec_total_num_forward_ct``
+  ``get_spec_total_num_accept_tokens`` / ``get_spec_total_num_forward_ct``
   switch to ``self.metrics_reporter.spec_total_num_*``.
 - ``metrics_collector`` post-init call sites route through
   ``self.metrics_reporter.metrics_collector.X(...)``. The early
@@ -308,9 +308,9 @@ REPORTER_OWNED_ATTRS = frozenset({
     "step_time_dict",
     "stats",
     "_graph_backend_label",
-    "spec_num_accepted_tokens",
+    "spec_num_accept_tokens",
     "spec_num_forward_ct",
-    "spec_total_num_accepted_tokens",
+    "spec_total_num_accept_tokens",
     "spec_total_num_forward_ct",
     "kv_transfer_speed_gb_s",
     "kv_transfer_latency_ms",
@@ -598,9 +598,9 @@ def transform(wt: Path) -> None:
     # the reporter (ownership migration).
     text = replace_call_site(
         text,
-        old="            get_spec_total_num_accepted_tokens=lambda: self.spec_total_num_accepted_tokens,\n"
+        old="            get_spec_total_num_accept_tokens=lambda: self.spec_total_num_accept_tokens,\n"
         "            get_spec_total_num_forward_ct=lambda: self.spec_total_num_forward_ct,\n",
-        new="            get_spec_total_num_accepted_tokens=lambda: self.metrics_reporter.spec_total_num_accepted_tokens,\n"
+        new="            get_spec_total_num_accept_tokens=lambda: self.metrics_reporter.spec_total_num_accept_tokens,\n"
         "            get_spec_total_num_forward_ct=lambda: self.metrics_reporter.spec_total_num_forward_ct,\n",
     )
     # Hot-path callsites — static-bound sister form (pool-stats-observer pattern).
@@ -626,8 +626,8 @@ def transform(wt: Path) -> None:
     )
     # Spec lifetime counters now reporter-owned (post-init reads from Scheduler).
     text = replace_call_site(
-        text, old="self.spec_total_num_accepted_tokens",
-        new="self.metrics_reporter.spec_total_num_accepted_tokens",
+        text, old="self.spec_total_num_accept_tokens",
+        new="self.metrics_reporter.spec_total_num_accept_tokens",
     )
     text = replace_call_site(
         text, old="self.spec_total_num_forward_ct",

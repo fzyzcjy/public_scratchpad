@@ -119,7 +119,7 @@ class SchedulerLoadInquirer:
     get_disagg_prefill_inflight_queue: Callable
     get_disagg_decode_prealloc_queue: Callable
     get_disagg_decode_transfer_queue: Callable
-    get_spec_total_num_accepted_tokens: Callable
+    get_spec_total_num_accept_tokens: Callable
     get_spec_total_num_forward_ct: Callable
 '''
 
@@ -143,7 +143,7 @@ SCHEDULER_INIT_INSERT = """\
             get_disagg_prefill_inflight_queue=lambda: self.disagg_prefill_inflight_queue,
             get_disagg_decode_prealloc_queue=lambda: self.disagg_decode_prealloc_queue,
             get_disagg_decode_transfer_queue=lambda: self.disagg_decode_transfer_queue,
-            get_spec_total_num_accepted_tokens=lambda: self.spec_total_num_accepted_tokens,
+            get_spec_total_num_accept_tokens=lambda: self.spec_total_num_accept_tokens,
             get_spec_total_num_forward_ct=lambda: self.spec_total_num_forward_ct,
         )
 
@@ -192,9 +192,9 @@ BODY_GETTER_REPLACEMENTS = [
         "if not self.spec_algorithm.is_none() and self.get_spec_total_num_forward_ct() > 0:",
     ),
     (
-        "                        self.spec_total_num_accepted_tokens\n"
+        "                        self.spec_total_num_accept_tokens\n"
         "                        / self.spec_total_num_forward_ct",
-        "                        self.get_spec_total_num_accepted_tokens()\n"
+        "                        self.get_spec_total_num_accept_tokens()\n"
         "                        / self.get_spec_total_num_forward_ct()",
     ),
     (

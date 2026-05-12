@@ -471,8 +471,8 @@ def transform(wt: Path) -> None:
     # the C13 RPC dispatch + the C16 streamer init insert + the local reads
     # in get_internal_state / set_internal_state.
     text = text.replace(
-        "self.spec_total_num_accepted_tokens",
-        "self.metrics_reporter.spec_total_num_accepted_tokens",
+        "self.spec_total_num_accept_tokens",
+        "self.metrics_reporter.spec_total_num_accept_tokens",
     )
     text = text.replace(
         "self.spec_total_num_forward_ct",

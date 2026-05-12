@@ -43,7 +43,7 @@ token_to_kv_pool_allocator, spec_algorithm).
 
 Runtime-mutable state read by the body becomes per-call kwargs (R4 kwarg
 add per EXECUTION_GUIDE item 2): ``running_batch`` / ``waiting_queue`` /
-``stats`` / ``spec_total_num_accepted_tokens`` /
+``stats`` / ``spec_total_num_accept_tokens`` /
 ``spec_total_num_forward_ct`` / 4 disagg queues. Callers (RPC dispatch
 tuple in ``init_request_dispatcher`` and 1 internal call from
 ``stream_output_generation``) provide these via lambda.
@@ -120,7 +120,7 @@ class SchedulerLoadInquirer:
         running_batch,
         waiting_queue,
         stats,
-        spec_total_num_accepted_tokens: int,
+        spec_total_num_accept_tokens: int,
         spec_total_num_forward_ct: int,
         disagg_prefill_bootstrap_queue,
         disagg_prefill_inflight_queue,
@@ -173,7 +173,7 @@ class SchedulerLoadInquirer:
             if not self.spec_algorithm.is_none() and spec_total_num_forward_ct > 0:
                 speculative = SpeculativeMetrics(
                     accept_length=(
-                        spec_total_num_accepted_tokens
+                        spec_total_num_accept_tokens
                         / spec_total_num_forward_ct
                     ),
                     accept_rate=stats.spec_accept_rate,
@@ -273,7 +273,7 @@ LOAD_INQUIRER_CALL_KWARGS = """\
                 running_batch=self.running_batch,
                 waiting_queue=self.waiting_queue,
                 stats=self.stats,
-                spec_total_num_accepted_tokens=self.spec_total_num_accepted_tokens,
+                spec_total_num_accept_tokens=self.spec_total_num_accept_tokens,
                 spec_total_num_forward_ct=self.spec_total_num_forward_ct,
                 disagg_prefill_bootstrap_queue=getattr(self, "disagg_prefill_bootstrap_queue", None),
                 disagg_prefill_inflight_queue=getattr(self, "disagg_prefill_inflight_queue", None),

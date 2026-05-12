@@ -227,8 +227,8 @@ def transform(wt: Path) -> None:
     )
     # Insert the init helper method before ``_build_model_config``.
     text = text.replace(
-        "    def _build_model_config(",
-        _INIT_HELPER + "    def _build_model_config(",
+        "    def init_msprobe(",
+        _INIT_HELPER + "    def init_msprobe(",
         1,
     )
 

@@ -212,8 +212,8 @@ def transform(wt: Path) -> None:
         "\n"
     )
     text = text.replace(
-        "    def _build_model_config(",
-        helper_method + "    def _build_model_config(",
+        "    def init_msprobe(",
+        helper_method + "    def init_msprobe(",
         1,
     )
 
