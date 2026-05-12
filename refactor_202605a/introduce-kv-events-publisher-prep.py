@@ -98,6 +98,7 @@ class SchedulerKvEventsPublisher:
     Scheduler (``self.kv_events_publisher``)."""
 
     kv_events_config: Optional[str]
+    ps: Any
     attn_tp_rank: int
     attn_cp_rank: int
     attn_dp_rank: int
@@ -115,6 +116,7 @@ class SchedulerKvEventsPublisher:
 SCHEDULER_INIT_INSERT = '''\
         self.kv_events_publisher = SchedulerKvEventsPublisher(
             kv_events_config=self.server_args.kv_events_config,
+            ps=self.ps,
             attn_tp_rank=self.ps.attn_tp_rank,
             attn_cp_rank=self.ps.attn_cp_rank,
             attn_dp_rank=self.ps.attn_dp_rank,
