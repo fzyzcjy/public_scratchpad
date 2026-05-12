@@ -363,6 +363,22 @@ def transform(wt: Path) -> None:
         )
         f.write_text(ftext)
 
+    # 7. Disagg queue-class callers (live on disaggregation/{decode,prefill}.py
+    # but hold a ``self.scheduler`` back-reference, not the Scheduler/mixin
+    # ``self``). Route directly to the final post-move form
+    # ``self.scheduler.output_streamer.stream_output(...)`` — bypassing the
+    # transitional static-bound shim that's used for in-class callers.
+    for f in [
+        wt / "python/sglang/srt/disaggregation/prefill.py",
+        wt / "python/sglang/srt/disaggregation/decode.py",
+    ]:
+        ftext = f.read_text()
+        ftext = ftext.replace(
+            "self.scheduler.stream_output(",
+            "self.scheduler.output_streamer.stream_output(",
+        )
+        f.write_text(ftext)
+
 
 if __name__ == "__main__":
     run_pr(
