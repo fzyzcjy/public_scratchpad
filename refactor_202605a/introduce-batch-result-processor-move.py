@@ -63,7 +63,7 @@ METHODS = [
     "_maybe_collect_indexer_topk",     # prep flipped privacy
     "_maybe_collect_customized_info",  # prep flipped privacy
     "process_batch_result_prefill",
-    "_resolve_spec_overlap_token_ids",
+    "_resolve_spec_overlap_tokens",
     "process_batch_result_idle",
     "process_batch_result_decode",
     "_handle_finished_req",

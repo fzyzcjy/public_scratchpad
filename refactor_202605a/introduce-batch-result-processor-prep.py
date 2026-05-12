@@ -94,7 +94,7 @@ METHODS = [
     "maybe_collect_indexer_topk",
     "maybe_collect_customized_info",
     "process_batch_result_prefill",
-    "_resolve_spec_overlap_token_ids",
+    "_resolve_spec_overlap_tokens",
     "process_batch_result_idle",
     "process_batch_result_decode",
     "_handle_finished_req",
