@@ -696,6 +696,13 @@ def transform(wt: Path) -> None:
         r"\1self.report_prefill_stats(self.metrics_reporter, ",
         text,
     )
+    # num_generated_tokens moved from Scheduler (set by init_metrics) to
+    # the reporter; redirect the dllm-mixin accumulator write.
+    text = replace_call_site(
+        text,
+        old="self.num_generated_tokens += new_tokens\n",
+        new="self.metrics_reporter.num_generated_tokens += new_tokens\n",
+    )
     dllm.write_text(text)
 
 
