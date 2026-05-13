@@ -691,6 +691,22 @@ def transform(wt: Path) -> None:
     # which ``self.metrics_collector`` resolves correctly on the reporter.
     sched.write_text(text)
 
+    # 4.5 Test mock fix-up: ``test_scheduler_chunked_req_gate`` constructs
+    #     a stub via ``Scheduler.__new__(Scheduler)`` and reads
+    #     ``self.enable_fpm`` inside ``get_next_batch_to_run``. In preflight
+    #     this defaulted to ``False`` via class-level annotation on
+    #     ``SchedulerMetricsMixin``; once that mixin retires in C14-move
+    #     the default vanishes — the test mock must set it explicitly.
+    test_gate = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
+    if test_gate.exists():
+        ttext = test_gate.read_text()
+        ttext = replace_call_site(
+            ttext,
+            old="    s.enable_hisparse = False\n",
+            new="    s.enable_hisparse = False\n    s.enable_fpm = False\n",
+        )
+        test_gate.write_text(ttext)
+
     # 5. Output processor mixin callsites — static-bound sister form.
     text = output_mixin.read_text()
     text = re.sub(
