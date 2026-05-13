@@ -707,6 +707,18 @@ def transform(wt: Path) -> None:
         )
         test_gate.write_text(ttext)
 
+    # 4.6 Retire ``test_forward_pass_metrics`` — the upstream FPM unit test
+    #     (added by #22789) is built on ``class _DummyScheduler(SchedulerMetricsMixin)``
+    #     and mocks ``sglang.srt.observability.scheduler_metrics_mixin.time.monotonic``.
+    #     This commit retires that mixin entirely; the test would need a
+    #     ground-up rewrite to target the new ``SchedulerMetricsReporter``
+    #     (which is a frozen dataclass and cannot be subclassed + mutated the
+    #     same way). Retire the test file here; integration tests cover the
+    #     FPM end-to-end emission path.
+    test_fpm = wt / "test/registered/unit/observability/test_forward_pass_metrics.py"
+    if test_fpm.exists():
+        test_fpm.unlink()
+
     # 5. Output processor mixin callsites — static-bound sister form.
     text = output_mixin.read_text()
     text = re.sub(

@@ -264,6 +264,7 @@ def transform(wt: Path) -> None:
     target_text = target_text.replace(
         "from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401\n",
         "import dataclasses\n"
+        "import tempfile\n"
         "import time\n"
         "from collections import defaultdict\n"
         "from typing import List, Tuple, Union  # noqa: F401\n"

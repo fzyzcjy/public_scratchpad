@@ -63,7 +63,7 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
     text = text.replace(f"self: \"{target_class}\"", "self")
     import re
     text = re.sub(
-        r"self\.(\w+)\(\s*self\.logprob_computer\s*(?:,\s*)?",
+        r"self\.(\w+)\(\s*self\.logprob_result_processor\s*(?:,\s*)?",
         r"self.\1(",
         text,
         flags=re.DOTALL,
@@ -133,7 +133,7 @@ def transform(wt: Path) -> None:
         for m in callsite_methods:
             try:
                 ftext = rewrite_method_call_site(
-                    ftext, method_name=m, target_attr="logprob_computer"
+                    ftext, method_name=m, target_attr="logprob_result_processor"
                 )
             except ValueError:
                 pass  # not all methods called in every file
