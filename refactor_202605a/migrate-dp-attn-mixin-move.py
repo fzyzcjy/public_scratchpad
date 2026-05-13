@@ -218,6 +218,17 @@ def transform(wt: Path) -> None:
     )
     test_chunked.write_text(test_text)
 
+    # 8. External free-function import: bench_one_batch imports
+    #    ``prepare_mlp_sync_batch_raw`` from the now-retired mixin path.
+    bench = wt / "python/sglang/bench_one_batch.py"
+    btext = bench.read_text()
+    btext = replace_call_site(
+        btext,
+        old="from sglang.srt.managers.scheduler_dp_attn_mixin import prepare_mlp_sync_batch_raw\n",
+        new="from sglang.srt.managers.scheduler_components.dp_attn_adapter import prepare_mlp_sync_batch_raw\n",
+    )
+    bench.write_text(btext)
+
 
 if __name__ == "__main__":
     run_pr(
