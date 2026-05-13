@@ -349,14 +349,11 @@ REPORTER_OWNED_ATTRS = frozenset({
     "_mfu_log_flops",
     "_mfu_log_read_bytes",
     "_mfu_log_write_bytes",
-    # FPM state (set by _init_fpm; mutated by hot path).
-    "enable_fpm",
-    "_fpm_batch_t0",
-    "_fpm_dp_rank",
-    "_fpm_worker_id",
-    "_fpm_publisher",
-    "_fpm_gpu_time_acc",
-    "_fpm_uses_device_timer",
+    # FPM state lives on Scheduler (NOT reporter) — pre-existing tests call
+    # ``Scheduler.<method>(mock_scheduler)`` with a stub that has no
+    # ``metrics_reporter`` but checks ``self.enable_fpm`` directly. So the
+    # AST rewriter SHOULD turn ``self.enable_fpm`` inside reporter methods
+    # into ``self.scheduler.enable_fpm`` (i.e., NOT in the owned set).
 } | set(METHODS_TO_FLIP))
 
 
@@ -644,22 +641,13 @@ def transform(wt: Path) -> None:
         old="        self.reset_device_timer_window()\n",
         new="        self.reset_device_timer_window(self.metrics_reporter)\n",
     )
-    # FPM hot-path callsites + state reads on Scheduler — route through the
-    # reporter (the methods + state migrate to the reporter in C14 move).
-    text = replace_call_site(
-        text,
-        old="        if self.enable_fpm:\n            self._fpm_batch_t0 = time.monotonic()\n",
-        new="        if self.metrics_reporter.enable_fpm:\n            self.metrics_reporter._fpm_batch_t0 = time.monotonic()\n",
-    )
-    text = replace_call_site(
-        text,
-        old="            if self.enable_fpm:\n                ret.fpm_start_time = self._fpm_batch_t0\n",
-        new="            if self.metrics_reporter.enable_fpm:\n                ret.fpm_start_time = self.metrics_reporter._fpm_batch_t0\n",
-    )
+    # FPM hot-path: method calls go via static-bound sister form (collapsed
+    # in move); field reads stay direct on Scheduler (fields live on
+    # Scheduler, not reporter — see REPORTER_OWNED_ATTRS rationale above).
     text = replace_call_site(
         text,
         old="        if self.enable_fpm:\n            self._emit_forward_pass_metrics(batch, result)\n",
-        new="        if self.metrics_reporter.enable_fpm:\n            self._emit_forward_pass_metrics(self.metrics_reporter, batch, result)\n",
+        new="        if self.enable_fpm:\n            self._emit_forward_pass_metrics(self.metrics_reporter, batch, result)\n",
     )
     text = replace_call_site(
         text,
