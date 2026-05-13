@@ -74,9 +74,9 @@ ORDER: list[str] = [
     "introduce-metrics-reporter-prep",
     "introduce-metrics-reporter-move",
     "move-maybe-log-idle-metrics-to-metrics-reporter",  # single (doc exception)
-    "introduce-logprob-computer-pre-rename",
-    "introduce-logprob-computer-prep",
-    "introduce-logprob-computer-move",
+    "introduce-logprob-result-processor-pre-rename",
+    "introduce-logprob-result-processor-prep",
+    "introduce-logprob-result-processor-move",
     "introduce-output-streamer-prep",
     "introduce-output-streamer-move",
     "introduce-batch-result-processor-prep",

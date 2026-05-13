@@ -150,7 +150,7 @@ class SchedulerBatchResultProcessor:
     metrics_collector: Any
     draft_worker: Any
     model_worker: Any
-    logprob_computer: Any
+    logprob_result_processor: Any
     output_streamer: Any
     abort_request: Any
     report_prefill_stats: Any
@@ -177,7 +177,13 @@ SCHEDULER_INIT_INSERT = """\
             metrics_collector=self.metrics_collector,
             draft_worker=self.draft_worker,
             model_worker=self.model_worker,
-            logprob_computer=self.logprob_computer,
+            # logprob_result_processor is owned by batch_result_processor
+            # (it's a sub-component, only consumed inside this class — there's
+            # no other Scheduler-side caller). Inline-construct here; drop the
+            # Scheduler-side ``self.logprob_result_processor`` field below.
+            logprob_result_processor=SchedulerLogprobResultProcessor(
+                server_args=self.server_args, model_config=self.model_config
+            ),
             output_streamer=self.output_streamer,
             abort_request=self.abort_request,
             # Wrapped in lambdas so they resolve ``self.metrics_reporter``
@@ -362,7 +368,33 @@ def transform(wt: Path) -> None:
     if m is None:
         raise RuntimeError("output_streamer ctor block not found in scheduler.py")
     text = text[: m.end()] + SCHEDULER_INIT_INSERT + text[m.end():]
+
+    # 7. Nesting: drop the standalone ``self.logprob_result_processor =
+    #    SchedulerLogprobResultProcessor(...)`` field on Scheduler (C15 added
+    #    it as a sister). It now lives inside ``batch_result_processor`` —
+    #    constructed inline by SCHEDULER_INIT_INSERT above. Callers reach it
+    #    via ``self.batch_result_processor.logprob_result_processor``.
+    text = _re.sub(
+        r"        self\.logprob_result_processor = SchedulerLogprobResultProcessor\(\n"
+        r"(?:.*\n)+?"
+        r"        \)\n\n",
+        "",
+        text,
+        count=1,
+    )
     sched.write_text(text)
+
+    # 8. Disagg-prefill mixin caller fix-up: a couple of call sites read
+    #    ``self.logprob_result_processor`` directly (where ``self`` is
+    #    Scheduler via mixin). After nesting, route via batch_result_processor.
+    prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
+    if prefill.exists():
+        ptext = prefill.read_text()
+        ptext = ptext.replace(
+            "self.logprob_result_processor",
+            "self.batch_result_processor.logprob_result_processor",
+        )
+        prefill.write_text(ptext)
 
     # 7. Caller rewrites: ``self.process_batch_result_*(`` → form
     #    ``self.process_batch_result_*(self.batch_result_processor, ...)``.

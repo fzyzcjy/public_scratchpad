@@ -319,7 +319,7 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.logprob_computer import (\n    SchedulerLogprobComputer,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.logprob_result_processor import (\n    SchedulerLogprobResultProcessor,\n)\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.output_streamer import (\n"
             "    SchedulerOutputStreamer,\n"
@@ -330,7 +330,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor=(
-            "        self.logprob_computer = SchedulerLogprobComputer(\n"
+            "        self.logprob_result_processor = SchedulerLogprobResultProcessor(\n"
             "            server_args=self.server_args,\n"
             "            model_config=self.model_config,\n"
             "        )\n\n"

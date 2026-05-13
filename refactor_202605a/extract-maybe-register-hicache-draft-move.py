@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mechanical move for ``extract-maybe-register-hicache-draft``: cut the
-@staticmethod from Scheduler, append to ``scheduler_components/kv_cache.py``
+@staticmethod from Scheduler, append to ``mem_cache/kv_cache_builder.py``
 (file already exists from the prior ``-move`` commit). Drop ``@staticmethod``,
 dedent 4 spaces, collapse self-module qualifier
 (``kv_cache.get_draft_kv_pool`` → ``get_draft_kv_pool``), add module logger,
@@ -33,13 +33,13 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-maybe-register-hicache-draft-move"
-SUBJECT = "Move maybe_register_hicache_draft to scheduler_components/kv_cache.py"
+SUBJECT = "Move maybe_register_hicache_draft to mem_cache/kv_cache_builder.py"
 BODY = """\
 Mechanical cut + paste for the ``extract-maybe-register-hicache-draft``
 mech move.
 
 Cut ``Scheduler.maybe_register_hicache_draft`` (@staticmethod after the
-prep commit) and append to ``scheduler_components/kv_cache.py``. Drop
+prep commit) and append to ``mem_cache/kv_cache_builder.py``. Drop
 ``@staticmethod`` decorator; dedent body to module level. Collapse
 self-module qualifier ``kv_cache.get_draft_kv_pool(...)`` → bare
 ``get_draft_kv_pool(...)`` since both functions now live in the same
@@ -59,7 +59,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # Cut the @staticmethod from Scheduler.
     s, e = find_method_lines(

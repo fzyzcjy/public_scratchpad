@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mechanical move step for ``extract-get-draft-kv-pool``: cut the
 ``get_draft_kv_pool`` @staticmethod from Scheduler, paste it as a free
-function in ``scheduler_components/kv_cache.py``. Drop ``@staticmethod``,
+function in ``mem_cache/kv_cache_builder.py``. Drop ``@staticmethod``,
 dedent 4 spaces, rewrite 2 callers ``Scheduler.foo(...)`` → ``kv_cache.foo(...)``,
 add module import.
 
@@ -30,13 +30,13 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-get-draft-kv-pool-move"
-SUBJECT = "Move get_draft_kv_pool to scheduler_components/kv_cache.py"
+SUBJECT = "Move get_draft_kv_pool to mem_cache/kv_cache_builder.py"
 BODY = """\
 Mechanical cut + paste for the ``extract-get-draft-kv-pool`` mech move.
 
 Cut ``Scheduler.get_draft_kv_pool`` (a @staticmethod after the prep
 commit) and paste it as a module-level free function in
-``python/sglang/srt/managers/scheduler_components/kv_cache.py`` (new
+``python/sglang/srt/mem_cache/kv_cache_builder.py`` (new
 package). Drop ``@staticmethod`` decorator; body bytes unchanged.
 
 2 caller sites updated: ``Scheduler.get_draft_kv_pool(...)`` →
@@ -60,7 +60,7 @@ HEADER = '''from __future__ import annotations
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # Create the new package skeleton.
     pkg_init.parent.mkdir(parents=True, exist_ok=True)

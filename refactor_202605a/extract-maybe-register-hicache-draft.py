@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Cut `_maybe_register_hicache_draft` from Scheduler; paste as a free
 function ``maybe_register_hicache_draft`` in the same
-``scheduler_components/kv_cache.py`` (created by
+``mem_cache/kv_cache_builder.py`` (created by
 ``extract-get-draft-kv-pool``). Update the sole caller in ``Scheduler.__init__``.
 
 - Method body (post-C1) calls ``kv_cache.get_draft_kv_pool(...)`` with module
@@ -42,12 +42,12 @@ from _runner import run_pr
 
 ID = "extract-maybe-register-hicache-draft"
 SUBJECT = (
-    "Extract _maybe_register_hicache_draft to scheduler_components/kv_cache.py"
+    "Extract _maybe_register_hicache_draft to mem_cache/kv_cache_builder.py"
 )
 BODY = """\
 Move ``_maybe_register_hicache_draft`` off Scheduler into a free function
 ``maybe_register_hicache_draft`` in the same
-``scheduler_components/kv_cache.py`` introduced for
+``mem_cache/kv_cache_builder.py`` introduced for
 ``get_draft_kv_pool``. Body reads 7 self.X fields (tree_cache, draft_worker,
 spec_algorithm, server_args, enable_hierarchical_cache, enable_overlap,
 page_size) which become keyword-only parameters. Drop the underscore prefix
@@ -67,7 +67,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # Cut the method.
     s, e = find_method_lines(

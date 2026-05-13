@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """1:N split #1 of ``SchedulerOutputProcessorMixin``: 9 logprob methods move
-to ``SchedulerLogprobComputer`` at
-``scheduler_components/logprob_computer.py``.
+to ``SchedulerLogprobResultProcessor`` at
+``scheduler_components/logprob_result_processor.py``.
 
 Ctor narrow kwargs: ``server_args``, ``model_config`` (2 only — logprob is
 near-stateless).
@@ -29,13 +29,13 @@ sys.path.insert(0, str(HERE))
 from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
-ID = "introduce-logprob-computer"
-SUBJECT = "Introduce SchedulerLogprobComputer (split #1 of output_processor mixin)"
+ID = "introduce-logprob-result-processor"
+SUBJECT = "Introduce SchedulerLogprobResultProcessor (split #1 of output_processor mixin)"
 BODY = """\
 Pull 9 logprob methods out of ``SchedulerOutputProcessorMixin`` into a new
-``SchedulerLogprobComputer`` class at
-``scheduler_components/logprob_computer.py``. Scheduler holds it as
-``self.logprob_computer``.
+``SchedulerLogprobResultProcessor`` class at
+``scheduler_components/logprob_result_processor.py``. Scheduler holds it as
+``self.logprob_result_processor``.
 
 Ctor narrow kwargs (per CLAUDE.md ch4): ``server_args`` + ``model_config``
 (2 only — these methods are near-stateless apart from server_args /
@@ -59,9 +59,9 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 NEW_CLASS_HEADER = '''\
-class SchedulerLogprobComputer:
+class SchedulerLogprobResultProcessor:
     """Pure-compute logprob accumulator helpers. Composition target on
-    Scheduler (``self.logprob_computer``)."""
+    Scheduler (``self.logprob_result_processor``)."""
 
     def __init__(self, *, server_args, model_config) -> None:
         self.server_args = server_args
@@ -86,7 +86,7 @@ from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID
 
 
 SCHEDULER_INIT_INSERT = """\
-        self.logprob_computer = SchedulerLogprobComputer(
+        self.logprob_result_processor = SchedulerLogprobResultProcessor(
             server_args=self.server_args,
             model_config=self.model_config,
         )
@@ -97,7 +97,7 @@ SCHEDULER_INIT_INSERT = """\
 def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_computer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_result_processor.py"
 
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
@@ -154,8 +154,8 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.logprob_computer import (\n"
-            "    SchedulerLogprobComputer,\n"
+            "from sglang.srt.managers.scheduler_components.logprob_result_processor import (\n"
+            "    SchedulerLogprobResultProcessor,\n"
             ")\n"
         ),
     )
@@ -167,7 +167,7 @@ def transform(wt: Path) -> None:
     sched.write_text(text)
 
     # The remaining output_processor mixin (still in place) calls these
-    # methods — update its body to use ``self.logprob_computer.X`` form.
+    # methods — update its body to use ``self.logprob_result_processor.X`` form.
     # Also update external callers (disaggregation/prefill.py) that invoke
     # the methods directly on Scheduler.
     for f in [
@@ -177,15 +177,15 @@ def transform(wt: Path) -> None:
         text = f.read_text()
         text = text.replace(
             "self.add_logprob_return_values(",
-            "self.logprob_computer.add_logprob_return_values(",
+            "self.logprob_result_processor.add_logprob_return_values(",
         )
         text = text.replace(
             "self.add_input_logprob_return_values(",
-            "self.logprob_computer.add_input_logprob_return_values(",
+            "self.logprob_result_processor.add_input_logprob_return_values(",
         )
         text = text.replace(
             "self._calculate_num_input_logprobs(",
-            "self.logprob_computer.calculate_num_input_logprobs(",
+            "self.logprob_result_processor.calculate_num_input_logprobs(",
         )
         f.write_text(text)
 

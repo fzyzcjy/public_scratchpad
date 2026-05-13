@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mechanical move for ``extract-build-kv-cache``: cut the @staticmethod
 ``build_kv_cache`` from Scheduler, append to
-``scheduler_components/kv_cache.py``. Drop ``@staticmethod``, dedent 4
+``mem_cache/kv_cache_builder.py``. Drop ``@staticmethod``, dedent 4
 spaces, rewrite sole caller's ``Scheduler.build_kv_cache(`` → ``kv_cache.build_kv_cache(``.
 
 Body bytes byte-equivalent with prep modulo dedent + decorator removal.
@@ -27,12 +27,12 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-build-kv-cache-move"
-SUBJECT = "Move build_kv_cache to scheduler_components/kv_cache.py"
+SUBJECT = "Move build_kv_cache to mem_cache/kv_cache_builder.py"
 BODY = """\
 Mechanical cut + paste for the ``extract-build-kv-cache`` mech move.
 
 Cut ``Scheduler.build_kv_cache`` (@staticmethod after the prep commit)
-and append to ``scheduler_components/kv_cache.py``. Drop ``@staticmethod``
+and append to ``mem_cache/kv_cache_builder.py``. Drop ``@staticmethod``
 decorator; dedent body to module level. Body bytes byte-equivalent.
 
 Sole caller in ``Scheduler.__init__`` updated from
@@ -46,7 +46,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # Cut @staticmethod from Scheduler.
     s, e = find_method_lines(

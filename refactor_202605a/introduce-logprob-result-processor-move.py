@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Mechanical move for ``introduce-logprob-computer``: cut 9 @staticmethods
+"""Mechanical move for ``introduce-logprob-result-processor``: cut 9 @staticmethods
 from ``SchedulerOutputProcessorMixin``, paste them into the
-``SchedulerLogprobComputer`` class body. Drop ``@staticmethod`` decorators,
-simplify ``self: "SchedulerLogprobComputer"`` → bare ``self``, rewrite
-callers ``self.<m>(self.logprob_computer, ...)`` →
-``self.logprob_computer.<m>(...)``.
+``SchedulerLogprobResultProcessor`` class body. Drop ``@staticmethod`` decorators,
+simplify ``self: "SchedulerLogprobResultProcessor"`` → bare ``self``, rewrite
+callers ``self.<m>(self.logprob_result_processor, ...)`` →
+``self.logprob_result_processor.<m>(...)``.
 """
 
 # /// script
@@ -20,23 +20,23 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
-ID = "introduce-logprob-computer-move"
-SUBJECT = "Hand logprob assembly over to SchedulerLogprobComputer"
+ID = "introduce-logprob-result-processor-move"
+SUBJECT = "Hand logprob assembly over to SchedulerLogprobResultProcessor"
 BODY = """\
-Mechanical cut + paste for the ``introduce-logprob-computer`` mech move.
+Mechanical cut + paste for the ``introduce-logprob-result-processor`` mech move.
 
 Cut the 9 logprob @staticmethods (after prep) from
 ``SchedulerOutputProcessorMixin`` and paste them into
-``SchedulerLogprobComputer`` body in
-``scheduler_components/logprob_computer.py``.
+``SchedulerLogprobResultProcessor`` body in
+``scheduler_components/logprob_result_processor.py``.
 
 Drop ``@staticmethod`` decorators; simplify
-``self: "SchedulerLogprobComputer"`` → bare ``self`` (in class context
+``self: "SchedulerLogprobResultProcessor"`` → bare ``self`` (in class context
 the type is implicit). Method bodies otherwise byte-identical.
 
 All callers updated:
-  ``self.<m>(self.logprob_computer, ...)`` →
-  ``self.logprob_computer.<m>(...)``
+  ``self.<m>(self.logprob_result_processor, ...)`` →
+  ``self.logprob_result_processor.<m>(...)``
 (pure prefix transformation).
 """
 AREA = "mech_scheduler"
@@ -74,7 +74,7 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
 def transform(wt: Path) -> None:
     mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_computer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_result_processor.py"
 
     # Locate then cut each method bottom-up (re-parse each time since line
     # numbers shift after each cut).
@@ -102,7 +102,7 @@ def transform(wt: Path) -> None:
         )
         block = cut_lines(mixin, s, e)
         block = _strip_staticmethod_typeflip(
-            block, target_class="SchedulerLogprobComputer"
+            block, target_class="SchedulerLogprobResultProcessor"
         )
         method_blocks.append((name, block))
 

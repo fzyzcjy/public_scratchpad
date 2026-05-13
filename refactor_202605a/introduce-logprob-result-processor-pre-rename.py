@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Pre-rename for ``introduce-logprob-computer``: privacy-flip
+"""Pre-rename for ``introduce-logprob-result-processor``: privacy-flip
 ``_calculate_num_input_logprobs`` → ``calculate_num_input_logprobs`` on
 ``SchedulerOutputProcessorMixin`` and update its 2 intra-mixin callsites.
 
 Body unchanged. No structural moves. This commit lets the subsequent
 ``-prep`` + ``-move`` commits keep method bodies byte-identical (the
 renamed identifier is the only thing that differs between the original
-single-shot ``introduce-logprob-computer.py`` script and the split path).
+single-shot ``introduce-logprob-result-processor.py`` script and the split path).
 """
 
 # /// script
@@ -22,8 +22,8 @@ sys.path.insert(0, str(HERE))
 from _helpers import replace_call_site
 from _runner import run_pr
 
-ID = "introduce-logprob-computer-pre-rename"
-SUBJECT = "Drop underscore from _calculate_num_input_logprobs (pre-rename for introduce-logprob-computer)"
+ID = "introduce-logprob-result-processor-pre-rename"
+SUBJECT = "Drop underscore from _calculate_num_input_logprobs (pre-rename for introduce-logprob-result-processor)"
 BODY = """\
 Privacy flip ``_calculate_num_input_logprobs`` →
 ``calculate_num_input_logprobs`` inside
@@ -38,7 +38,7 @@ Method body byte-identical. No callers outside the mixin file
 (``grep`` confirmed: only the mixin uses this method).
 
 Absorbed early per ``MECH_COMMIT_SPLIT.md`` so the follow-up
-``introduce-logprob-computer-prep`` + ``-move`` pair can keep all moved
+``introduce-logprob-result-processor-prep`` + ``-move`` pair can keep all moved
 method bodies byte-identical.
 """
 AREA = "mech_scheduler"

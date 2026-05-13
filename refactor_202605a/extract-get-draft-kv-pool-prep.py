@@ -41,7 +41,7 @@ public API.
 ``Scheduler.get_draft_kv_pool(draft_worker=self.draft_worker, ...)``.
 
 The method stays inside Scheduler. The physical cut + paste to
-``scheduler_components/kv_cache.py`` happens in
+``mem_cache/kv_cache_builder.py`` happens in
 ``extract-get-draft-kv-pool-move``.
 """
 AREA = "mech_scheduler"

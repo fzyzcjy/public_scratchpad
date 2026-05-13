@@ -83,7 +83,7 @@ SCHEDULER_INIT_INSERT = """\
             metrics_collector=getattr(self, "metrics_collector", None),
             draft_worker=self.draft_worker,
             model_worker=self.model_worker,
-            logprob_computer=self.logprob_computer,
+            logprob_result_processor=self.logprob_result_processor,
             output_streamer=self.output_streamer,
             abort_request=self.abort_request,
             # Wrapped in lambdas so they resolve ``self.metrics_reporter``
@@ -173,7 +173,7 @@ class SchedulerBatchResultProcessor:
         self.metrics_collector = metrics_collector
         self.draft_worker = draft_worker
         self.model_worker = model_worker
-        self.logprob_computer = logprob_computer
+        self.logprob_result_processor = logprob_computer
         self.output_streamer = output_streamer
         self.abort_request = abort_request
         self.report_prefill_stats = report_prefill_stats

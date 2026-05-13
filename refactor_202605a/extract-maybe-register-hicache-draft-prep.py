@@ -39,7 +39,7 @@ Privacy underscore dropped for the upcoming module-level public API.
 Sole callsite ``Scheduler.__init__`` rewritten to class-qualified form.
 
 The method stays inside Scheduler; physical cut + paste to
-``scheduler_components/kv_cache.py`` happens in the move commit.
+``mem_cache/kv_cache_builder.py`` happens in the move commit.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

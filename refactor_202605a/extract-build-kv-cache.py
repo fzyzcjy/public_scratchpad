@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Cut ``init_cache_with_memory_pool`` from Scheduler; paste as a free
-function ``build_kv_cache`` in ``scheduler_components/kv_cache.py``.
+function ``build_kv_cache`` in ``mem_cache/kv_cache_builder.py``.
 Returns a ``KVCacheBuildResult`` dataclass containing 9 KV-cache derived
 fields; the caller (Scheduler.__init__) unpacks each into a separate
 ``self.X``.
@@ -40,10 +40,10 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-build-kv-cache"
-SUBJECT = "Extract init_cache_with_memory_pool to scheduler_components/kv_cache.py"
+SUBJECT = "Extract init_cache_with_memory_pool to mem_cache/kv_cache_builder.py"
 BODY = """\
 Move ``init_cache_with_memory_pool`` body off Scheduler into a free function
-``build_kv_cache`` in ``scheduler_components/kv_cache.py``. The method
+``build_kv_cache`` in ``mem_cache/kv_cache_builder.py``. The method
 writes 9 ``self.X`` fields (is_hybrid_swa / is_hybrid_ssm /
 sliding_window_size / full_tokens_per_layer / swa_tokens_per_layer /
 req_to_token_pool / token_to_kv_pool_allocator / disable_radix_cache /
@@ -306,7 +306,7 @@ def _build_function_text(method_text: str) -> str:
 
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # 1. Cut method body from Scheduler.
     s, e = find_method_lines(

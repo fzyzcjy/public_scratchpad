@@ -2,7 +2,7 @@
 """Inplace prep for ``extract-build-kv-cache``: rewrite
 ``init_cache_with_memory_pool`` body to its final ``build_kv_cache`` form
 **in place** in Scheduler; add ``KVCacheBuildResult`` dataclass + needed
-imports to ``scheduler_components/kv_cache.py``; update sole caller to
+imports to ``mem_cache/kv_cache_builder.py``; update sole caller to
 ``Scheduler.build_kv_cache(...)``.
 
 Body bytes after this commit match the body bytes that will land in
@@ -44,7 +44,7 @@ Caller in ``Scheduler.__init__`` rewritten: the
 live in ``Scheduler.__init__`` after the ``-pre-prep`` block-move commit.)
 
 ``KVCacheBuildResult`` dataclass + needed imports are appended to
-``scheduler_components/kv_cache.py`` (file already exists from earlier
+``mem_cache/kv_cache_builder.py`` (file already exists from earlier
 chain commits).
 
 The method **stays in Scheduler** in this commit; physical cut + paste
@@ -221,7 +221,7 @@ def _rewrite_method_body(method_text: str) -> str:
 
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
-    kvc = wt / "python/sglang/srt/managers/scheduler_components/kv_cache.py"
+    kvc = wt / "python/sglang/srt/mem_cache/kv_cache_builder.py"
 
     # 1. Locate and rewrite method in place.
     text = sched.read_text()
@@ -246,7 +246,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
-        addition="from sglang.srt.managers.scheduler_components.kv_cache import KVCacheBuildResult\n",
+        addition="from sglang.srt.mem_cache.kv_cache_builder import KVCacheBuildResult\n",
     )
 
     sched.write_text(text)

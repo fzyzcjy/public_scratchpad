@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Inplace prep for ``introduce-logprob-computer``: create empty
-``SchedulerLogprobComputer`` class skeleton, instantiate on Scheduler,
+"""Inplace prep for ``introduce-logprob-result-processor``: create empty
+``SchedulerLogprobResultProcessor`` class skeleton, instantiate on Scheduler,
 convert 9 logprob methods on ``SchedulerOutputProcessorMixin`` to
-``@staticmethod`` with ``self: "SchedulerLogprobComputer"`` type annotation,
-rewrite callers to ``self.<method>(self.logprob_computer, ...)``.
+``@staticmethod`` with ``self: "SchedulerLogprobResultProcessor"`` type annotation,
+rewrite callers to ``self.<method>(self.logprob_result_processor, ...)``.
 
 Method bodies byte-identical (modulo the ``: Scheduler`` annotation drop —
 applied here as it's the minimal change needed to detach ``self`` from
@@ -23,15 +23,15 @@ sys.path.insert(0, str(HERE))
 from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
-ID = "introduce-logprob-computer-prep"
-SUBJECT = "Stage logprob assembly for handoff to SchedulerLogprobComputer"
+ID = "introduce-logprob-result-processor-prep"
+SUBJECT = "Stage logprob assembly for handoff to SchedulerLogprobResultProcessor"
 BODY = """\
-Inplace prep for the ``introduce-logprob-computer`` mech move.
+Inplace prep for the ``introduce-logprob-result-processor`` mech move.
 
-- Create ``scheduler_components/logprob_computer.py`` with an empty
-  ``SchedulerLogprobComputer`` class (ctor takes ``server_args`` +
+- Create ``scheduler_components/logprob_result_processor.py`` with an empty
+  ``SchedulerLogprobResultProcessor`` class (ctor takes ``server_args`` +
   ``model_config`` — 2 narrow kwargs).
-- Instantiate ``self.logprob_computer = SchedulerLogprobComputer(...)``
+- Instantiate ``self.logprob_result_processor = SchedulerLogprobResultProcessor(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
 - In ``SchedulerOutputProcessorMixin``, convert 9 logprob methods
   (``_initialize_empty_logprob_containers``, ``add_logprob_return_values``,
@@ -39,16 +39,16 @@ Inplace prep for the ``introduce-logprob-computer`` mech move.
   ``calculate_num_input_logprobs`` [renamed by ``-pre-rename`` already],
   ``_calculate_relevant_tokens_len``, ``_process_input_token_ids_logprobs``,
   ``_process_input_top_logprobs``, ``_process_input_token_logprobs``) to
-  ``@staticmethod`` with ``self: "SchedulerLogprobComputer"`` type annotation.
+  ``@staticmethod`` with ``self: "SchedulerLogprobResultProcessor"`` type annotation.
 - Drop the original ``self: Scheduler`` annotation; otherwise method bodies
   byte-identical.
 - Callers (3 callsites in ``scheduler_output_processor_mixin.py`` and 2
   in ``disaggregation/prefill.py``) rewritten to
-  ``self.<method>(self.logprob_computer, ...)``.
+  ``self.<method>(self.logprob_result_processor, ...)``.
 
 The 9 methods stay inside the mixin in this commit; physical cut + paste
-to ``SchedulerLogprobComputer`` body happens in
-``introduce-logprob-computer-move``.
+to ``SchedulerLogprobResultProcessor`` body happens in
+``introduce-logprob-result-processor-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -69,9 +69,9 @@ from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID  # noqa: F401
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
-class SchedulerLogprobComputer:
+class SchedulerLogprobResultProcessor:
     """Pure-compute logprob accumulator helpers. Composition target on
-    Scheduler (``self.logprob_computer``)."""
+    Scheduler (``self.logprob_result_processor``)."""
 
     server_args: Any
     model_config: Any
@@ -79,7 +79,7 @@ class SchedulerLogprobComputer:
 
 
 SCHEDULER_INIT_INSERT = """\
-        self.logprob_computer = SchedulerLogprobComputer(
+        self.logprob_result_processor = SchedulerLogprobResultProcessor(
             server_args=self.server_args,
             model_config=self.model_config,
         )
@@ -103,7 +103,7 @@ METHODS = [
 def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_computer.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/logprob_result_processor.py"
 
     # 1. Create skeleton target file (class + ctor, no methods yet).
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -113,8 +113,8 @@ def transform(wt: Path) -> None:
     target.write_text(TARGET_FILE_HEADER)
 
     # 2. Convert 9 methods on the mixin to @staticmethod with
-    #    type-flipped ``self: "SchedulerLogprobComputer"``. Body unchanged
-    #    apart from the ``: Scheduler`` → ``: "SchedulerLogprobComputer"``
+    #    type-flipped ``self: "SchedulerLogprobResultProcessor"``. Body unchanged
+    #    apart from the ``: Scheduler`` → ``: "SchedulerLogprobResultProcessor"``
     #    annotation rewrite (achieved via a global replace at the end since
     #    only the 9 picked methods carry that annotation in their signature).
     text = mixin.read_text()
@@ -136,19 +136,19 @@ def transform(wt: Path) -> None:
         if single_line_sig in method_text:
             new_method = method_text.replace(
                 single_line_sig,
-                f"    @staticmethod\n    def {name}(self: \"SchedulerLogprobComputer\", ",
+                f"    @staticmethod\n    def {name}(self: \"SchedulerLogprobResultProcessor\", ",
                 1,
             )
         elif single_line_no_args in method_text:
             new_method = method_text.replace(
                 single_line_no_args,
-                f"    @staticmethod\n    def {name}(self: \"SchedulerLogprobComputer\")",
+                f"    @staticmethod\n    def {name}(self: \"SchedulerLogprobResultProcessor\")",
                 1,
             )
         elif multi_line_sig in method_text:
             new_method = method_text.replace(
                 multi_line_sig,
-                f"    @staticmethod\n    def {name}(\n        self: \"SchedulerLogprobComputer\",",
+                f"    @staticmethod\n    def {name}(\n        self: \"SchedulerLogprobResultProcessor\",",
                 1,
             )
         else:
@@ -159,12 +159,12 @@ def transform(wt: Path) -> None:
         text = "".join(lines[:s]) + new_method + "".join(lines[e:])
 
     # Add TYPE_CHECKING import for the new TargetClass so the
-    # ``self: "SchedulerLogprobComputer"`` annotation resolves under pyflakes.
-    if "from sglang.srt.managers.scheduler_components.logprob_computer import SchedulerLogprobComputer" not in text:
+    # ``self: "SchedulerLogprobResultProcessor"`` annotation resolves under pyflakes.
+    if "from sglang.srt.managers.scheduler_components.logprob_result_processor import SchedulerLogprobResultProcessor" not in text:
         text = text.replace(
             "if TYPE_CHECKING:\n",
             "if TYPE_CHECKING:\n"
-            "    from sglang.srt.managers.scheduler_components.logprob_computer import SchedulerLogprobComputer\n",
+            "    from sglang.srt.managers.scheduler_components.logprob_result_processor import SchedulerLogprobResultProcessor\n",
             1,
         )
 
@@ -176,8 +176,8 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.scheduler_components.pool_stats_observer import (\n    SchedulerPoolStatsObserver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.logprob_computer import (\n"
-            "    SchedulerLogprobComputer,\n"
+            "from sglang.srt.managers.scheduler_components.logprob_result_processor import (\n"
+            "    SchedulerLogprobResultProcessor,\n"
             ")\n"
         ),
     )
@@ -190,7 +190,7 @@ def transform(wt: Path) -> None:
 
     # 4. Callsite rewrites: mixin body (still in place) + external callers
     #    in disaggregation/prefill.py. Form is
-    #    ``self.<method>(self.logprob_computer, <existing-args>)``.
+    #    ``self.<method>(self.logprob_result_processor, <existing-args>)``.
     for f in [
         mixin,
         wt / "python/sglang/srt/disaggregation/prefill.py",
@@ -198,15 +198,15 @@ def transform(wt: Path) -> None:
         ftext = f.read_text()
         ftext = ftext.replace(
             "self.add_logprob_return_values(",
-            "self.add_logprob_return_values(self.logprob_computer, ",
+            "self.add_logprob_return_values(self.logprob_result_processor, ",
         )
         ftext = ftext.replace(
             "self.add_input_logprob_return_values(",
-            "self.add_input_logprob_return_values(self.logprob_computer, ",
+            "self.add_input_logprob_return_values(self.logprob_result_processor, ",
         )
         ftext = ftext.replace(
             "self.calculate_num_input_logprobs(",
-            "self.calculate_num_input_logprobs(self.logprob_computer, ",
+            "self.calculate_num_input_logprobs(self.logprob_result_processor, ",
         )
         f.write_text(ftext)
 
