@@ -102,6 +102,12 @@ METHOD_ORDER = [
     "_calculate_utilization",
     "update_device_timer",
     "reset_device_timer_window",
+    # FPM (forward-pass-metrics) family added on the preflight branch.
+    "_init_fpm",
+    "_shutdown_fpm",
+    "_emit_forward_pass_metrics",
+    "_build_scheduled_request_metrics",
+    "_build_queued_request_metrics",
 ]
 
 
