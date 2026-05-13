@@ -40,8 +40,8 @@ commit) and paste it as a module-level free function in
 package). Drop ``@staticmethod`` decorator; body bytes unchanged.
 
 2 caller sites updated: ``Scheduler.get_draft_kv_pool(...)`` →
-``kv_cache.get_draft_kv_pool(...)`` (pure prefix replacement). Add import
-``from sglang.srt.managers.scheduler_components import kv_cache``.
+``kv_cache_builder.get_draft_kv_pool(...)`` (pure prefix replacement). Add import
+``from sglang.srt.mem_cache import kv_cache_builder``.
 
 Verify via ``git --color-moved-ws=allow-indentation-change``: the entire
 function body should be marked as moved.
@@ -86,7 +86,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="Scheduler.get_draft_kv_pool(",
-        new="kv_cache.get_draft_kv_pool(",
+        new="kv_cache_builder.get_draft_kv_pool(",
     )
 
     # Add import. Anchor: the stable ``scheduler_input_blocker`` line in the
@@ -94,7 +94,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.scheduler_input_blocker import SchedulerInputBlocker\n",
-        addition="from sglang.srt.managers.scheduler_components import kv_cache\n",
+        addition="from sglang.srt.mem_cache import kv_cache_builder\n",
     )
 
     sched.write_text(text)

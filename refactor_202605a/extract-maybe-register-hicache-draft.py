@@ -4,7 +4,7 @@ function ``maybe_register_hicache_draft`` in the same
 ``mem_cache/kv_cache_builder.py`` (created by
 ``extract-get-draft-kv-pool``). Update the sole caller in ``Scheduler.__init__``.
 
-- Method body (post-C1) calls ``kv_cache.get_draft_kv_pool(...)`` with module
+- Method body (post-C1) calls ``kv_cache_builder.get_draft_kv_pool(...)`` with module
   qualifier — that line stays as-is when the method moves into the same
   module (the ``kv_cache.`` qualifier becomes a self-reference but pyflakes
   doesn't object; we'll switch to bare ``get_draft_kv_pool(...)`` since it's
@@ -54,7 +54,7 @@ page_size) which become keyword-only parameters. Drop the underscore prefix
 per the privacy convention for new module APIs. The sole caller in
 ``Scheduler.__init__`` is rewritten to a module-qualified call.
 
-The body's existing ``kv_cache.get_draft_kv_pool(...)`` self-reference is
+The body's existing ``kv_cache_builder.get_draft_kv_pool(...)`` self-reference is
 collapsed to a bare ``get_draft_kv_pool(...)`` since both functions now live
 in the same module.
 
@@ -81,7 +81,7 @@ def transform(wt: Path) -> None:
     #   - dedent 4 spaces
     #   - drop ``_`` prefix on signature; replace ``self`` with 7 keyword-only kwargs
     #   - rewrite ``self.X`` reads to bare kwarg names
-    #   - collapse the ``kv_cache.get_draft_kv_pool(...)`` self-qualifier to bare
+    #   - collapse the ``kv_cache_builder.get_draft_kv_pool(...)`` self-qualifier to bare
     #     ``get_draft_kv_pool(...)`` since both live in the same module now
     function_text = dedent_method_to_function(method_text)
     function_text = function_text.replace(
@@ -102,7 +102,7 @@ def transform(wt: Path) -> None:
         "if not enable_hierarchical_cache:",
     )
     function_text = function_text.replace(
-        "draft_kv_pool, _ = kv_cache.get_draft_kv_pool(",
+        "draft_kv_pool, _ = kv_cache_builder.get_draft_kv_pool(",
         "draft_kv_pool, _ = get_draft_kv_pool(",
     )
     function_text = function_text.replace("self.draft_worker", "draft_worker")
@@ -131,7 +131,7 @@ def transform(wt: Path) -> None:
         "        self._maybe_register_hicache_draft()\n",
         new=(
             "        # Register draft KV pool (when spec + HiCache co-enabled).\n"
-            "        kv_cache.maybe_register_hicache_draft(\n"
+            "        kv_cache_builder.maybe_register_hicache_draft(\n"
             "            tree_cache=self.tree_cache,\n"
             "            draft_worker=self.draft_worker,\n"
             "            spec_algorithm=self.spec_algorithm,\n"

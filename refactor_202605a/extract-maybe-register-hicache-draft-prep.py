@@ -8,7 +8,7 @@ in ``extract-maybe-register-hicache-draft-move``.
 
 Body bytes (post-prep) will be byte-equivalent to body bytes in
 ``kv_cache.py`` after the move, modulo dedent + decorator removal and one
-self-qualifier collapse (``kv_cache.get_draft_kv_pool`` → ``get_draft_kv_pool``,
+self-qualifier collapse (``kv_cache_builder.get_draft_kv_pool`` → ``get_draft_kv_pool``,
 documented in the move commit).
 """
 

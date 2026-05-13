@@ -98,7 +98,7 @@ TAIL_BLOCK_TO_STRIP = """\
 # Replacement for the call site in ``Scheduler.__init__`` (line ~451).
 INLINE_CALLER_REPLACEMENT = """\
         # Init cache and memory pool
-        result = kv_cache.build_kv_cache(
+        result = kv_cache_builder.build_kv_cache(
             server_args=self.server_args,
             model_config=self.model_config,
             tp_worker=self.tp_worker,

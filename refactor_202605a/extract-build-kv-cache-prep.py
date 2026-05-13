@@ -245,7 +245,7 @@ def transform(wt: Path) -> None:
     # ``return KVCacheBuildResult(...)`` resolves at runtime.
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
+        anchor="from sglang.srt.mem_cache import kv_cache_builder\n",
         addition="from sglang.srt.mem_cache.kv_cache_builder import KVCacheBuildResult\n",
     )
 

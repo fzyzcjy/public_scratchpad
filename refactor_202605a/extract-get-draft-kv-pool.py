@@ -8,7 +8,7 @@ package). Update 2 callers and add an import.
   function. Privacy flip drops the leading ``_``.
 - Two callsites in ``Scheduler``: ``_maybe_register_hicache_draft`` (1 call)
   and ``init_disaggregation`` (1 call). Both rewritten to module-qualified
-  ``kv_cache.get_draft_kv_pool(...)`` per EXECUTION_GUIDE item 6.
+  ``kv_cache_builder.get_draft_kv_pool(...)`` per EXECUTION_GUIDE item 6.
 
 Usage:
     uv run --python 3.12 extract-get-draft-kv-pool.py run
@@ -109,7 +109,7 @@ def transform(wt: Path) -> None:
         text,
         old="        draft_kv_pool, _ = self._get_draft_kv_pool()\n",
         new=(
-            "        draft_kv_pool, _ = kv_cache.get_draft_kv_pool(\n"
+            "        draft_kv_pool, _ = kv_cache_builder.get_draft_kv_pool(\n"
             "            draft_worker=self.draft_worker,\n"
             "            spec_algorithm=self.spec_algorithm,\n"
             "            server_args=self.server_args,\n"
@@ -121,7 +121,7 @@ def transform(wt: Path) -> None:
         text,
         old="        draft_token_to_kv_pool, model_config = self._get_draft_kv_pool()\n",
         new=(
-            "        draft_token_to_kv_pool, model_config = kv_cache.get_draft_kv_pool(\n"
+            "        draft_token_to_kv_pool, model_config = kv_cache_builder.get_draft_kv_pool(\n"
             "            draft_worker=self.draft_worker,\n"
             "            spec_algorithm=self.spec_algorithm,\n"
             "            server_args=self.server_args,\n"
@@ -136,7 +136,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.scheduler_input_blocker import SchedulerInputBlocker\n",
-        addition="from sglang.srt.managers.scheduler_components import kv_cache\n",
+        addition="from sglang.srt.mem_cache import kv_cache_builder\n",
     )
 
     sched.write_text(text)

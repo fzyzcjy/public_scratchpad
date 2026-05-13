@@ -258,7 +258,7 @@ def transform(wt: Path) -> None:
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components import kv_cache\n",
+        anchor="from sglang.srt.mem_cache import kv_cache_builder\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.request_receiver import (\n"
             "    SchedulerRequestReceiver,\n"

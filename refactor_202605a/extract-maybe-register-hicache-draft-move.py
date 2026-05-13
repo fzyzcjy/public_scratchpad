@@ -3,7 +3,7 @@
 @staticmethod from Scheduler, append to ``mem_cache/kv_cache_builder.py``
 (file already exists from the prior ``-move`` commit). Drop ``@staticmethod``,
 dedent 4 spaces, collapse self-module qualifier
-(``kv_cache.get_draft_kv_pool`` → ``get_draft_kv_pool``), add module logger,
+(``kv_cache_builder.get_draft_kv_pool`` → ``get_draft_kv_pool``), add module logger,
 rewrite caller.
 
 Deviation from strict byte-equivalence: 1 line in the body changes due to
@@ -41,7 +41,7 @@ mech move.
 Cut ``Scheduler.maybe_register_hicache_draft`` (@staticmethod after the
 prep commit) and append to ``mem_cache/kv_cache_builder.py``. Drop
 ``@staticmethod`` decorator; dedent body to module level. Collapse
-self-module qualifier ``kv_cache.get_draft_kv_pool(...)`` → bare
+self-module qualifier ``kv_cache_builder.get_draft_kv_pool(...)`` → bare
 ``get_draft_kv_pool(...)`` since both functions now live in the same
 module.
 
@@ -50,7 +50,7 @@ Add a module logger to ``kv_cache.py`` (the moved function calls
 
 Sole caller in ``Scheduler.__init__`` updated from
 ``Scheduler.maybe_register_hicache_draft(...)`` →
-``kv_cache.maybe_register_hicache_draft(...)`` (pure prefix replacement).
+``kv_cache_builder.maybe_register_hicache_draft(...)`` (pure prefix replacement).
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -75,7 +75,7 @@ def transform(wt: Path) -> None:
 
     # Self-module qualifier collapse.
     function_text = function_text.replace(
-        "kv_cache.get_draft_kv_pool(", "get_draft_kv_pool("
+        "kv_cache_builder.get_draft_kv_pool(", "get_draft_kv_pool("
     )
 
     append_to_file(kvc, function_text)
@@ -94,7 +94,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="Scheduler.maybe_register_hicache_draft(",
-        new="kv_cache.maybe_register_hicache_draft(",
+        new="kv_cache_builder.maybe_register_hicache_draft(",
     )
     sched.write_text(text)
 

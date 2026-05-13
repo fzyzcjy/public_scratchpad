@@ -2,7 +2,7 @@
 """Mechanical move for ``extract-build-kv-cache``: cut the @staticmethod
 ``build_kv_cache`` from Scheduler, append to
 ``mem_cache/kv_cache_builder.py``. Drop ``@staticmethod``, dedent 4
-spaces, rewrite sole caller's ``Scheduler.build_kv_cache(`` → ``kv_cache.build_kv_cache(``.
+spaces, rewrite sole caller's ``Scheduler.build_kv_cache(`` → ``kv_cache_builder.build_kv_cache(``.
 
 Body bytes byte-equivalent with prep modulo dedent + decorator removal.
 """
@@ -36,7 +36,7 @@ and append to ``mem_cache/kv_cache_builder.py``. Drop ``@staticmethod``
 decorator; dedent body to module level. Body bytes byte-equivalent.
 
 Sole caller in ``Scheduler.__init__`` updated from
-``Scheduler.build_kv_cache(...)`` → ``kv_cache.build_kv_cache(...)``
+``Scheduler.build_kv_cache(...)`` → ``kv_cache_builder.build_kv_cache(...)``
 (pure prefix replacement).
 """
 AREA = "mech_scheduler"
@@ -66,7 +66,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="Scheduler.build_kv_cache(",
-        new="kv_cache.build_kv_cache(",
+        new="kv_cache_builder.build_kv_cache(",
     )
     sched.write_text(text)
 
