@@ -259,6 +259,13 @@ METHODS_TO_FLIP = [
     "_calculate_utilization",
     "update_device_timer",
     "reset_device_timer_window",
+    # FPM (forward-pass-metrics) family added on the preflight branch — move
+    # along with the rest of metrics state to the reporter.
+    "_init_fpm",
+    "_shutdown_fpm",
+    "_emit_forward_pass_metrics",
+    "_build_scheduled_request_metrics",
+    "_build_queued_request_metrics",
 ]
 
 
@@ -272,6 +279,11 @@ SIBLING_CALLS = [
     "_log_hicache_stats",
     "_update_lora_metrics",
     "_calculate_utilization",
+    # FPM sibling calls (called from init_metrics / _emit_forward_pass_metrics
+    # / _shutdown_fpm body).
+    "_init_fpm",
+    "_build_scheduled_request_metrics",
+    "_build_queued_request_metrics",
 ]
 
 
@@ -337,6 +349,14 @@ REPORTER_OWNED_ATTRS = frozenset({
     "_mfu_log_flops",
     "_mfu_log_read_bytes",
     "_mfu_log_write_bytes",
+    # FPM state (set by _init_fpm; mutated by hot path).
+    "enable_fpm",
+    "_fpm_batch_t0",
+    "_fpm_dp_rank",
+    "_fpm_worker_id",
+    "_fpm_publisher",
+    "_fpm_gpu_time_acc",
+    "_fpm_uses_device_timer",
 } | set(METHODS_TO_FLIP))
 
 
@@ -623,6 +643,28 @@ def transform(wt: Path) -> None:
         text,
         old="        self.reset_device_timer_window()\n",
         new="        self.reset_device_timer_window(self.metrics_reporter)\n",
+    )
+    # FPM hot-path callsites + state reads on Scheduler — route through the
+    # reporter (the methods + state migrate to the reporter in C14 move).
+    text = replace_call_site(
+        text,
+        old="        if self.enable_fpm:\n            self._fpm_batch_t0 = time.monotonic()\n",
+        new="        if self.metrics_reporter.enable_fpm:\n            self.metrics_reporter._fpm_batch_t0 = time.monotonic()\n",
+    )
+    text = replace_call_site(
+        text,
+        old="            if self.enable_fpm:\n                ret.fpm_start_time = self._fpm_batch_t0\n",
+        new="            if self.metrics_reporter.enable_fpm:\n                ret.fpm_start_time = self.metrics_reporter._fpm_batch_t0\n",
+    )
+    text = replace_call_site(
+        text,
+        old="        if self.enable_fpm:\n            self._emit_forward_pass_metrics(batch, result)\n",
+        new="        if self.metrics_reporter.enable_fpm:\n            self._emit_forward_pass_metrics(self.metrics_reporter, batch, result)\n",
+    )
+    text = replace_call_site(
+        text,
+        old="            scheduler._shutdown_fpm()\n",
+        new="            scheduler.metrics_reporter._shutdown_fpm()\n",
     )
     # Spec lifetime counters now reporter-owned (post-init reads from Scheduler).
     text = replace_call_site(
