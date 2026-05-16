@@ -32,7 +32,7 @@ sister API consumed by the upcoming ``SchedulerBatchResultProcessor``
 split.
 
 - Definition line renamed (drop leading ``_``).
-- 2 intra-mixin callers updated (both inside ``add_input_logprob_return_values``).
+- Intra-mixin callers updated (inside ``add_input_logprob_return_values``).
 
 Method body byte-identical. No callers outside the mixin file
 (``grep`` confirmed: only the mixin uses this method).
