@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Inplace prep for ``migrate-profiler-mixin``: build the
 ``SchedulerProfilerManager`` (@dataclass) skeleton at
-``scheduler_components/profiler_manager.py``, lift the inlined
-``init_profiler`` body out of ``Scheduler.__init__`` into the manager ctor
-(byte-identical block move), wire composition on Scheduler, inject the
-``forward_ct`` Callable getter, and type-flip the 6 mixin methods to
-``@staticmethod`` with ``self: "SchedulerProfilerManager"``. Body refs to
-``self.forward_ct`` (runtime-mutable Scheduler state) rewrite to
-``self.get_forward_ct()`` (Callable getter form).
+``scheduler_components/profiler_manager.py``, lift the ``init_profiler``
+method body out of ``SchedulerProfilerMixin`` into the manager
+``__post_init__`` (byte-identical block move; return-short-circuit
+semantics preserved because ``__post_init__`` is itself a method),
+replace the ``self.init_profiler()`` call in ``Scheduler.__init__`` with
+the manager ctor, inject the ``forward_ct`` Callable getter, and
+type-flip the 6 mixin methods to ``@staticmethod`` with
+``self: "SchedulerProfilerManager"``. Body refs to ``self.forward_ct``
+(runtime-mutable Scheduler state) rewrite to ``self.get_forward_ct()``
+(Callable getter form).
 
 Method bodies byte-identical wrt the post-move state (modulo
 ``@staticmethod`` + ``self: "SchedulerProfilerManager"`` annotation
@@ -38,10 +41,12 @@ Inplace prep for the ``migrate-profiler-mixin`` mech move.
   ``get_forward_ct: Callable[[], int]`` Callable getter (runtime-mutable
   Scheduler state per ``MECH_COMMIT_SPLIT.md`` §"Runtime-mutable scheduler
   state Callable injection").
-- Lift the inlined ``init_profiler`` body out of ``Scheduler.__init__``
-  into ``SchedulerProfilerManager.__init__`` (byte-identical block
-  move). Instantiate
-  ``self.profiler_manager = SchedulerProfilerManager(...)`` in place.
+- Cut the ``init_profiler`` body from ``SchedulerProfilerMixin`` and
+  paste it byte-identical (including the ``return`` short-circuit) into
+  ``SchedulerProfilerManager.__post_init__``. Delete the now-empty
+  ``init_profiler`` method from the mixin. Replace the
+  ``self.init_profiler()`` call in ``Scheduler.__init__`` with
+  ``self.profiler_manager = SchedulerProfilerManager(...)``.
 - In ``SchedulerProfilerMixin``, type-flip the remaining methods to
   ``@staticmethod`` with ``self: "SchedulerProfilerManager"``. Body
   ``self.forward_ct`` reads rewrite to ``self.get_forward_ct()``.
@@ -79,35 +84,71 @@ class SchedulerProfilerManager:
 '''
 
 
-# The inlined block currently in Scheduler.__init__ (from pre-prep). After
-# this commit it lives byte-identical inside SchedulerProfilerManager.__init__,
-# replaced in Scheduler.__init__ by the ctor instantiation.
-INIT_PROFILER_BODY_INLINED = """\
+# The original ``init_profiler`` method block as it lives in the mixin
+# right after pre-rename. Method-level indent (4 spaces); body lines at
+# 8-space indent. We cut this verbatim from the mixin.
+INIT_PROFILER_METHOD_BLOCK = """\
+    def init_profiler(self: Scheduler):
         if envs.SGLANG_PROFILE_V2.get():
             self._profile_manager = ProfileManager(
                 ps=self.ps,
                 cpu_group=self.dp_tp_cpu_group,
             )
-        else:
-            self.torch_profiler = None
-            self.torch_profiler_output_dir: Optional[Path] = None
-            self.profiler_activities: Optional[List[str]] = None
-            self.profile_id: Optional[str] = None
+            return
 
-            self.profiler_start_forward_ct: Optional[int] = None
-            self.profiler_target_forward_ct: Optional[int] = None
+        self.torch_profiler = None
+        self.torch_profiler_output_dir: Optional[Path] = None
+        self.profiler_activities: Optional[List[str]] = None
+        self.profile_id: Optional[str] = None
 
-            self.profiler_prefill_ct: Optional[int] = None
-            self.profiler_decode_ct: Optional[int] = None
-            self.profiler_target_prefill_ct: Optional[int] = None
-            self.profiler_target_decode_ct: Optional[int] = None
+        self.profiler_start_forward_ct: Optional[int] = None
+        self.profiler_target_forward_ct: Optional[int] = None
 
-            self.profile_by_stage: bool = False
-            self.profile_in_progress: bool = False
-            self.merge_profiles = False
+        self.profiler_prefill_ct: Optional[int] = None
+        self.profiler_decode_ct: Optional[int] = None
+        self.profiler_target_prefill_ct: Optional[int] = None
+        self.profiler_target_decode_ct: Optional[int] = None
 
-            # For ROCM
-            self.rpd_profiler = None
+        self.profile_by_stage: bool = False
+        self.profile_in_progress: bool = False
+        self.merge_profiles = False
+
+        # For ROCM
+        self.rpd_profiler = None
+
+"""
+
+
+# Same body, re-indented for ``__post_init__`` context (still 8 spaces
+# because ``__post_init__`` is itself a method). Byte-identical to the
+# mixin body, including the ``return`` short-circuit.
+INIT_PROFILER_BODY_FOR_POST_INIT = """\
+        if envs.SGLANG_PROFILE_V2.get():
+            self._profile_manager = ProfileManager(
+                ps=self.ps,
+                cpu_group=self.dp_tp_cpu_group,
+            )
+            return
+
+        self.torch_profiler = None
+        self.torch_profiler_output_dir: Optional[Path] = None
+        self.profiler_activities: Optional[List[str]] = None
+        self.profile_id: Optional[str] = None
+
+        self.profiler_start_forward_ct: Optional[int] = None
+        self.profiler_target_forward_ct: Optional[int] = None
+
+        self.profiler_prefill_ct: Optional[int] = None
+        self.profiler_decode_ct: Optional[int] = None
+        self.profiler_target_prefill_ct: Optional[int] = None
+        self.profiler_target_decode_ct: Optional[int] = None
+
+        self.profile_by_stage: bool = False
+        self.profile_in_progress: bool = False
+        self.merge_profiles = False
+
+        # For ROCM
+        self.rpd_profiler = None
 """
 
 
@@ -126,15 +167,24 @@ def transform(wt: Path) -> None:
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/profiler_manager.py"
 
-    # 1. Create new target file with class skeleton (ctor only).
+    # 1. Cut the ``init_profiler`` method block from the mixin (byte-identical;
+    #    return-short-circuit preserved).
+    text = mixin.read_text()
+    if INIT_PROFILER_METHOD_BLOCK not in text:
+        raise RuntimeError("init_profiler method block anchor mismatch")
+    text = text.replace(INIT_PROFILER_METHOD_BLOCK, "")
+    mixin_text = text
+
+    # 2. Create new target file with class skeleton (ctor body holds the
+    #    relocated init_profiler body verbatim inside __post_init__).
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
     if not pkg_init.exists():
         pkg_init.write_text("")
-    target.write_text(PROFILER_MANAGER_HEADER + INIT_PROFILER_BODY_INLINED)
+    target.write_text(PROFILER_MANAGER_HEADER + INIT_PROFILER_BODY_FOR_POST_INIT)
 
-    # 2. In mixin: type-flip the 6 methods to @staticmethod with
+    # 3. In mixin: type-flip the 6 remaining methods to @staticmethod with
     #    self: "SchedulerProfilerManager".
-    text = mixin.read_text()
+    text = mixin_text
     text = text.replace(
         "    def _init_profile(\n        self: Scheduler,\n",
         '    @staticmethod\n    def _init_profile(\n        self: "SchedulerProfilerManager",\n',
@@ -160,11 +210,11 @@ def transform(wt: Path) -> None:
         '    @staticmethod\n    def _profile(self: "SchedulerProfilerManager", recv_req: ProfileReq):',
     )
 
-    # 3. Body: ``self.forward_ct`` reads → ``self.get_forward_ct()``
+    # 4. Body: ``self.forward_ct`` reads → ``self.get_forward_ct()``
     #    (Callable getter form for runtime-mutable Scheduler state).
     text = text.replace("self.forward_ct", "self.get_forward_ct()")
 
-    # 4. Swap the TYPE_CHECKING Scheduler import for SchedulerProfilerManager
+    # 5. Swap the TYPE_CHECKING Scheduler import for SchedulerProfilerManager
     #    so the ``self: "SchedulerProfilerManager"`` annotation resolves under
     #    pyflakes.
     text = text.replace(
@@ -174,11 +224,12 @@ def transform(wt: Path) -> None:
 
     mixin.write_text(text)
 
-    # 5. Scheduler.__init__: replace the inlined body with the ctor call.
+    # 6. Scheduler.__init__: replace ``self.init_profiler()`` with the
+    #    SchedulerProfilerManager ctor.
     text = sched.read_text()
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.dp_attn import (\n    SchedulerDPAttnAdapter,\n)\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.profiler_manager import (\n"
             "    SchedulerProfilerManager,\n"
@@ -187,11 +238,11 @@ def transform(wt: Path) -> None:
     )
     text = replace_call_site(
         text,
-        old="        # Init profiler\n" + INIT_PROFILER_BODY_INLINED,
+        old="        # Init profiler\n        self.init_profiler()\n",
         new="        # Init profiler\n" + SCHEDULER_INIT_INSERT,
     )
 
-    # 6. Caller rewrites — prep cadence (class-qualified form). ``move`` will
+    # 7. Caller rewrites — prep cadence (class-qualified form). ``move`` will
     #    collapse to ``self.profiler_manager.<method>``.
     text = replace_call_site(
         text,

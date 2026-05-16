@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import replace_call_site
 from _runner import run_pr
 
-ID = "extract-build-kv-cache-pre-prep"
+ID = "extract-build-kv-cache-pre-move"
 SUBJECT = "Hoist hisparse and decode-offload setup out of init_cache_with_memory_pool"
 BODY = """\
 Pure block-move pre-prep for ``extract-build-kv-cache``.

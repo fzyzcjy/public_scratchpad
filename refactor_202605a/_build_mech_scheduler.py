@@ -42,7 +42,7 @@ ORDER: list[str] = [
     "extract-get-draft-kv-pool-move",
     "extract-maybe-register-hicache-draft-prep",
     "extract-maybe-register-hicache-draft-move",
-    "extract-build-kv-cache-pre-prep",
+    "extract-build-kv-cache-pre-move",
     "extract-build-kv-cache-prep",
     "extract-build-kv-cache-move",
     "init-mode-conditional-defaults",
@@ -52,20 +52,19 @@ ORDER: list[str] = [
     "migrate-dp-attn-mixin-prep",
     "migrate-dp-attn-mixin-move",
     "migrate-profiler-mixin-pre-rename",
-    "migrate-profiler-mixin-pre-prep",
     "migrate-profiler-mixin-prep",
     "migrate-profiler-mixin-move",
-    "migrate-update-weights-mixin-pre-prep1",
-    "migrate-update-weights-mixin-pre-prep2",
     "migrate-update-weights-mixin-prep",
     "migrate-update-weights-mixin-move",
-    "move-on-idle-to-scheduler-main",  # single (doc exception)
+    "on-idle-to-scheduler-main-move",  # single (doc exception)
+    "introduce-pool-stats-observer-pre-move",
     "introduce-pool-stats-observer-prep",
     "introduce-pool-stats-observer-move",
-    "introduce-invariant-checker-pre-prep",
+    "introduce-invariant-checker-pre-move",
     "introduce-invariant-checker-prep",
     "introduce-invariant-checker-move",
     "introduce-kv-events-publisher-pre-rename",
+    "introduce-kv-events-publisher-pre-move",
     "introduce-kv-events-publisher-prep",
     "introduce-kv-events-publisher-move",
     "introduce-load-inquirer-prep",
@@ -73,7 +72,7 @@ ORDER: list[str] = [
     "introduce-metrics-reporter-pre-rename",
     "introduce-metrics-reporter-prep",
     "introduce-metrics-reporter-move",
-    "move-maybe-log-idle-metrics-to-metrics-reporter",  # single (doc exception)
+    "maybe-log-idle-metrics-to-metrics-reporter-move",  # single (doc exception)
     "introduce-logprob-result-processor-pre-rename",
     "introduce-logprob-result-processor-prep",
     "introduce-logprob-result-processor-move",
@@ -83,7 +82,7 @@ ORDER: list[str] = [
     "introduce-batch-result-processor-move",
     # Tail follow-ups: relocate residual module-level free items out of
     # scheduler.py (mech move + non-mech cleanup).
-    "move-free-items-from-scheduler-py",
+    "free-items-from-scheduler-py-move",
     "cleanup-scheduler-py-free-items",
 ]
 

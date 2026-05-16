@@ -9,7 +9,7 @@ annotation.
 
 Note: ``_maybe_log_idle_metrics`` (``on_idle``'s 30-second metric flush
 helper) stays in ``SchedulerRuntimeCheckerMixin`` for now; a downstream
-commit (``move-maybe-log-idle-metrics-to-metrics-reporter``) cuts it
+commit (``maybe-log-idle-metrics-to-metrics-reporter-move``) cuts it
 directly from the mixin into ``SchedulerMetricsReporter`` after C14 builds
 the reporter class. ``self._maybe_log_idle_metrics()`` from ``on_idle``
 still resolves via mixin inheritance until that later commit rewrites the
@@ -29,7 +29,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
-ID = "move-on-idle-to-scheduler-main"
+ID = "on-idle-to-scheduler-main-move"
 SUBJECT = "Move on_idle from runtime_checker mixin into Scheduler"
 BODY = """\
 Move ``on_idle`` (the idle housekeeping orchestrator) from
@@ -46,7 +46,7 @@ since it lives on Scheduler directly).
 intentionally NOT moved here. It is a metrics-collection routine, not an
 orchestrator, so it gets relocated directly from
 ``SchedulerRuntimeCheckerMixin`` into ``SchedulerMetricsReporter`` by a
-downstream commit (``move-maybe-log-idle-metrics-to-metrics-reporter``).
+downstream commit (``maybe-log-idle-metrics-to-metrics-reporter-move``).
 Until that commit runs, ``self._maybe_log_idle_metrics()`` inside
 ``on_idle`` continues to resolve via mixin inheritance.
 

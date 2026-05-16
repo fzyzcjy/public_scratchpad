@@ -173,7 +173,7 @@ def transform(wt: Path) -> None:
     # 3. ``_maybe_log_idle_metrics`` is the lone remaining method on
     # ``SchedulerRuntimeCheckerMixin`` after this cut. It moves to
     # ``SchedulerMetricsReporter`` in the later
-    # ``move-maybe-log-idle-metrics-to-metrics-reporter`` commit, which is
+    # ``maybe-log-idle-metrics-to-metrics-reporter-move`` commit, which is
     # what finally deletes the mixin file + inheritance entry + import.
     text = sched.read_text()
 

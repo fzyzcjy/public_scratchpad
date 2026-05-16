@@ -33,7 +33,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_function_lines, insert_after, replace_call_site
 from _runner import run_pr
 
-ID = "introduce-invariant-checker-pre-prep"
+ID = "introduce-invariant-checker-pre-move"
 SUBJECT = "Move create_scheduler_watchdog from runtime_checker mixin to scheduler.py"
 BODY = """\
 Pre-prep for the ``introduce-invariant-checker`` mech split.

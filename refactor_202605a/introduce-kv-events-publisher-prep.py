@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Inplace prep for ``introduce-kv-events-publisher``: build the
-``SchedulerKvEventsPublisher`` class skeleton (ctor with Callable getter
-injection for ``stats`` + ``KvMetrics`` dataclass, NO methods yet),
-instantiate on Scheduler, type-flip 3 mixin methods to ``@staticmethod``
+"""Inplace prep for ``introduce-kv-events-publisher``: append the
+``SchedulerKvEventsPublisher`` class skeleton to
+``scheduler_components/kv_events_publisher.py`` (the ``KvMetrics``
+dataclass already lives there from the preceding ``pre-move``).
+Instantiate on Scheduler, type-flip 3 mixin methods to ``@staticmethod``
 with ``self: "SchedulerKvEventsPublisher"``, rewrite ``emit_kv_metrics``
 body reads of ``self.stats.X`` to ``self.get_stats().X`` Callable-getter
 form, rewrite callers to the sister form.
@@ -28,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import find_class_lines, find_method_lines, insert_after, replace_call_site
+from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-prep"
@@ -36,11 +37,11 @@ SUBJECT = "Stand up SchedulerKvEventsPublisher; migrate KV-event state to it"
 BODY = """\
 Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 
-- Create ``scheduler_components/kv_events_publisher.py`` with an empty
-  ``SchedulerKvEventsPublisher`` class skeleton (ctor + ``KvMetrics``
-  dataclass moved here; no methods yet). Ctor adds ``get_stats:
-  Callable[[], SchedulerStats]`` for runtime-mutable scheduler stats
-  (CLAUDE.md §4 form).
+- Append an empty ``SchedulerKvEventsPublisher`` class skeleton (ctor;
+  no methods yet) to ``scheduler_components/kv_events_publisher.py``
+  (the ``KvMetrics`` dataclass already lives there from the preceding
+  ``pre-move``). Ctor adds ``get_stats: Callable[[], SchedulerStats]``
+  for runtime-mutable scheduler stats (CLAUDE.md §4 form).
 - Instantiate ``self.kv_events_publisher = SchedulerKvEventsPublisher(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``,
   passing ``get_stats=lambda: self.stats``.
@@ -61,24 +62,8 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-# Target file: header + dataclass + empty class skeleton (no methods).
-TARGET_FILE_HEADER = '''\
-from __future__ import annotations
-
-import dataclasses
-import time
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
-
-from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch
-
-
-class SchedulerStats: ...  # type: ignore[no-redef]
-
-
-'''
-
-
+# Class skeleton appended to the target module (KvMetrics dataclass
+# already lives there from the preceding pre-move).
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True)
 class SchedulerKvEventsPublisher:
@@ -203,22 +188,14 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
 
-    # 1. Move the ``KvMetrics`` dataclass out of the mixin into the new file.
-    src_text = src.read_text()
-    s, e = find_class_lines(src_text, class_name="KvMetrics")
-    kv_metrics_block = "".join(src_text.splitlines(keepends=True)[s:e]).rstrip() + "\n"
-    lines = src_text.splitlines(keepends=True)
-    del lines[s:e]
-    src_text = "".join(lines)
-    src.write_text(src_text)
+    # 1. Append the SchedulerKvEventsPublisher class skeleton to the target
+    #    file (KvMetrics already lives there from pre-move).
+    target_text = target.read_text()
+    if not target_text.endswith("\n"):
+        target_text += "\n"
+    target.write_text(target_text + "\n" + NEW_CLASS_SKELETON)
 
-    # 2. Create new target file (skeleton: header + KvMetrics + empty class).
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        TARGET_FILE_HEADER + kv_metrics_block + "\n\n" + NEW_CLASS_SKELETON
-    )
-
-    # 3. Type-flip 3 mixin methods to @staticmethod + self: SchedulerKvEventsPublisher.
+    # 2. Type-flip 3 mixin methods to @staticmethod + self: SchedulerKvEventsPublisher.
     text = src.read_text()
     text = _add_static_decorator_and_typeflip(
         text,
@@ -242,12 +219,12 @@ def transform(wt: Path) -> None:
         original_self_sig="self: Scheduler",
     )
 
-    # 4. Rewrite ``emit_kv_metrics`` body reads to Callable-getter form so
+    # 3. Rewrite ``emit_kv_metrics`` body reads to Callable-getter form so
     #    the method survives the move into ``SchedulerKvEventsPublisher``
     #    (which has no ``stats`` attribute, only ``get_stats: Callable``).
     text = _rewrite_emit_kv_metrics_body(text)
 
-    # 5. Mixin internal callsites: route through sister.
+    # 4. Mixin internal callsites: route through sister.
     text = text.replace(
         "            self.emit_kv_metrics()\n",
         "            self.emit_kv_metrics(self.kv_events_publisher)\n",
@@ -274,7 +251,7 @@ def transform(wt: Path) -> None:
         )
     src.write_text(text)
 
-    # 6. Scheduler: import + ctor + on_idle callsite.
+    # 5. Scheduler: import + ctor + on_idle callsite.
     text = sched.read_text()
     text = insert_after(
         text,

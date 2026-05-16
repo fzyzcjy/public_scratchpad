@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mechanical move for ``migrate-dp-attn-mixin``: true cut + paste from
 ``scheduler_dp_attn_mixin.py`` into
-``scheduler_components/dp_attn_adapter.py``.
+``scheduler_components/dp_attn.py``.
 
 Cuts (in source order, top-down):
   - module-level ``MLPSyncBatchInfo`` ``@dataclass`` (verbatim)
@@ -51,7 +51,7 @@ Mechanical cut + paste for the ``migrate-dp-attn-mixin`` mech move.
 Cut ``prepare_mlp_sync_batch`` / ``maybe_prepare_mlp_sync_batch`` /
 ``get_idle_batch`` (@staticmethods after prep) from
 ``scheduler_dp_attn_mixin.py`` and paste them into ``SchedulerDPAttnAdapter``
-class body in ``scheduler_components/dp_attn_adapter.py``.
+class body in ``scheduler_components/dp_attn.py``.
 
 Module-level ``MLPSyncBatchInfo`` dataclass + ``_update_gather_batch`` +
 ``prepare_mlp_sync_batch_raw`` are cut verbatim from the old mixin and
@@ -117,7 +117,7 @@ def transform(wt: Path) -> None:
     prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     decode = wt / "python/sglang/srt/disaggregation/decode.py"
     test_chunked = wt / "test/registered/unit/managers/test_scheduler_chunked_req_gate.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/dp_attn_adapter.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/dp_attn.py"
 
     # 1. Cut module-level items (bottom-up so earlier line offsets stay valid).
     mtext = mixin.read_text()
@@ -225,7 +225,7 @@ def transform(wt: Path) -> None:
     btext = replace_call_site(
         btext,
         old="from sglang.srt.managers.scheduler_dp_attn_mixin import prepare_mlp_sync_batch_raw\n",
-        new="from sglang.srt.managers.scheduler_components.dp_attn_adapter import prepare_mlp_sync_batch_raw\n",
+        new="from sglang.srt.managers.scheduler_components.dp_attn import prepare_mlp_sync_batch_raw\n",
     )
     bench.write_text(btext)
 

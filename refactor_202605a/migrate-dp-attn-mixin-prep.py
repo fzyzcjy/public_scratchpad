@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Inplace prep for ``migrate-dp-attn-mixin``: create the
 ``SchedulerDPAttnAdapter`` class skeleton at
-``scheduler_components/dp_attn_adapter.py`` (ctor + fields only, no methods),
+``scheduler_components/dp_attn.py`` (ctor + fields only, no methods),
 instantiate in Scheduler.__init__, convert the 3
 ``SchedulerDPAttnMixin`` methods to ``@staticmethod`` with
 ``self: "SchedulerDPAttnAdapter"`` type annotation, and rewrite the 5
@@ -30,7 +30,7 @@ SUBJECT = "Introduce SchedulerDPAttnAdapter to own DP-attention state"
 BODY = """\
 Inplace prep for the ``migrate-dp-attn-mixin`` mech move.
 
-- Create ``scheduler_components/dp_attn_adapter.py`` with an empty
+- Create ``scheduler_components/dp_attn.py`` with an empty
   ``SchedulerDPAttnAdapter`` class (collaborator/config fields enumerated
   in the dataclass body below). No methods yet.
 - Instantiate ``self.dp_attn_adapter = SchedulerDPAttnAdapter(...)`` in
@@ -98,7 +98,7 @@ def transform(wt: Path) -> None:
     prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     decode = wt / "python/sglang/srt/disaggregation/decode.py"
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
-    target = wt / "python/sglang/srt/managers/scheduler_components/dp_attn_adapter.py"
+    target = wt / "python/sglang/srt/managers/scheduler_components/dp_attn.py"
 
     # 1. Create new file with empty class skeleton.
     pkg_init.parent.mkdir(parents=True, exist_ok=True)
@@ -156,11 +156,11 @@ def transform(wt: Path) -> None:
 
     # Add TYPE_CHECKING import for the new TargetClass so the
     # ``self: "SchedulerDPAttnAdapter"`` annotation resolves under pyflakes.
-    if "from sglang.srt.managers.scheduler_components.dp_attn_adapter import SchedulerDPAttnAdapter" not in text:
+    if "from sglang.srt.managers.scheduler_components.dp_attn import SchedulerDPAttnAdapter" not in text:
         text = text.replace(
             "if TYPE_CHECKING:\n",
             "if TYPE_CHECKING:\n"
-            "    from sglang.srt.managers.scheduler_components.dp_attn_adapter import SchedulerDPAttnAdapter\n",
+            "    from sglang.srt.managers.scheduler_components.dp_attn import SchedulerDPAttnAdapter\n",
             1,
         )
 
@@ -172,7 +172,7 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.scheduler_components.request_receiver import (\n    SchedulerRequestReceiver,\n)\n",
         addition=(
-            "from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n"
+            "from sglang.srt.managers.scheduler_components.dp_attn import (\n"
             "    SchedulerDPAttnAdapter,\n"
             ")\n"
         ),

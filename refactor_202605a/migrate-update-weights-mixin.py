@@ -197,7 +197,7 @@ def transform(wt: Path) -> None:
     )
     text = insert_after(
         text,
-        anchor="from sglang.srt.managers.scheduler_components.dp_attn_adapter import (\n    SchedulerDPAttnAdapter,\n)\n",
+        anchor="from sglang.srt.managers.scheduler_components.dp_attn import (\n    SchedulerDPAttnAdapter,\n)\n",
         addition=(
             "from sglang.srt.managers.scheduler_components.weight_updater import (\n"
             "    SchedulerWeightUpdaterManager,\n"

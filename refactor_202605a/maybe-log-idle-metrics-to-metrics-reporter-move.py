@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
-ID = "move-maybe-log-idle-metrics-to-metrics-reporter"
+ID = "maybe-log-idle-metrics-to-metrics-reporter-move"
 SUBJECT = "Move idle-metrics logging to SchedulerMetricsReporter"
 BODY = """\
 Cut ``_maybe_log_idle_metrics`` from ``SchedulerRuntimeCheckerMixin`` and

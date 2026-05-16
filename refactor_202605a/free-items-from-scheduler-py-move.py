@@ -37,7 +37,7 @@ from _helpers import (
 )
 from _runner import run_pr
 
-ID = "move-free-items-from-scheduler-py"
+ID = "free-items-from-scheduler-py-move"
 SUBJECT = "Move module-level helpers out of scheduler.py"
 BODY = """\
 Pure mechanical relocation of module-level free items out of

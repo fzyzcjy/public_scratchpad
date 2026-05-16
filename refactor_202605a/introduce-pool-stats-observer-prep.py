@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Inplace prep for ``introduce-pool-stats-observer``: create the empty
-``SchedulerPoolStatsObserver`` class skeleton (+ move ``PoolStats`` dataclass)
-into ``scheduler_components/pool_stats_observer.py``. Instantiate in
-``Scheduler.__init__`` with Callable getter injection for runtime-mutable
+"""Inplace prep for ``introduce-pool-stats-observer``: append the empty
+``SchedulerPoolStatsObserver`` class skeleton to
+``scheduler_components/pool_stats_observer.py`` (the ``PoolStats``
+dataclass already lives there from the preceding ``pre-move``).
+Instantiate in ``Scheduler.__init__`` with Callable getter injection for
+runtime-mutable
 ``last_batch`` / ``running_batch`` state. Convert the 12 stats methods in
 the runtime_checker mixin to ``@staticmethod`` with
 ``self: "SchedulerPoolStatsObserver"`` type annotation; do the 7 privacy
@@ -36,7 +38,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import find_class_lines, find_method_lines, insert_after, replace_call_site
+from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-pool-stats-observer-prep"
@@ -44,18 +46,16 @@ SUBJECT = "Add SchedulerPoolStatsObserver and route pool-stats state through it"
 BODY = """\
 Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 
-- Create ``scheduler_components/pool_stats_observer.py`` containing the
-  ``PoolStats`` dataclass (relocated verbatim from
-  ``scheduler_runtime_checker_mixin.py``) + an empty
-  ``SchedulerPoolStatsObserver`` class skeleton (collaborators + configs +
-  Callable getters enumerated in the dataclass body below, no methods yet).
+- Append an empty ``SchedulerPoolStatsObserver`` class skeleton
+  (collaborators + configs + Callable getters enumerated in the
+  dataclass body below, no methods yet) to
+  ``scheduler_components/pool_stats_observer.py`` (the ``PoolStats``
+  dataclass already lives there from the preceding ``pre-move``).
 - Instantiate ``self.pool_stats_observer = SchedulerPoolStatsObserver(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
   Runtime-mutable ``last_batch`` / ``running_batch`` are injected as
   ``get_last_batch`` / ``get_running_batch`` Callable getters
   (CLAUDE.md form).
-- Mixin file imports ``PoolStats`` from the new module (mixin still defines
-  the stats methods until the move commit).
 - Privacy flips (drop leading ``_``): ``_streaming_session_count`` /
   ``_active_pool_idxs`` and the ``_session_held_*`` family. ``get_pool_stats``
   and the ``_get_*_token_info`` helpers keep their existing names.
@@ -74,9 +74,6 @@ Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 - Callers updated to ``self.<method>(self.pool_stats_observer)`` form
   (mixin-internal MRO dispatch routes through the @staticmethod). No
   caller-side ``last_batch`` / ``running_batch`` kwargs.
-- ``test/registered/unit/managers/test_scheduler_pause_generation.py``:
-  update import of ``PoolStats`` to the new module.
-
 The stats methods stay inside ``SchedulerRuntimeCheckerMixin`` in this
 commit; physical cut + paste into ``SchedulerPoolStatsObserver`` body
 happens in ``introduce-pool-stats-observer-move``.
@@ -86,23 +83,9 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-# Target file: PoolStats dataclass moves verbatim (cut + paste). Class
-# skeleton: ctor + fields + 2 Callable getters. The methods land here in
-# the move commit.
-TARGET_FILE_HEADER = '''\
-from __future__ import annotations
-
-import dataclasses
-from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple
-
-
-class SchedulerStats: ...  # type: ignore[no-redef]
-
-
-'''
-
-
+# Class skeleton: ctor + fields + 2 Callable getters. The methods land here in
+# the move commit. The ``PoolStats`` dataclass already lives in this target
+# module from the preceding ``pre-move`` commit.
 SKELETON_CLASS = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerPoolStatsObserver:
@@ -375,14 +358,7 @@ def transform(wt: Path) -> None:
 
     src_text = src.read_text()
 
-    # 1. Cut PoolStats dataclass from mixin file (verbatim move to target).
-    s, e = find_class_lines(src_text, class_name="PoolStats")
-    lines = src_text.splitlines(keepends=True)
-    pool_stats_block = "".join(lines[s:e]).rstrip() + "\n"
-    del lines[s:e]
-    src_text = "".join(lines)
-
-    # 2. Replace each of the 12 mixin methods with the prep-form @staticmethod
+    # 1. Replace each of the 12 mixin methods with the prep-form @staticmethod
     # block (bottom-up to keep line ranges valid).
     for name in reversed(METHOD_ORDER):
         s, e = find_method_lines(
@@ -392,13 +368,7 @@ def transform(wt: Path) -> None:
         new_block = PREP_METHOD_BLOCKS[name]
         src_text = "".join(lines[:s]) + new_block + "".join(lines[e:])
 
-    # 3. Add PoolStats import to mixin (it now lives in the new module).
-    src_text = insert_after(
-        src_text,
-        anchor="from sglang.srt.utils.watchdog import WatchdogRaw\n",
-        addition="\nfrom sglang.srt.managers.scheduler_components.pool_stats_observer import PoolStats\n",
-    )
-    # Add TYPE_CHECKING import for the new TargetClass so the
+    # 2. Add TYPE_CHECKING import for the new TargetClass so the
     # ``self: "SchedulerPoolStatsObserver"`` annotation resolves under pyflakes.
     if "from sglang.srt.managers.scheduler_components.pool_stats_observer import SchedulerPoolStatsObserver" not in src_text:
         src_text = src_text.replace(
@@ -409,12 +379,14 @@ def transform(wt: Path) -> None:
         )
     src.write_text(src_text)
 
-    # 4. Build the new target file: header + PoolStats dataclass + empty class
-    # skeleton (methods land here in the move commit).
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(TARGET_FILE_HEADER + pool_stats_block + "\n" + SKELETON_CLASS)
+    # 3. Append the empty SchedulerPoolStatsObserver class skeleton to the
+    # target file (PoolStats already moved there in pre-move).
+    target_text = target.read_text()
+    if not target_text.endswith("\n"):
+        target_text += "\n"
+    target.write_text(target_text + "\n" + SKELETON_CLASS)
 
-    # 5. Scheduler: add import + ctor instantiation.
+    # 4. Scheduler: add import + ctor instantiation.
     text = sched.read_text()
     text = insert_after(
         text,
@@ -432,7 +404,7 @@ def transform(wt: Path) -> None:
         new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
     )
 
-    # 6. Hot-path callsites in scheduler.py (1 run_batch + 4 in
+    # 5. Hot-path callsites in scheduler.py (1 run_batch + 4 in
     # _maybe_log_idle_metrics / on_idle methods moved here in C8).
     text = text.replace(
         "            max_pool_usage = self.get_pool_stats().get_max_pool_usage()\n",
@@ -468,7 +440,7 @@ def transform(wt: Path) -> None:
     )
     sched.write_text(text)
 
-    # 7. Internal callsites in the runtime_checker mixin (still mixin until the
+    # 6. Internal callsites in the runtime_checker mixin (still mixin until the
     # move commit). 7 callsites in _check_*_pool / _check_req_pool /
     # create_scheduler_watchdog (dump_info).
     text = src.read_text()
@@ -519,7 +491,7 @@ def transform(wt: Path) -> None:
     )
     src.write_text(text)
 
-    # 8. Metrics mixin callsites (5).
+    # 7. Metrics mixin callsites (5).
     text = metrics_mixin.read_text()
     text = text.replace(
         "        pool_stats = self.get_pool_stats()\n",
@@ -546,16 +518,6 @@ def transform(wt: Path) -> None:
         "            )\n",
     )
     metrics_mixin.write_text(text)
-
-    # 9. Test file: update the PoolStats import (the dataclass moved this commit).
-    test_pause = wt / "test/registered/unit/managers/test_scheduler_pause_generation.py"
-    if test_pause.exists():
-        ttext = test_pause.read_text()
-        ttext = ttext.replace(
-            "from sglang.srt.managers.scheduler_runtime_checker_mixin import PoolStats\n",
-            "from sglang.srt.managers.scheduler_components.pool_stats_observer import PoolStats\n",
-        )
-        test_pause.write_text(ttext)
 
 
 if __name__ == "__main__":
