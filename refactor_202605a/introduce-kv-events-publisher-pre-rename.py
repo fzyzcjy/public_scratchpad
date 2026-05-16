@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pre-rename for ``introduce-kv-events-publisher``: drop the leading ``_``
-on 2 methods so they expose a public API matching the sister manager
-forms that arrive in ``-prep`` / ``-move``.
+on the affected methods so they expose a public API matching the sister
+manager forms that arrive in ``-prep`` / ``-move``.
 
 - ``_emit_kv_metrics`` → ``emit_kv_metrics``
 - ``_publish_kv_events`` → ``publish_kv_events``
@@ -28,15 +28,15 @@ ID = "introduce-kv-events-publisher-pre-rename"
 SUBJECT = "Drop leading _ on emit_kv_metrics / publish_kv_events (pre-rename for kv-events-publisher)"
 BODY = """\
 Privacy flip pre-rename for the ``introduce-kv-events-publisher`` mech
-move. Two ``SchedulerMetricsMixin`` methods are made public ahead of the
-1:N split because the sister API they will expose is public.
+move. ``SchedulerMetricsMixin`` methods are made public ahead of the
+sister split because the sister API they will expose is public.
 
 - ``_emit_kv_metrics`` → ``emit_kv_metrics``
 - ``_publish_kv_events`` → ``publish_kv_events``
 
 Body byte-identical. Callsites updated in the mixin
 (``report_prefill_stats`` / ``report_decode_stats``) and in
-``scheduler.py`` ``on_idle`` (moved here in C8).
+``scheduler.py`` ``on_idle`` (moved here in the on-idle move commit).
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
