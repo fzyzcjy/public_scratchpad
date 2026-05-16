@@ -10,10 +10,6 @@ Body bytes (post-prep) will be byte-equivalent to body bytes in
 ``kv_cache.py`` after the move, modulo dedent + decorator removal and one
 self-qualifier collapse (``kv_cache_builder.get_draft_kv_pool`` → ``get_draft_kv_pool``,
 documented in the move commit).
-
-# TODO: type annotations for tree_cache / draft_worker — BasePrefixCache and
-# the TpModelWorker subclass type are not module-level imports in scheduler.py,
-# so we leave them untyped to avoid introducing new top-level imports.
 """
 
 # /// script
@@ -54,8 +50,8 @@ NEW_SIGNATURE = (
     "    @staticmethod\n"
     "    def maybe_register_hicache_draft(\n"
     "        *,\n"
-    "        tree_cache,\n"
-    "        draft_worker,\n"
+    "        tree_cache: \"BasePrefixCache\",\n"
+    "        draft_worker: \"BaseTpWorker\",\n"
     "        spec_algorithm: SpeculativeAlgorithm,\n"
     "        server_args: ServerArgs,\n"
     "        enable_hierarchical_cache: bool,\n"
