@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mechanical move for ``introduce-pool-stats-observer``: cut the 12 prep-form
+"""Mechanical move for ``introduce-pool-stats-observer``: cut the prep-form
 @staticmethods from ``SchedulerRuntimeCheckerMixin``, paste them into the
 ``SchedulerPoolStatsObserver`` class body. Drop ``@staticmethod`` decorators;
 simplify ``self: "SchedulerPoolStatsObserver"`` annotation to bare ``self``;
@@ -28,7 +28,7 @@ SUBJECT = "Hand pool-stats sampling over to SchedulerPoolStatsObserver"
 BODY = """\
 Mechanical cut + paste for the ``introduce-pool-stats-observer`` mech move.
 
-Cut the 12 stats methods (all @staticmethod after prep) from
+Cut the stats methods (all @staticmethod after prep) from
 ``SchedulerRuntimeCheckerMixin`` and paste them into the
 ``SchedulerPoolStatsObserver`` class body in
 ``scheduler_components/pool_stats_observer.py``. Drop ``@staticmethod``
@@ -47,7 +47,7 @@ All callers updated:
   ``create_scheduler_watchdog`` ``scheduler.`` prefix).
 - ``observability/scheduler_metrics_mixin.py`` callsites.
 
-The runtime_checker mixin file still hosts the 10 check methods +
+The runtime_checker mixin file still hosts the check methods +
 ``create_scheduler_watchdog``; those move in the next commit
 (``introduce-invariant-checker``).
 """

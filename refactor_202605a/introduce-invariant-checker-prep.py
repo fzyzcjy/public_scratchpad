@@ -24,7 +24,7 @@ state (``last_batch`` / ``running_batch``) and the
 ``Callable[[], T]`` getters in the ctor (not per-call kwargs). The
 ``pool_stats_observer`` itself remains a static ctor field so the
 session_held_*_tokens calls inside ``_check_full_pool`` / ``_check_swa_pool``
-/ ``_check_mamba_pool`` stay readable. The 2 ``count_*_leak_warnings``
+/ ``_check_mamba_pool`` stay readable. The ``count_*_leak_warnings``
 counter fields are fresh-initialised here (they had no static definition on
 ``Scheduler`` previously — ``raise_error_or_warn`` creates them dynamically
 via ``setattr``).
@@ -50,24 +50,23 @@ Inplace prep for the ``introduce-invariant-checker`` mech move.
 
 - Create ``scheduler_components/invariant_checker.py`` with an empty
   ``SchedulerInvariantChecker`` class skeleton (ctor only; no methods
-  yet). Ctor takes 12 static fields (collaborators + configs +
-  ``pool_stats_observer``) + 3 Callable getters
-  (``get_last_batch`` / ``get_running_batch`` / ``get_pool_stats``) +
-  initialises 2 mutable counter fields ``count_req_pool_leak_warnings``
-  / ``count_memory_leak_warnings`` to 0.
+  yet). Ctor takes the static fields (collaborators + configs +
+  ``pool_stats_observer``) plus the Callable getters
+  (``get_last_batch`` / ``get_running_batch`` / ``get_pool_stats``) plus
+  the mutable counter fields ``count_req_pool_leak_warnings`` /
+  ``count_memory_leak_warnings`` fresh-initialised to 0.
 - Instantiate ``self.invariant_checker = SchedulerInvariantChecker(...)``
   in ``Scheduler.__init__`` just after ``self.pool_stats_observer`` so
   the sister composition dep resolves. ``get_pool_stats`` is wrapped via
   ``lambda`` so the bound observer call captures the current
   ``last_batch`` / ``running_batch`` at invocation time.
-- In ``SchedulerRuntimeCheckerMixin``, convert 9 instance methods (the
-  10th, ``_check_pool_invariant``, is already a stateless
-  ``@staticmethod``) to ``@staticmethod`` with
-  ``self: "SchedulerInvariantChecker"`` type annotation. Body reads of
-  runtime-mutable ``Scheduler`` state are rewritten through the Callable
-  getters: ``self.last_batch`` → ``self.get_last_batch()``,
-  ``self.running_batch`` → ``self.get_running_batch()``, and
-  ``self.pool_stats_observer.get_pool_stats(last_batch=...,
+- In ``SchedulerRuntimeCheckerMixin``, convert the instance methods to
+  ``@staticmethod`` with ``self: "SchedulerInvariantChecker"`` type
+  annotation. (``_check_pool_invariant`` is already a stateless
+  ``@staticmethod``.) Body reads of runtime-mutable ``Scheduler`` state
+  are rewritten through the Callable getters: ``self.last_batch`` →
+  ``self.get_last_batch()``, ``self.running_batch`` →
+  ``self.get_running_batch()``, and ``self.pool_stats_observer.get_pool_stats(last_batch=...,
   running_batch=...)`` → ``self.get_pool_stats()``.
 - Callers rewritten to the sister staticmethod-on-mixin form
   ``self.<method>(self.invariant_checker, ...)`` (mirrors
@@ -80,9 +79,9 @@ Inplace prep for the ``introduce-invariant-checker`` mech move.
   ``create_scheduler_watchdog`` free function (moved into
   ``scheduler.py`` in the pre-prep commit).
 
-The 10 methods stay inside ``SchedulerRuntimeCheckerMixin`` in this
-commit; physical cut + paste into ``SchedulerInvariantChecker`` body
-happens in ``introduce-invariant-checker-move``.
+The invariant-check methods stay inside ``SchedulerRuntimeCheckerMixin``
+in this commit; physical cut + paste into ``SchedulerInvariantChecker``
+body happens in ``introduce-invariant-checker-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

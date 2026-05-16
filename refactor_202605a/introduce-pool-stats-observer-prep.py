@@ -47,24 +47,25 @@ Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 - Create ``scheduler_components/pool_stats_observer.py`` containing the
   ``PoolStats`` dataclass (relocated verbatim from
   ``scheduler_runtime_checker_mixin.py``) + an empty
-  ``SchedulerPoolStatsObserver`` class skeleton (5 collaborators + 6 configs
-  + 2 Callable getters, no methods yet).
+  ``SchedulerPoolStatsObserver`` class skeleton (collaborators + configs +
+  Callable getters enumerated in the dataclass body below, no methods yet).
 - Instantiate ``self.pool_stats_observer = SchedulerPoolStatsObserver(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
   Runtime-mutable ``last_batch`` / ``running_batch`` are injected as
   ``get_last_batch`` / ``get_running_batch`` Callable getters
-  (CLAUDE.md §4 form).
+  (CLAUDE.md form).
 - Mixin file imports ``PoolStats`` from the new module (mixin still defines
-  the 12 stats methods until the move commit).
-- 7 privacy flips (drop leading ``_``): ``_streaming_session_count`` /
-  ``_active_pool_idxs`` / 5 ``_session_held_*``. ``get_pool_stats`` and the
-  4 ``_get_*_token_info`` keep their existing names.
-- 12 methods on ``SchedulerRuntimeCheckerMixin`` retyped to ``@staticmethod``
-  with ``self: "SchedulerPoolStatsObserver"`` type annotation.
+  the stats methods until the move commit).
+- Privacy flips (drop leading ``_``): ``_streaming_session_count`` /
+  ``_active_pool_idxs`` and the ``_session_held_*`` family. ``get_pool_stats``
+  and the ``_get_*_token_info`` helpers keep their existing names.
+- All stats methods on ``SchedulerRuntimeCheckerMixin`` retyped to
+  ``@staticmethod`` with ``self: "SchedulerPoolStatsObserver"`` type
+  annotation.
 - Body reads of ``self.last_batch`` / ``self.running_batch`` are rewritten
   to ``self.get_last_batch()`` / ``self.get_running_batch()`` Callable
   getter calls. No per-call ``last_batch`` / ``running_batch`` kwargs.
-- Sibling calls inside the 12 prep-form @staticmethods use the qualified
+- Sibling calls inside the prep-form @staticmethods use the qualified
   form ``SchedulerRuntimeCheckerMixin.<method>(self)`` because the methods
   physically live on the mixin during prep but receive a
   ``SchedulerPoolStatsObserver`` as ``self``. The move commit strips the
@@ -76,9 +77,9 @@ Inplace prep for the ``introduce-pool-stats-observer`` mech move.
 - ``test/registered/unit/managers/test_scheduler_pause_generation.py``:
   update import of ``PoolStats`` to the new module.
 
-The 12 methods stay inside ``SchedulerRuntimeCheckerMixin`` in this commit;
-physical cut + paste into ``SchedulerPoolStatsObserver`` body happens in
-``introduce-pool-stats-observer-move``.
+The stats methods stay inside ``SchedulerRuntimeCheckerMixin`` in this
+commit; physical cut + paste into ``SchedulerPoolStatsObserver`` body
+happens in ``introduce-pool-stats-observer-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

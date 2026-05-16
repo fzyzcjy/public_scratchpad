@@ -31,9 +31,10 @@ BODY = """\
 Mechanical cut + paste for the ``introduce-invariant-checker`` mech move
 (tail commit of the ``SchedulerRuntimeCheckerMixin`` 1:N split).
 
-Cut the 10 methods (9 @staticmethod after prep + the already-static
-``_check_pool_invariant``) from ``SchedulerRuntimeCheckerMixin`` and paste
-them into the ``SchedulerInvariantChecker`` class body in
+Cut the invariant-check methods (the @staticmethod-converted ones from
+prep plus the already-static ``_check_pool_invariant``) from
+``SchedulerRuntimeCheckerMixin`` and paste them into the
+``SchedulerInvariantChecker`` class body in
 ``scheduler_components/invariant_checker.py``. Drop ``@staticmethod``
 decorators; simplify ``self: "SchedulerInvariantChecker"`` annotation to
 bare ``self`` (in class context the type is implicit). Strip the
@@ -53,7 +54,7 @@ Final cleanup:
 - Drop ``SchedulerRuntimeCheckerMixin`` from ``Scheduler``'s inheritance
   list and from the import in ``scheduler.py``.
 - Delete ``python/sglang/srt/managers/scheduler_runtime_checker_mixin.py``
-  (now empty after the 10 method bodies are moved out and
+  (now empty after the invariant-check method bodies are moved out and
   ``create_scheduler_watchdog`` already moved in pre-prep).
 """
 AREA = "mech_scheduler"
