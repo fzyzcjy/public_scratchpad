@@ -21,7 +21,6 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import replace_call_site  (kept for parity)
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-pre-rename"
