@@ -30,6 +30,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import (
     append_to_file,
     cut_lines,
+    ensure_imports,
     find_class_lines,
     find_function_lines,
     replace_call_site,
@@ -60,25 +61,6 @@ dead-code ``is_work_request`` function (zero callers codebase-wide).
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
-
-
-def _ensure_type_checking_imports(text: str, *, new_imports: str) -> str:
-    """Insert ``new_imports`` inside the ``if TYPE_CHECKING:`` block of ``text``.
-
-    Tolerant of an empty/``pass``-only block (ruff F401 may have collapsed it
-    during the prep commit when these names were not yet referenced). Falls
-    back to a clean replacement of ``if TYPE_CHECKING:\\n    pass\\n`` with the
-    populated block.
-    """
-    pass_block = "if TYPE_CHECKING:\n    pass\n"
-    if pass_block in text:
-        return text.replace(
-            pass_block, "if TYPE_CHECKING:\n" + new_imports, 1
-        )
-    head_anchor = "if TYPE_CHECKING:\n"
-    if head_anchor in text:
-        return text.replace(head_anchor, head_anchor + new_imports, 1)
-    raise RuntimeError("no `if TYPE_CHECKING:` block found to extend")
 
 
 def _move_embedding_batch_result(wt: Path) -> None:
@@ -118,32 +100,28 @@ def _move_embedding_batch_result(wt: Path) -> None:
     sched.write_text(sched_text)
 
     # batch_result_processor.py: ensure the TYPE_CHECKING block imports the
-    # 2 result classes from utils. Tolerate a previously-trimmed
-    # `if TYPE_CHECKING:` block (ruff F401 may have collapsed it to `pass`
-    # in the prep commit when these names were not yet used).
+    # 2 result classes from utils.
     text = batch_result_processor.read_text()
-    text = _ensure_type_checking_imports(
+    text = ensure_imports(
         text,
-        new_imports=(
-            "    from sglang.srt.managers.utils import (\n"
-            "        EmbeddingBatchResult,\n"
-            "        GenerationBatchResult,\n"
-            "    )\n"
-        ),
+        type_checking={
+            "sglang.srt.managers.utils": (
+                "EmbeddingBatchResult",
+                "GenerationBatchResult",
+            ),
+        },
     )
     batch_result_processor.write_text(text)
 
     # metrics_reporter.py: keep Scheduler from scheduler, switch
-    # EmbeddingBatchResult source to utils. Tolerant in the same way.
+    # EmbeddingBatchResult source to utils.
     text = metrics_reporter.read_text()
-    text = _ensure_type_checking_imports(
+    text = ensure_imports(
         text,
-        new_imports=(
-            "    from sglang.srt.managers.scheduler import Scheduler\n"
-            "    from sglang.srt.managers.utils import (\n"
-            "        EmbeddingBatchResult,\n"
-            "    )\n"
-        ),
+        type_checking={
+            "sglang.srt.managers.scheduler": "Scheduler",
+            "sglang.srt.managers.utils": "EmbeddingBatchResult",
+        },
     )
     metrics_reporter.write_text(text)
 
@@ -192,26 +170,11 @@ def _move_create_scheduler_watchdog(wt: Path) -> None:
     # invariant_checker.py: add WatchdogRaw runtime import and Scheduler
     # TYPE_CHECKING import.
     text = invariant_checker.read_text()
-    text = replace_call_site(
+    text = ensure_imports(
         text,
-        old="from sglang.srt.utils.common import ceil_align, raise_error_or_warn\n",
-        new=(
-            "from sglang.srt.utils.common import ceil_align, raise_error_or_warn\n"
-            "from sglang.srt.utils.watchdog import WatchdogRaw\n"
-        ),
+        runtime={"sglang.srt.utils.watchdog": "WatchdogRaw"},
+        type_checking={"sglang.srt.managers.scheduler": "Scheduler"},
     )
-    # Add Scheduler to TYPE_CHECKING block (it doesn't already exist there).
-    if "from sglang.srt.managers.scheduler import Scheduler" not in text:
-        # Insert a TYPE_CHECKING import block right before ``logger =``.
-        text = replace_call_site(
-            text,
-            old="logger = logging.getLogger(__name__)\n",
-            new=(
-                "if TYPE_CHECKING:\n"
-                "    from sglang.srt.managers.scheduler import Scheduler\n\n"
-                "logger = logging.getLogger(__name__)\n"
-            ),
-        )
     invariant_checker.write_text(text)
 
     # scheduler.py: extend existing invariant_checker import to include

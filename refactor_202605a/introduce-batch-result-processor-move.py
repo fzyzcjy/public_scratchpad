@@ -22,7 +22,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-batch-result-processor-move"
@@ -124,6 +130,28 @@ def transform(wt: Path) -> None:
 
     rtext = target.read_text()
     rtext = rtext.rstrip() + "\n\n" + methods_text.rstrip() + "\n"
+    # Re-inject imports the method bodies need. Prep wrote these into the
+    # target header, but pre-commit ruff F401 stripped them while the
+    # bodies weren't yet present.
+    rtext = ensure_bare_imports(rtext, ["import torch\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "typing": ("List", "Union"),
+            "sglang.srt.disaggregation.utils": "DisaggregationMode",
+            "sglang.srt.environ": "envs",
+            "sglang.srt.layers.logits_processor": "LogitsProcessorOutput",
+            "sglang.srt.managers.io_struct": "AbortReq",
+            "sglang.srt.managers.schedule_batch": ("Req", "ScheduleBatch"),
+            "sglang.srt.mem_cache.common": (
+                "maybe_cache_unfinished_req",
+                "release_kv_cache",
+            ),
+            "sglang.srt.server_args": "get_global_server_args",
+            "sglang.srt.state_capturer.indexer_topk": "get_global_indexer_capturer",
+            "sglang.srt.state_capturer.routed_experts": "get_global_experts_capturer",
+        },
+    )
     target.write_text(rtext)
 
     # Delete the now-empty mixin file (all 28 methods have moved out across

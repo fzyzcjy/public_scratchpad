@@ -22,7 +22,14 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, replace_call_site, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    replace_call_site,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-move"
@@ -148,6 +155,19 @@ def transform(wt: Path) -> None:
     # have 4-space class-body indent).
     rtext = target.read_text()
     rtext = rtext.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
+    # Re-inject imports the method bodies need (prep wrote these; pre-commit
+    # ruff F401 stripped them while the bodies were absent).
+    rtext = ensure_bare_imports(rtext, ["import warnings\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "typing": ("List", "Optional", "Tuple"),
+            "sglang.srt.disaggregation.utils": "DisaggregationMode",
+            "sglang.srt.environ": "envs",
+            "sglang.srt.managers.scheduler_components.pool_stats_observer": "PoolStats",
+            "sglang.srt.utils.common": ("ceil_align", "raise_error_or_warn"),
+        },
+    )
     target.write_text(rtext)
 
     # 3. ``_maybe_log_idle_metrics`` is the lone remaining method on
