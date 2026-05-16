@@ -64,7 +64,7 @@ Method bodies otherwise byte-identical. ``@staticmethod`` decorators
 dropped; ``self: "SchedulerDPAttnAdapter"`` annotation simplified to bare
 ``self``.
 
-All 5 callers updated:
+All callers updated:
   ``self.maybe_prepare_mlp_sync_batch(self.dp_attn_adapter, batch, ...)`` →
   ``self.dp_attn_adapter.maybe_prepare_mlp_sync_batch(batch, ...)``
 (pure prefix transformation).

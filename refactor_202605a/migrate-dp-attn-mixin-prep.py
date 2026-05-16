@@ -31,11 +31,11 @@ BODY = """\
 Inplace prep for the ``migrate-dp-attn-mixin`` mech move.
 
 - Create ``scheduler_components/dp_attn_adapter.py`` with an empty
-  ``SchedulerDPAttnAdapter`` class (11 collaborator/config fields). No
-  methods yet.
+  ``SchedulerDPAttnAdapter`` class (collaborator/config fields enumerated
+  in the dataclass body below). No methods yet.
 - Instantiate ``self.dp_attn_adapter = SchedulerDPAttnAdapter(...)`` in
   ``Scheduler.__init__`` just before ``self.is_initializing = False``.
-- In ``scheduler_dp_attn_mixin.py``, convert 3 methods
+- In ``scheduler_dp_attn_mixin.py``, convert the adapter methods
   (``prepare_mlp_sync_batch`` / ``maybe_prepare_mlp_sync_batch`` /
   ``get_idle_batch``) to ``@staticmethod`` with
   ``self: "SchedulerDPAttnAdapter"`` type annotation. Body bytes unchanged.
@@ -43,8 +43,8 @@ Inplace prep for the ``migrate-dp-attn-mixin`` mech move.
   and disaggregation/decode.py are rewritten to
   ``self.<method>(self.dp_attn_adapter, ...)``.
 
-The 3 methods stay inside ``SchedulerDPAttnMixin`` in this commit; physical
-cut + paste to ``SchedulerDPAttnAdapter`` body happens in
+The adapter methods stay inside ``SchedulerDPAttnMixin`` in this commit;
+physical cut + paste to ``SchedulerDPAttnAdapter`` body happens in
 ``migrate-dp-attn-mixin-move``.
 """
 AREA = "mech_scheduler"
