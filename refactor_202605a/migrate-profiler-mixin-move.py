@@ -142,8 +142,8 @@ def transform(wt: Path) -> None:
         "from typing import TYPE_CHECKING, Callable, List, Optional",
     )
     target_text = target_text.replace(
-        "from sglang.srt.environ import envs  # noqa: F401\n",
-        "from sglang.srt.environ import envs  # noqa: F401\n"
+        "from sglang.srt.environ import envs\n",
+        "from sglang.srt.environ import envs\n"
         + TARGET_PRELUDE_NEW_IMPORTS.lstrip("\n"),
         1,
     )

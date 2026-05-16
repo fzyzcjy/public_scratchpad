@@ -153,7 +153,7 @@ def transform(wt: Path) -> None:
     target_text = target_text.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
 
     # 4. Splice the supporting module-level prelude into the target file.
-    anchor = "from typing import Any, Callable, Optional  # noqa: F401\n"
+    anchor = "from typing import Any, Callable, Optional\n"
     if anchor not in target_text:
         raise RuntimeError(f"prelude-splice anchor not found: {anchor!r}")
     target_text = target_text.replace(

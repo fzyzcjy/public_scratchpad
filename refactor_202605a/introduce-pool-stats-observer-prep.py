@@ -90,11 +90,11 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # skeleton: ctor + fields + 2 Callable getters. The methods land here in
 # the move commit.
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
+from __future__ import annotations
 
-import dataclasses  # noqa: F401
+import dataclasses
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple  # noqa: F401
+from typing import Any, Callable, List, Optional, Tuple
 
 
 class SchedulerStats: ...  # type: ignore[no-redef]

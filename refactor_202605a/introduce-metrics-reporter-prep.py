@@ -110,19 +110,19 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
+from __future__ import annotations
 
-import logging  # noqa: F401
+import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional  # noqa: F401
+from typing import TYPE_CHECKING, Any, Optional
 
-from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
-from sglang.srt.observability.scheduler_metrics_mixin import (  # noqa: F401
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.observability.scheduler_metrics_mixin import (
     SchedulerMetricsMixin,
 )
 
 if TYPE_CHECKING:
-    from sglang.srt.managers.scheduler import Scheduler  # noqa: F401
+    from sglang.srt.managers.scheduler import Scheduler
 
 
 logger = logging.getLogger(__name__)

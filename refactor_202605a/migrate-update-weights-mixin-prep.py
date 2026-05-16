@@ -71,10 +71,10 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-WEIGHT_UPDATER_HEADER = '''from __future__ import annotations  # noqa: F401
+WEIGHT_UPDATER_HEADER = '''from __future__ import annotations
 
-from dataclasses import dataclass, field  # noqa: F401
-from typing import Any, Callable, Optional  # noqa: F401
+from dataclasses import dataclass, field
+from typing import Any, Callable, Optional
 
 
 @dataclass(kw_only=True, slots=True)

@@ -104,26 +104,26 @@ METHODS = [
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
+from __future__ import annotations
 
-import logging  # noqa: F401
+import logging
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING, List, Union  # noqa: F401
+from typing import Any, TYPE_CHECKING, List, Union
 
-import torch  # noqa: F401
+import torch
 
-from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
-from sglang.srt.environ import envs  # noqa: F401
-from sglang.srt.layers.logits_processor import LogitsProcessorOutput  # noqa: F401
-from sglang.srt.managers.io_struct import AbortReq  # noqa: F401
-from sglang.srt.managers.schedule_batch import Req, ScheduleBatch  # noqa: F401
-from sglang.srt.mem_cache.common import maybe_cache_unfinished_req, release_kv_cache  # noqa: F401
-from sglang.srt.server_args import get_global_server_args  # noqa: F401
-from sglang.srt.state_capturer.indexer_topk import get_global_indexer_capturer  # noqa: F401
-from sglang.srt.state_capturer.routed_experts import get_global_experts_capturer  # noqa: F401
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.environ import envs
+from sglang.srt.layers.logits_processor import LogitsProcessorOutput
+from sglang.srt.managers.io_struct import AbortReq
+from sglang.srt.managers.schedule_batch import Req, ScheduleBatch
+from sglang.srt.mem_cache.common import maybe_cache_unfinished_req, release_kv_cache
+from sglang.srt.server_args import get_global_server_args
+from sglang.srt.state_capturer.indexer_topk import get_global_indexer_capturer
+from sglang.srt.state_capturer.routed_experts import get_global_experts_capturer
 
 if TYPE_CHECKING:
-    from sglang.srt.managers.scheduler import (  # noqa: F401
+    from sglang.srt.managers.scheduler import (
         EmbeddingBatchResult,
         GenerationBatchResult,
     )

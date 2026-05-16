@@ -108,16 +108,16 @@ INLINE_CALLER_REPLACEMENT = """\
 
 
 KVCACHE_HEADER_INSERT = """\
-from dataclasses import dataclass  # noqa: F401
-from typing import Optional  # noqa: F401
+from dataclasses import dataclass
+from typing import Optional
 
-from sglang.srt.configs.model_config import ModelImpl  # noqa: F401
-from sglang.srt.environ import envs  # noqa: F401
-from sglang.srt.model_loader.utils import get_resolved_model_impl  # noqa: F401
-from sglang.srt.managers.mm_utils import init_mm_embedding_cache  # noqa: F401
-from sglang.srt.mem_cache.cache_init_params import CacheInitParams  # noqa: F401
-from sglang.srt.mem_cache.radix_cache import RadixCache  # noqa: F401
-from sglang.srt.session.streaming_session import StreamingSession  # noqa: F401
+from sglang.srt.configs.model_config import ModelImpl
+from sglang.srt.environ import envs
+from sglang.srt.model_loader.utils import get_resolved_model_impl
+from sglang.srt.managers.mm_utils import init_mm_embedding_cache
+from sglang.srt.mem_cache.cache_init_params import CacheInitParams
+from sglang.srt.mem_cache.radix_cache import RadixCache
+from sglang.srt.session.streaming_session import StreamingSession
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

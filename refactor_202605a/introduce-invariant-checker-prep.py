@@ -89,20 +89,20 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
+from __future__ import annotations
 
-import logging  # noqa: F401
-import warnings  # noqa: F401
+import logging
+import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING  # noqa: F401
+from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING
 
-from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
-from sglang.srt.environ import envs  # noqa: F401
-from sglang.srt.managers.scheduler_components.pool_stats_observer import (  # noqa: F401
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.environ import envs
+from sglang.srt.managers.scheduler_components.pool_stats_observer import (
     PoolStats,
     SchedulerPoolStatsObserver,
 )
-from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401
+from sglang.srt.utils.common import ceil_align, raise_error_or_warn
 
 
 logger = logging.getLogger(__name__)

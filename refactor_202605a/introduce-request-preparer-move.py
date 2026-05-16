@@ -37,7 +37,7 @@ EXTRA_IMPORTS = '''import logging
 from typing import Any, Union
 
 from sglang.srt.environ import envs
-from sglang.srt.managers.embed_types import PositionalEmbeds  # noqa: F401
+from sglang.srt.managers.embed_types import PositionalEmbeds
 from sglang.srt.managers.io_struct import (
     EmbeddingReqInput,
     GenerateReqInput,

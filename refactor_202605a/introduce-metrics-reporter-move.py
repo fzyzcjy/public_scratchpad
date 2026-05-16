@@ -253,7 +253,7 @@ def transform(wt: Path) -> None:
     #    method bodies need.
     target_text = target.read_text()
     target_text = target_text.replace(
-        "from sglang.srt.observability.scheduler_metrics_mixin import (  # noqa: F401\n"
+        "from sglang.srt.observability.scheduler_metrics_mixin import (\n"
         "    SchedulerMetricsMixin,\n"
         ")\n",
         "",
@@ -262,12 +262,12 @@ def transform(wt: Path) -> None:
     # existing import set). Inserted after the existing
     # ``from sglang.srt.disaggregation.utils import DisaggregationMode`` line.
     target_text = target_text.replace(
-        "from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401\n",
+        "from sglang.srt.disaggregation.utils import DisaggregationMode\n",
         "import dataclasses\n"
         "import tempfile\n"
         "import time\n"
         "from collections import defaultdict\n"
-        "from typing import List, Tuple, Union  # noqa: F401\n"
+        "from typing import List, Tuple, Union\n"
         "\n"
         "from sglang.srt.disaggregation.utils import DisaggregationMode\n"
         "from sglang.srt.environ import envs\n"
@@ -287,11 +287,11 @@ def transform(wt: Path) -> None:
     # EmbeddingBatchResult) alongside the existing Scheduler import.
     target_text = target_text.replace(
         "if TYPE_CHECKING:\n"
-        "    from sglang.srt.managers.scheduler import Scheduler  # noqa: F401\n",
+        "    from sglang.srt.managers.scheduler import Scheduler\n",
         "if TYPE_CHECKING:\n"
         "    from sglang.srt.managers.schedule_batch import Req\n"
         "    from sglang.srt.managers.schedule_policy import PrefillAdder\n"
-        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult, Scheduler  # noqa: F401\n",
+        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult, Scheduler\n",
     )
     target.write_text(target_text)
 

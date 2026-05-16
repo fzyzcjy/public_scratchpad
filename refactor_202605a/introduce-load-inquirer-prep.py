@@ -70,15 +70,15 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 TARGET_FILE_HEADER = '''\
-from __future__ import annotations  # noqa: F401
+from __future__ import annotations
 
-import logging  # noqa: F401
-import time  # noqa: F401
+import logging
+import time
 from dataclasses import dataclass
-from typing import Any, Callable, Optional  # noqa: F401
+from typing import Any, Callable, Optional
 
-from sglang.srt.disaggregation.utils import DisaggregationMode  # noqa: F401
-from sglang.srt.managers.io_struct import (  # noqa: F401
+from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.managers.io_struct import (
     DisaggregationMetrics,
     GetLoadsReqInput,
     GetLoadsReqOutput,

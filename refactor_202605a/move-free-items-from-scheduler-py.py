@@ -105,13 +105,13 @@ def _move_embedding_batch_result(wt: Path) -> None:
     text = replace_call_site(
         text,
         old=(
-            "    from sglang.srt.managers.scheduler import (  # noqa: F401\n"
+            "    from sglang.srt.managers.scheduler import (\n"
             "        EmbeddingBatchResult,\n"
             "        GenerationBatchResult,\n"
             "    )\n"
         ),
         new=(
-            "    from sglang.srt.managers.utils import (  # noqa: F401\n"
+            "    from sglang.srt.managers.utils import (\n"
             "        EmbeddingBatchResult,\n"
             "        GenerationBatchResult,\n"
             "    )\n"
@@ -125,14 +125,14 @@ def _move_embedding_batch_result(wt: Path) -> None:
     text = replace_call_site(
         text,
         old=(
-            "    from sglang.srt.managers.scheduler import (  # noqa: F401\n"
+            "    from sglang.srt.managers.scheduler import (\n"
             "        EmbeddingBatchResult,\n"
             "        Scheduler,\n"
             "    )\n"
         ),
         new=(
-            "    from sglang.srt.managers.scheduler import Scheduler  # noqa: F401\n"
-            "    from sglang.srt.managers.utils import (  # noqa: F401\n"
+            "    from sglang.srt.managers.scheduler import Scheduler\n"
+            "    from sglang.srt.managers.utils import (\n"
             "        EmbeddingBatchResult,\n"
             "    )\n"
         ),
@@ -186,9 +186,9 @@ def _move_create_scheduler_watchdog(wt: Path) -> None:
     text = invariant_checker.read_text()
     text = replace_call_site(
         text,
-        old="from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401\n",
+        old="from sglang.srt.utils.common import ceil_align, raise_error_or_warn\n",
         new=(
-            "from sglang.srt.utils.common import ceil_align, raise_error_or_warn  # noqa: F401\n"
+            "from sglang.srt.utils.common import ceil_align, raise_error_or_warn\n"
             "from sglang.srt.utils.watchdog import WatchdogRaw\n"
         ),
     )
@@ -200,7 +200,7 @@ def _move_create_scheduler_watchdog(wt: Path) -> None:
             old="logger = logging.getLogger(__name__)\n",
             new=(
                 "if TYPE_CHECKING:\n"
-                "    from sglang.srt.managers.scheduler import Scheduler  # noqa: F401\n\n"
+                "    from sglang.srt.managers.scheduler import Scheduler\n\n"
                 "logger = logging.getLogger(__name__)\n"
             ),
         )
