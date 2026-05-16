@@ -177,17 +177,11 @@ SCHEDULER_INIT_INSERT = """\
             metrics_collector=self.metrics_collector,
             draft_worker=self.draft_worker,
             model_worker=self.model_worker,
-            # logprob_result_processor is owned by batch_result_processor
-            # (it's a sub-component, only consumed inside this class — there's
-            # no other Scheduler-side caller). Inline-construct here; drop the
-            # Scheduler-side ``self.logprob_result_processor`` field below.
             logprob_result_processor=SchedulerLogprobResultProcessor(
                 server_args=self.server_args, model_config=self.model_config
             ),
             output_streamer=self.output_streamer,
             abort_request=self.abort_request,
-            # Wrapped in lambdas so they resolve ``self.metrics_reporter``
-            # lazily.
             report_prefill_stats=lambda *a, **k: self.metrics_reporter.report_prefill_stats(*a, **k),
             report_decode_stats=lambda *a, **k: self.metrics_reporter.report_decode_stats(*a, **k),
             update_spec_metrics=lambda *a, **k: self.metrics_reporter.update_spec_metrics(*a, **k),
