@@ -53,6 +53,12 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 HEADER = '''from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sglang.srt.server_args import ServerArgs
+    from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
+
 
 '''
 
