@@ -56,6 +56,12 @@ HEADER = '''from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from torch.distributed import ProcessGroup
+
+    from sglang.srt.configs.model_config import ModelConfig
+    from sglang.srt.distributed.parallel_state import GroupCoordinator
+    from sglang.srt.distributed.parallel_state_wrapper import ParallelState
+    from sglang.srt.managers.tp_worker import BaseTpWorker
     from sglang.srt.server_args import ServerArgs
     from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 
