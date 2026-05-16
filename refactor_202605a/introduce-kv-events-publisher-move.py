@@ -36,9 +36,9 @@ Drop ``@staticmethod`` decorators; simplify
 Method bodies otherwise byte-identical.
 
 Callers updated (pure prefix transformation):
-- 2 in metrics mixin (``report_prefill_stats`` / ``report_decode_stats``)
-- 1 in mixin ``init_metrics`` (``init_kv_events`` call)
-- 1 in scheduler.py ``on_idle`` (``publish_kv_events`` call)
+- metrics mixin (``report_prefill_stats`` / ``report_decode_stats``)
+- mixin ``init_metrics`` (``init_kv_events`` call)
+- ``scheduler.py`` ``on_idle`` (``publish_kv_events`` call)
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
@@ -63,7 +63,7 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
 
-    # Cut 3 methods (bottom-up so earlier line offsets stay valid).
+    # Cut the methods (bottom-up so earlier line offsets stay valid).
     method_blocks = []
     for name in ["publish_kv_events", "emit_kv_metrics", "init_kv_events"]:
         s, e = find_method_lines(
