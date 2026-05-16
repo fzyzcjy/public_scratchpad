@@ -46,20 +46,19 @@ Inplace prep for the ``introduce-load-inquirer`` mech move.
   ``self: "SchedulerLoadInquirer"`` type annotation. Body reads of
   runtime-mutable Scheduler state are rewritten to call
   ``self.get_X()`` Callable getters.
-- Callers (RPC dispatch tuple in ``init_request_dispatcher``, 1 call
+- Callers (RPC dispatch tuple in ``init_request_dispatcher``, call
   in ``scheduler_output_processor_mixin.stream_output_generation``,
-  and 1 ``_get_num_pending_tokens`` caller in
+  and the ``_get_num_pending_tokens`` caller in
   ``_get_new_batch_prefill_raw``) rewritten to call through
   ``self.load_inquirer``.
 
 Pragmatic deviation (per doc): Callable injection
 (``get_running_batch`` / ``get_waiting_queue`` / ``get_stats`` /
-``get_chunked_req`` / 2 spec accumulators / 4 disagg queues) is kept in
-this prep commit (not pushed to R4 per-call kwarg add) so the
-``get_loads`` / ``_get_num_pending_tokens`` signatures stay stable and
-the upcoming ``-move`` commit is a true byte-equal cut + paste. This
-mirrors the Callable injection pattern used by
-``SchedulerMetricsReporter`` in C14.
+``get_chunked_req`` / spec accumulators / disagg queues) is kept in this
+prep commit (not pushed to per-call kwarg add) so the ``get_loads`` /
+``_get_num_pending_tokens`` signatures stay stable and the upcoming
+``-move`` commit is a true byte-equal cut + paste. This mirrors the
+Callable injection pattern used by ``SchedulerMetricsReporter``.
 
 The methods stay inside ``SchedulerMetricsMixin`` in this commit;
 physical cut + paste to ``SchedulerLoadInquirer`` body happens in
