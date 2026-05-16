@@ -153,12 +153,23 @@ def transform(wt: Path) -> None:
     target_text = target_text.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
 
     # 4. Splice the supporting module-level prelude into the target file.
-    anchor = "from typing import Any, Callable, Optional\n"
-    if anchor not in target_text:
-        raise RuntimeError(f"prelude-splice anchor not found: {anchor!r}")
+    import re
+
+    needed_typing = {"Any", "Callable", "Optional"}
+    match = re.search(r"^from typing import [^\n]+\n", target_text, re.MULTILINE)
+    if not match:
+        raise RuntimeError("typing import line not found in target file")
+    current_line = match.group(0)
+    current_names = set(
+        n.strip()
+        for n in current_line.removeprefix("from typing import ").rstrip("\n").split(",")
+    )
+    merged_names = sorted(current_names | needed_typing)
+    new_line = "from typing import " + ", ".join(merged_names) + "\n"
+    target_text = target_text.replace(current_line, new_line, 1)
     target_text = target_text.replace(
-        anchor,
-        anchor + "\n" + TARGET_PRELUDE_NEW_IMPORTS,
+        new_line,
+        new_line + "\n" + TARGET_PRELUDE_NEW_IMPORTS,
         1,
     )
 
