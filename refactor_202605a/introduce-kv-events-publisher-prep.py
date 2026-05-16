@@ -44,19 +44,19 @@ Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 - Instantiate ``self.kv_events_publisher = SchedulerKvEventsPublisher(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``,
   passing ``get_stats=lambda: self.stats``.
-- In ``SchedulerMetricsMixin``, convert 3 methods (``init_kv_events`` /
-  ``emit_kv_metrics`` / ``publish_kv_events``) to ``@staticmethod`` with
+- In ``SchedulerMetricsMixin``, convert ``init_kv_events`` /
+  ``emit_kv_metrics`` / ``publish_kv_events`` to ``@staticmethod`` with
   ``self: "SchedulerKvEventsPublisher"`` type annotation.
 - ``emit_kv_metrics`` body rewrites ``self.stats.X`` reads as
   ``self.get_stats().X`` Callable-getter calls. Otherwise unchanged.
 - Callers in the metrics mixin and in scheduler.py ``on_idle`` are
   rewritten to ``self.<method>(self.kv_events_publisher, ...)``.
 
-The 3 methods stay inside ``SchedulerMetricsMixin`` in this commit;
-physical cut + paste to ``SchedulerKvEventsPublisher`` body happens in
-``introduce-kv-events-publisher-move``.
+The converted methods stay inside ``SchedulerMetricsMixin`` in this
+commit; physical cut + paste to ``SchedulerKvEventsPublisher`` body
+happens in ``introduce-kv-events-publisher-move``.
 
-Block-move audit (2026-05-11): the audit flagged inlining the
+On the block-move audit: the audit flagged inlining the
 ``init_kv_events`` body into ``SchedulerKvEventsPublisher.__init__`` as
 a "block-move candidate" that might be extractable into a ``-pre-prep``
 commit. On review, this is not separable: the destination
