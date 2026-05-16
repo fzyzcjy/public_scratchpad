@@ -253,3 +253,458 @@ def dedent_method_to_function(method_text: str) -> str:
         else:
             out.append(line)
     return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Import-injection helpers (Option C).
+#
+# Mech-prep commits write the methods/dataclasses into the target file's
+# skeleton with only the imports the skeleton itself needs. Then sglang's
+# pre-commit ruff (`--select=F401,F821 --fix`) strips any unused imports.
+# When the corresponding mech-move commit splices the method *bodies* in,
+# those bodies reference names that were never imported into the target
+# (because the prep skeleton didn't reference them, so ruff removed them).
+#
+# Option C: every mech-move script that splices method bodies into a new
+# target file calls ``ensure_imports`` (or feeds ``compute_required_imports``
+# from the source file's import header) so the names the bodies use are
+# imported either at runtime or inside ``if TYPE_CHECKING:``.
+# ---------------------------------------------------------------------------
+
+
+_ImportSpec = dict[str, str | tuple[str, ...] | list[str]]
+
+
+def _normalize_imports(spec: _ImportSpec | None) -> dict[str, tuple[str, ...]]:
+    if not spec:
+        return {}
+    out: dict[str, tuple[str, ...]] = {}
+    for module, names in spec.items():
+        if isinstance(names, str):
+            normalized = (names,)
+        else:
+            normalized = tuple(names)
+        if not normalized:
+            continue
+        out[module] = normalized
+    return out
+
+
+def _parse_grouped_import_block(text: str, start: int) -> tuple[int, list[str]]:
+    """Parse a multi-line ``from X import (\\n    A,\\n    B,\\n)`` block starting at ``start``.
+
+    Returns ``(end_index_after_closing_paren_newline, names)``.
+    """
+    end = text.index(")", start) + 1
+    if end < len(text) and text[end] == "\n":
+        end += 1
+    block = text[start:end]
+    names: list[str] = []
+    for line in block.splitlines():
+        s = line.strip().rstrip(",")
+        if not s or s.startswith("from ") or s == "(" or s == ")":
+            continue
+        if s.endswith("import (") or s.endswith("import("):
+            continue
+        names.append(s)
+    return end, names
+
+
+def _format_grouped_import(module: str, names: tuple[str, ...]) -> str:
+    sorted_names = sorted(set(names))
+    if len(sorted_names) == 1:
+        return f"from {module} import {sorted_names[0]}\n"
+    body = "".join(f"    {n},\n" for n in sorted_names)
+    return f"from {module} import (\n{body})\n"
+
+
+def _merge_import_into_text(
+    text: str,
+    *,
+    module: str,
+    names: tuple[str, ...],
+    inside_type_checking: bool,
+) -> str:
+    """Insert/merge a ``from <module> import ...`` statement into ``text``.
+
+    If ``inside_type_checking`` is True, the import is placed inside the
+    ``if TYPE_CHECKING:`` block (created if absent). Otherwise it goes
+    at module scope below the last existing import line.
+    """
+    import re
+
+    if inside_type_checking:
+        # Find ``if TYPE_CHECKING:`` block. The block contents are exactly
+        # the consecutive indented lines after the header.
+        tc_match = re.search(r"^if TYPE_CHECKING:\n", text, re.MULTILINE)
+        if tc_match is None:
+            # Create a new block right before ``logger = `` if present,
+            # else at the end of module-level imports.
+            new_block = (
+                "if TYPE_CHECKING:\n"
+                + _indent_grouped_import(module, names)
+                + "\n"
+            )
+            return _insert_at_module_scope(text, new_block)
+        body_start = tc_match.end()
+        # Walk forward over indented (4-space) lines, blank lines that
+        # sit between indented lines, and "    pass" placeholders.
+        i = body_start
+        last_body_end = body_start
+        while i < len(text):
+            line_end = text.find("\n", i)
+            if line_end == -1:
+                line_end = len(text)
+            line = text[i:line_end]
+            if line.startswith("    ") or (line == "" and i < len(text) - 1 and text[line_end + 1 : line_end + 5] == "    "):
+                last_body_end = line_end + 1
+                i = line_end + 1
+                continue
+            break
+        body = text[body_start:last_body_end]
+        # If body is just ``    pass\n`` (with optional blank line), replace it.
+        stripped_body_lines = [ln for ln in body.splitlines() if ln.strip()]
+        existing_block_idx_start = body_start
+        # Look for existing ``from <module> import ...`` inside this block.
+        existing_pattern = re.compile(
+            rf"^(    from {re.escape(module)} import [^\n(]+\n)",
+            re.MULTILINE,
+        )
+        existing_grouped_pattern = re.compile(
+            rf"^    from {re.escape(module)} import \(\n",
+            re.MULTILINE,
+        )
+        block_text = text[existing_block_idx_start:last_body_end]
+        m = existing_pattern.search(block_text)
+        m_grouped = existing_grouped_pattern.search(block_text)
+        if m_grouped is not None:
+            # Merge into existing grouped block.
+            grouped_start = existing_block_idx_start + m_grouped.start()
+            grouped_end, existing_names = _parse_grouped_import_block(text, grouped_start)
+            merged = tuple(sorted(set(existing_names) | set(names)))
+            new_grouped = "".join(
+                "    " + ln if ln.strip() else ln
+                for ln in _format_grouped_import(module, merged).splitlines(keepends=True)
+            )
+            return text[:grouped_start] + new_grouped + text[grouped_end:]
+        if m is not None:
+            # Merge into existing single-line ``from X import a, b``.
+            line_start = existing_block_idx_start + m.start()
+            line_end = existing_block_idx_start + m.end()
+            existing_line = text[line_start:line_end]
+            existing_names = [
+                n.strip()
+                for n in existing_line.strip().removeprefix("from ").split(" import ", 1)[1].rstrip(",").split(",")
+                if n.strip()
+            ]
+            merged = tuple(sorted(set(existing_names) | set(names)))
+            new_line = "    " + _format_grouped_import(module, merged)
+            new_line = new_line.replace("\n    ", "\n    ")
+            # Re-indent each line of the formatted import by 4 spaces.
+            new_block_lines = []
+            for ln in _format_grouped_import(module, merged).splitlines(keepends=True):
+                new_block_lines.append("    " + ln if ln.strip() else ln)
+            return text[:line_start] + "".join(new_block_lines) + text[line_end:]
+        # No existing import for this module — append a new line inside the block.
+        # Strip a sole ``    pass`` placeholder if present.
+        new_indented = "".join(
+            "    " + ln if ln.strip() else ln
+            for ln in _format_grouped_import(module, names).splitlines(keepends=True)
+        )
+        if stripped_body_lines == ["    pass"]:
+            # Replace the entire body (including its blank trailing line if any).
+            return text[:body_start] + new_indented + text[last_body_end:]
+        return text[:last_body_end] + new_indented + text[last_body_end:]
+
+    # Runtime import (module scope, outside any TYPE_CHECKING block).
+    grouped_pat = re.compile(
+        rf"^from {re.escape(module)} import \(\n", re.MULTILINE
+    )
+    m_grouped = grouped_pat.search(text)
+    if m_grouped is not None:
+        grouped_start = m_grouped.start()
+        grouped_end, existing_names = _parse_grouped_import_block(text, grouped_start)
+        merged = tuple(sorted(set(existing_names) | set(names)))
+        new_grouped = _format_grouped_import(module, merged)
+        return text[:grouped_start] + new_grouped + text[grouped_end:]
+    single_pat = re.compile(
+        rf"^from {re.escape(module)} import (?!\()([^\n]+)\n", re.MULTILINE
+    )
+    m_single = single_pat.search(text)
+    if m_single is not None:
+        existing_names = [n.strip() for n in m_single.group(1).split(",") if n.strip()]
+        merged = tuple(sorted(set(existing_names) | set(names)))
+        new_line = _format_grouped_import(module, merged)
+        return text[: m_single.start()] + new_line + text[m_single.end() :]
+    # No existing import — insert a fresh ``from X import ...`` line at
+    # module scope below the last import.
+    new_line = _format_grouped_import(module, names)
+    return _insert_at_module_scope(text, new_line)
+
+
+def _indent_grouped_import(module: str, names: tuple[str, ...]) -> str:
+    return "".join(
+        "    " + ln if ln.strip() else ln
+        for ln in _format_grouped_import(module, names).splitlines(keepends=True)
+    )
+
+
+def _insert_at_module_scope(text: str, snippet: str) -> str:
+    """Insert ``snippet`` after the last module-level ``from``/``import`` line.
+
+    Falls back to placing it just before the first non-import statement,
+    or at the top of the file (after ``from __future__`` and the module
+    docstring) if there are no imports.
+    """
+    import re
+
+    last_import_end = 0
+    # Find a clean module-level import line — not indented, starts with
+    # ``import `` or ``from ... import``.
+    pat = re.compile(
+        r"^(?:from\s+[\w.]+\s+import\s*\([^)]*\)\n|from\s+[\w.]+\s+import\s+[^\n]+\n|import\s+[^\n]+\n)",
+        re.MULTILINE,
+    )
+    for m in pat.finditer(text):
+        # Skip imports that sit inside an indented block — pat is MULTILINE
+        # but ``^`` anchors to a non-indented start, so this is already safe.
+        last_import_end = m.end()
+    if last_import_end == 0:
+        # No imports — place after the module docstring / __future__ if present.
+        return snippet + text
+    return text[:last_import_end] + snippet + text[last_import_end:]
+
+
+def ensure_imports(
+    text: str,
+    *,
+    runtime: _ImportSpec | None = None,
+    type_checking: _ImportSpec | None = None,
+) -> str:
+    """Ensure the given imports are present in ``text``.
+
+    Args:
+      text: file contents.
+      runtime: ``{module: name | (names, ...)}`` — imports placed at module
+        scope (real runtime imports).
+      type_checking: ``{module: name | (names, ...)}`` — imports placed
+        inside the ``if TYPE_CHECKING:`` block (created if absent).
+
+    Behavior:
+      * If a ``from <module> import ...`` already exists in the matching
+        scope, merge the new names (sorted, deduped, grouped on >=2 names).
+      * Otherwise insert a fresh import line in the matching scope.
+      * Existing imports are never removed; only added.
+      * If type_checking is provided and the file has no ``if TYPE_CHECKING:``
+        block, a new one is created at module-scope below the existing imports.
+    """
+    runtime_norm = _normalize_imports(runtime)
+    tc_norm = _normalize_imports(type_checking)
+
+    if tc_norm and "TYPE_CHECKING" not in text:
+        # Need to ensure TYPE_CHECKING itself is imported from typing.
+        text = ensure_imports(
+            text, runtime={"typing": ("TYPE_CHECKING",)}
+        )
+
+    for module, names in runtime_norm.items():
+        text = _merge_import_into_text(
+            text, module=module, names=names, inside_type_checking=False
+        )
+    for module, names in tc_norm.items():
+        text = _merge_import_into_text(
+            text, module=module, names=names, inside_type_checking=True
+        )
+    return text
+
+
+def _collect_referenced_names(method_blocks: list[str]) -> set[str]:
+    """Walk the AST of each block; return the set of Name node ids referenced."""
+    names: set[str] = set()
+    for block in method_blocks:
+        # Methods are indented; dedent before parsing standalone.
+        dedented = dedent_method_to_function(block)
+        try:
+            tree = ast.parse(dedented)
+        except SyntaxError:
+            # Some blocks are dataclass bodies / multi-statement spans —
+            # wrap them as a class body for parsability.
+            try:
+                tree = ast.parse("class _T:\n" + "".join(
+                    "    " + ln for ln in block.splitlines(keepends=True)
+                ))
+            except SyntaxError:
+                continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                # The base of an attribute chain is the only Name we care about;
+                # walk picks it up via the Name node, so nothing extra to do.
+                pass
+    return names
+
+
+def _module_import_map(source_text: str) -> tuple[dict[str, tuple[str, str]], set[str]]:
+    """Parse ``source_text``; return (name → (module, kind), tc_only_names).
+
+    ``kind`` is one of:
+      * ``"from"`` — ``from <module> import <name>``
+      * ``"import"`` — ``import <module>`` (name == module's leaf)
+      * ``"import_as"`` — ``import <module> as <name>``
+
+    ``tc_only_names`` is the subset of names that appeared only inside an
+    ``if TYPE_CHECKING:`` block.
+    """
+    tree = ast.parse(source_text)
+    name_map: dict[str, tuple[str, str]] = {}
+    tc_only: set[str] = set()
+
+    def _collect(nodes, *, inside_tc: bool) -> None:
+        for node in nodes:
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                for alias in node.names:
+                    name = alias.asname or alias.name
+                    key = name
+                    if alias.name == "*":
+                        continue
+                    name_map[key] = (module, "from")
+                    if inside_tc:
+                        tc_only.add(key)
+                    elif key in tc_only:
+                        tc_only.discard(key)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.asname:
+                        name_map[alias.asname] = (alias.name, "import_as")
+                        if inside_tc:
+                            tc_only.add(alias.asname)
+                        elif alias.asname in tc_only:
+                            tc_only.discard(alias.asname)
+                    else:
+                        leaf = alias.name.split(".")[0]
+                        name_map[leaf] = (alias.name, "import")
+                        if inside_tc:
+                            tc_only.add(leaf)
+                        elif leaf in tc_only:
+                            tc_only.discard(leaf)
+            elif isinstance(node, ast.If):
+                cond = node.test
+                is_tc = (
+                    isinstance(cond, ast.Name) and cond.id == "TYPE_CHECKING"
+                )
+                _collect(node.body, inside_tc=inside_tc or is_tc)
+                _collect(node.orelse, inside_tc=inside_tc)
+
+    _collect(tree.body, inside_tc=False)
+    return name_map, tc_only
+
+
+def compute_required_imports(
+    source_text: str,
+    method_blocks: list[str],
+    *,
+    target_text: str | None = None,
+    extra_names: list[str] | None = None,
+) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]:
+    """Derive (runtime_imports, type_checking_imports) needed by ``method_blocks``.
+
+    Args:
+      source_text: full text of the file the methods were cut from. Its
+        module-level (and TYPE_CHECKING) imports define name → module
+        mapping.
+      method_blocks: list of method-body texts (as ``cut_lines`` returns).
+      target_text: optional. If given, names already imported in the
+        target are dropped from the returned dicts (avoids redundant
+        merges).
+      extra_names: additional names to look up (e.g. names that appear
+        only in dataclass body / decorator arg lists that the AST walk
+        might miss).
+
+    Returns ``(runtime_dict, tc_dict)`` suitable for ``ensure_imports``.
+
+    Names with no matching import in ``source_text`` are silently skipped
+    (they may be locals / builtins / params).
+    """
+    name_map, tc_only = _module_import_map(source_text)
+    referenced = _collect_referenced_names(method_blocks)
+    if extra_names:
+        referenced.update(extra_names)
+
+    already_imported: set[str] = set()
+    if target_text is not None:
+        target_map, _ = _module_import_map(target_text)
+        already_imported = set(target_map.keys())
+
+    runtime: dict[str, list[str]] = {}
+    tc: dict[str, list[str]] = {}
+    for name in sorted(referenced):
+        if name in already_imported:
+            continue
+        if name not in name_map:
+            continue
+        module, kind = name_map[name]
+        if kind != "from":
+            # Bare ``import X`` or ``import X as Y`` — let it fall through
+            # via a single-name from-import is wrong; instead inject the
+            # raw import statement. We model this by inserting under a
+            # synthetic module key prefixed with ``__import__:`` so the
+            # caller / helper can special-case it. For simplicity here we
+            # treat ``import torch`` as ``from <empty> import torch`` which
+            # is wrong; instead skip and surface via a separate dict.
+            continue
+        bucket = tc if name in tc_only else runtime
+        bucket.setdefault(module, []).append(name)
+
+    runtime_out = {k: tuple(sorted(set(v))) for k, v in runtime.items()}
+    tc_out = {k: tuple(sorted(set(v))) for k, v in tc.items()}
+    return runtime_out, tc_out
+
+
+def collect_required_bare_imports(
+    source_text: str,
+    method_blocks: list[str],
+    *,
+    target_text: str | None = None,
+) -> list[str]:
+    """Return raw ``import X`` / ``import X as Y`` statements that ``method_blocks`` need.
+
+    Complementary to ``compute_required_imports`` (which only handles
+    ``from X import ...`` form). Returns each missing statement with a
+    trailing newline; caller decides where to splice them in.
+    """
+    name_map, _ = _module_import_map(source_text)
+    referenced = _collect_referenced_names(method_blocks)
+
+    already_imported: set[str] = set()
+    if target_text is not None:
+        target_map, _ = _module_import_map(target_text)
+        already_imported = set(target_map.keys())
+
+    out: list[str] = []
+    for name in sorted(referenced):
+        if name in already_imported:
+            continue
+        if name not in name_map:
+            continue
+        module, kind = name_map[name]
+        if kind == "import":
+            out.append(f"import {module}\n")
+        elif kind == "import_as":
+            out.append(f"import {module} as {name}\n")
+    return out
+
+
+def ensure_bare_imports(text: str, statements: list[str]) -> str:
+    """Ensure each ``import X`` statement in ``statements`` exists in ``text``.
+
+    Inserts missing statements at module-scope below the last import.
+    Existing identical lines are skipped.
+    """
+    out = text
+    for stmt in statements:
+        if stmt in out:
+            continue
+        out = _insert_at_module_scope(out, stmt)
+    return out
