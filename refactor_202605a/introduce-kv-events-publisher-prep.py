@@ -49,8 +49,8 @@ Inplace prep for the ``introduce-kv-events-publisher`` mech move.
   ``self: "SchedulerKvEventsPublisher"`` type annotation.
 - ``emit_kv_metrics`` body rewrites ``self.stats.X`` reads as
   ``self.get_stats().X`` Callable-getter calls. Otherwise unchanged.
-- Callers (2 in metrics mixin, 1 in scheduler.py ``on_idle``) rewritten
-  to ``self.<method>(self.kv_events_publisher, ...)``.
+- Callers in the metrics mixin and in scheduler.py ``on_idle`` are
+  rewritten to ``self.<method>(self.kv_events_publisher, ...)``.
 
 The 3 methods stay inside ``SchedulerMetricsMixin`` in this commit;
 physical cut + paste to ``SchedulerKvEventsPublisher`` body happens in
@@ -83,8 +83,6 @@ from typing import Any, Callable, Optional  # noqa: F401
 from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch  # noqa: F401
 
 
-# ``SchedulerStats`` referenced only as a type hint in ``emit_kv_metrics`` —
-# leave a forward-ref placeholder.
 class SchedulerStats: ...  # type: ignore[no-redef]
 
 
