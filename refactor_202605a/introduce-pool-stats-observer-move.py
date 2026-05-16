@@ -42,10 +42,10 @@ All callers updated:
   ``self.<method>(self.pool_stats_observer, ...)`` →
   ``self.pool_stats_observer.<method>(...)``
 (pure prefix transformation):
-- ``scheduler.py``: 5 callsites.
-- ``scheduler_runtime_checker_mixin.py``: 7 callsites (incl.
+- ``scheduler.py`` callsites.
+- ``scheduler_runtime_checker_mixin.py`` callsites (incl.
   ``create_scheduler_watchdog`` ``scheduler.`` prefix).
-- ``observability/scheduler_metrics_mixin.py``: 5 callsites.
+- ``observability/scheduler_metrics_mixin.py`` callsites.
 
 The runtime_checker mixin file still hosts the 10 check methods +
 ``create_scheduler_watchdog``; those move in the next commit
