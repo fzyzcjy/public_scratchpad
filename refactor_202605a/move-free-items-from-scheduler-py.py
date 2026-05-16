@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mech move: relocate 6 module-level free items out of ``scheduler.py``.
+"""Mech move: relocate module-level free items out of ``scheduler.py``.
 
 The items are byte-identical-relocated; no rename, no signature change.
 
@@ -37,9 +37,9 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "move-free-items-from-scheduler-py"
-SUBJECT = "Move 6 module-level free items out of scheduler.py"
+SUBJECT = "Move module-level free items out of scheduler.py"
 BODY = """\
-Pure mechanical relocation of 6 module-level free items out of
+Pure mechanical relocation of module-level free items out of
 ``scheduler.py``. Each item is byte-identical-relocated; no rename, no
 signature change.
 
@@ -52,8 +52,7 @@ signature change.
 | ``is_health_check_generate_req`` | ``managers/utils.py`` (fixes reverse-import from ``tokenizer_manager``) |
 | ``SenderWrapper`` | ``scheduler_components/output_sender.py`` (new file) |
 
-Caller-site impact: only import-path rewrites. ``scheduler.py`` shrinks
-by ~200 lines net.
+Caller-site impact: only import-path rewrites.
 
 A follow-up commit (``cleanup-scheduler-py-free-items``) deletes the
 dead-code ``is_work_request`` function (zero callers codebase-wide).
