@@ -37,14 +37,17 @@ BODY = """\
 Cut ``_maybe_log_idle_metrics`` from ``SchedulerRuntimeCheckerMixin`` and
 paste it into ``SchedulerMetricsReporter`` body. Body reads of Scheduler
 state (``running_batch`` / ``waiting_queue`` / ``grammar_manager`` /
-``disaggregation_mode`` / 4 disagg queues / ``enable_priority_scheduling``)
+``disaggregation_mode`` / disagg queues / ``enable_priority_scheduling``)
 become ``self.scheduler.X``, matching the back-reference ctor introduced
-in the C14 prep commit. Pool-stats sibling reads (``self.get_pool_stats()``
-/ ``self._streaming_session_count()`` / ``self._session_held_tokens()``)
-are rewritten to the post-C9 form (``self.scheduler.pool_stats_observer.X()``).
+in the metrics-reporter prep commit. Pool-stats sibling reads
+(``self.get_pool_stats()`` / ``self._streaming_session_count()`` /
+``self._session_held_tokens()``) are rewritten to the
+pool-stats-observer form
+(``self.scheduler.pool_stats_observer.X()``).
 
 Single caller (in ``Scheduler.on_idle``, hoisted to the Scheduler main
-class by C8) is updated: ``self._maybe_log_idle_metrics()`` →
+class by the on-idle move commit) is updated:
+``self._maybe_log_idle_metrics()`` →
 ``self.metrics_reporter._maybe_log_idle_metrics()``.
 
 This is a pure relocation — no behavior change.

@@ -31,7 +31,7 @@ from _runner import run_pr
 ID = "init-mode-conditional-defaults"
 SUBJECT = "Pre-declare mode-conditional Scheduler fields with None defaults"
 BODY = """\
-Pre-declare six mode-conditional Scheduler fields with ``None`` /
+Pre-declare the mode-conditional Scheduler fields with ``None`` /
 ``False`` defaults at the top of ``Scheduler.__init__``:
 
 - ``self.mm_receiver`` — populated by ``init_disaggregation`` under mm mode
@@ -46,7 +46,7 @@ Pre-declare six mode-conditional Scheduler fields with ``None`` /
   ``getattr`` fallback.
 
 These fields are read eagerly by sister-component ctors that the next
-mech commits (C4 ``introduce-scheduler-request-receiver-prep`` onwards)
+mech commits (``introduce-scheduler-request-receiver-prep`` onwards)
 will introduce. Without this pre-init, those eager reads would either
 need ``getattr(self, "X", DEFAULT)`` defenses (violates
 ``coding-style.md``) or only-work-in-mode-X conditional logic. With this
