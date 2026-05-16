@@ -41,7 +41,7 @@ SUBJECT = "Hand metrics reporting over to SchedulerMetricsReporter (retire metri
 BODY = """\
 Mechanical cut + paste for the ``introduce-metrics-reporter`` mech move.
 
-Cut the 15 methods (all @staticmethod after prep) +
+Cut the methods (all @staticmethod after prep) +
 ``PrefillStats`` dataclass + module constants
 (``RECORD_STEP_TIME`` / ``LOG_FORWARD_ITERS`` /
 ``ENABLE_METRICS_DEVICE_TIMER``) from
@@ -75,7 +75,7 @@ All callers updated:
 - ``dllm/mixin/scheduler.py``: ``report_prefill_stats`` + PrefillStats
   import path rewrite.
 
-3 import-path rewrites (pure prefix replace):
+Import-path rewrites (pure prefix replace):
 - ``scheduler.py``: ``RECORD_STEP_TIME`` / ``PrefillStats`` import block
   moves from observability/scheduler_metrics_mixin → scheduler_components/metrics_reporter.
 - ``schedule_batch.py``: TYPE_CHECKING ``PrefillStats`` import.
