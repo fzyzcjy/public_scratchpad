@@ -29,11 +29,12 @@ BODY = """\
 Inplace prep for the ``introduce-scheduler-request-receiver`` mech move.
 
 - Create ``scheduler_components/request_receiver.py`` with an empty
-  ``SchedulerRequestReceiver`` class (16 collaborator/config fields + 1
-  ``stream_output`` Callable). No methods yet.
+  ``SchedulerRequestReceiver`` class (collaborator / config fields +
+  ``stream_output`` Callable, enumerated in the dataclass body below).
+  No methods yet.
 - Instantiate ``self.request_receiver = SchedulerRequestReceiver(...)`` in
   ``Scheduler.__init__`` just before ``self.is_initializing = False``.
-- In Scheduler, convert 3 methods (``recv_requests`` /
+- In Scheduler, convert the receiver methods (``recv_requests`` /
   ``recv_limit_reached`` / ``_split_work_and_control_reqs``) to
   ``@staticmethod`` with ``self: SchedulerRequestReceiver`` type annotation.
   Body bytes unchanged.
@@ -53,8 +54,8 @@ name, producing a runtime ``NameError`` mid-chain. The hoist and the
 signature redesign (R4 kwarg add) are semantically inseparable here, so
 both stay in this prep commit.
 
-The 3 methods stay inside Scheduler in this commit; physical cut + paste
-to ``SchedulerRequestReceiver`` body happens in
+The receiver methods stay inside Scheduler in this commit; physical cut +
+paste to ``SchedulerRequestReceiver`` body happens in
 ``introduce-scheduler-request-receiver-move``.
 """
 AREA = "mech_scheduler"
