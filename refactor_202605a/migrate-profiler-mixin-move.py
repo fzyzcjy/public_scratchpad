@@ -29,7 +29,7 @@ SUBJECT = "Hand profiler controls over to SchedulerProfilerManager"
 BODY = """\
 Mechanical cut + paste for the ``migrate-profiler-mixin`` mech move.
 
-Cut the 6 @staticmethods (``_init_profile`` / ``_start_profile`` /
+Cut the @staticmethods (``_init_profile`` / ``_start_profile`` /
 ``_merge_profile_traces`` / ``_stop_profile`` / ``_profile_batch_predicate``
 / ``_profile``) from ``scheduler_profiler_mixin.py`` and paste them into
 ``SchedulerProfilerManager`` class body in

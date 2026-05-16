@@ -42,17 +42,17 @@ Inplace prep for the ``migrate-profiler-mixin`` mech move.
   into ``SchedulerProfilerManager.__init__`` (byte-identical block
   move). Instantiate
   ``self.profiler_manager = SchedulerProfilerManager(...)`` in place.
-- In ``SchedulerProfilerMixin``, type-flip the 6 remaining methods to
+- In ``SchedulerProfilerMixin``, type-flip the remaining methods to
   ``@staticmethod`` with ``self: "SchedulerProfilerManager"``. Body
   ``self.forward_ct`` reads rewrite to ``self.get_forward_ct()``.
-- Update the 2 hot-path callers in ``scheduler.py`` to the
+- Update the hot-path callers in ``scheduler.py`` to the
   class-qualified ``self._profile_batch_predicate(self.profiler_manager,
   ...)`` / ``self._profile(self.profiler_manager, ...)`` form (prep
   cadence; move step collapses to ``self.profiler_manager.<method>``).
 
-The 6 methods stay inside ``SchedulerProfilerMixin`` in this commit;
-physical cut + paste to ``SchedulerProfilerManager`` body happens in
-``migrate-profiler-mixin-move``.
+The type-flipped methods stay inside ``SchedulerProfilerMixin`` in this
+commit; physical cut + paste to ``SchedulerProfilerManager`` body
+happens in ``migrate-profiler-mixin-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
