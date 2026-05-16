@@ -44,10 +44,10 @@ now in the same class). Method bodies otherwise byte-identical.
 All callers updated:
   ``self.<method>(self.invariant_checker, ...)`` →
   ``self.invariant_checker.<method>(...)``
-(pure prefix transformation). 5 callsites in ``scheduler.py``
+(pure prefix transformation). The callsites in ``scheduler.py``
 (``on_idle`` / ``_maybe_log_idle_metrics`` / ``run_batch`` /
-``event_loop_overlap``) + 1 callsite in ``create_scheduler_watchdog``
-(also in ``scheduler.py`` post-pre-prep).
+``event_loop_overlap``) plus the callsite in ``create_scheduler_watchdog``
+(also in ``scheduler.py`` post-pre-prep) are rewritten.
 
 Final cleanup:
 - Drop ``SchedulerRuntimeCheckerMixin`` from ``Scheduler``'s inheritance
