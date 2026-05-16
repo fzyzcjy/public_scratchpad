@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""Mech move: relocate module-level free items out of ``scheduler.py``.
-
-The items are byte-identical-relocated; no rename, no signature change.
-
-| # | Item | Target |
-|---|---|---|
-| 1 | ``EmbeddingBatchResult`` | ``managers/utils.py`` (next to ``GenerationBatchResult``) |
-| 2 | ``validate_dflash_request`` | ``speculative/dflash_utils.py`` |
-| 3 | ``create_scheduler_watchdog`` | ``scheduler_components/invariant_checker.py`` |
-| 4 | ``IdleSleeper`` | ``scheduler_components/idle_sleeper.py`` (new) |
-| 5 | ``is_health_check_generate_req`` | ``managers/utils.py`` (fixes ``tokenizer_manager`` reverse-import) |
-| 6 | ``SenderWrapper`` | ``scheduler_components/output_sender.py`` (new) |
-
-Body bytes preserved; only imports rewritten. Follow-up commit
-(``cleanup-scheduler-py-free-items``) deletes dead-code
-``is_work_request``.
-"""
-
 # /// script
 # requires-python = ">=3.10"
 # dependencies = ["typer"]

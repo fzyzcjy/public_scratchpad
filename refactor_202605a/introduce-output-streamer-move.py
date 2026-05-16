@@ -157,6 +157,39 @@ def transform(wt: Path) -> None:
                 pass  # not all methods called in every file
         f.write_text(ftext)
 
+    # Disagg queue classes hold ``self.scheduler`` back-reference, not
+    # ``self`` of Scheduler/mixin. Prep emitted transitional sister form
+    # ``self.scheduler.stream_output(self.scheduler.output_streamer, ...)``;
+    # collapse to ``self.scheduler.output_streamer.stream_output(...)``.
+    import re
+    for f in [
+        wt / "python/sglang/srt/disaggregation/prefill.py",
+        wt / "python/sglang/srt/disaggregation/decode.py",
+    ]:
+        ftext = f.read_text()
+        ftext = re.sub(
+            r"self\.scheduler\.stream_output\(\s*self\.scheduler\.output_streamer\s*,\s*",
+            "self.scheduler.output_streamer.stream_output(",
+            ftext,
+        )
+        ftext = re.sub(
+            r"self\.scheduler\.stream_output\(\s*self\.scheduler\.output_streamer\s*\)",
+            "self.scheduler.output_streamer.stream_output()",
+            ftext,
+        )
+        f.write_text(ftext)
+
+    # Scheduler receiver shim: prep wired
+    # ``stream_output=lambda *a, **kw: self.stream_output(self.output_streamer, *a, **kw)``;
+    # collapse to a direct method reference now that ``stream_output`` lives
+    # on the streamer.
+    text = sched.read_text()
+    text = text.replace(
+        "            stream_output=lambda *a, **kw: self.stream_output(self.output_streamer, *a, **kw),\n",
+        "            stream_output=self.output_streamer.stream_output,\n",
+    )
+    sched.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(

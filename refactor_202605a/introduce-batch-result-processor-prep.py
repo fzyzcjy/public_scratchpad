@@ -108,7 +108,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING, List, Union
+from typing import Any, Callable, TYPE_CHECKING, List, Union
 
 import torch
 
@@ -123,10 +123,26 @@ from sglang.srt.state_capturer.indexer_topk import get_global_indexer_capturer
 from sglang.srt.state_capturer.routed_experts import get_global_experts_capturer
 
 if TYPE_CHECKING:
+    from sglang.srt.configs.model_config import ModelConfig
     from sglang.srt.managers.scheduler import (
         EmbeddingBatchResult,
         GenerationBatchResult,
     )
+    from sglang.srt.managers.scheduler_components.logprob_result_processor import (
+        SchedulerLogprobResultProcessor,
+    )
+    from sglang.srt.managers.scheduler_components.metrics_reporter import (
+        SchedulerMetricsReporter,
+    )
+    from sglang.srt.managers.scheduler_components.output_streamer import (
+        SchedulerOutputStreamer,
+    )
+    from sglang.srt.managers.tp_worker import BaseTpWorker
+    from sglang.srt.mem_cache.allocator import BaseTokenToKVPoolAllocator
+    from sglang.srt.mem_cache.base_prefix_cache import BasePrefixCache
+    from sglang.srt.mem_cache.memory_pool import ReqToTokenPool
+    from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector
+    from sglang.srt.server_args import ServerArgs
 
 logger = logging.getLogger(__name__)
 
@@ -134,27 +150,23 @@ logger = logging.getLogger(__name__)
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerBatchResultProcessor:
     is_generation: bool
-    disaggregation_mode: Any
+    disaggregation_mode: "DisaggregationMode"
     enable_overlap: bool
     enable_overlap_mlx: bool
-    server_args: Any
-    model_config: Any
-    token_to_kv_pool_allocator: Any
-    tree_cache: Any
+    server_args: "ServerArgs"
+    model_config: "ModelConfig"
+    token_to_kv_pool_allocator: "BaseTokenToKVPoolAllocator"
+    tree_cache: "BasePrefixCache"
     hisparse_coordinator: Any
-    req_to_token_pool: Any
+    req_to_token_pool: "ReqToTokenPool"
     decode_offload_manager: Any
-    metrics_collector: Any
-    draft_worker: Any
-    model_worker: Any
-    logprob_result_processor: Any
-    output_streamer: Any
-    abort_request: Any
-    report_prefill_stats: Any
-    report_decode_stats: Any
-    update_spec_metrics: Any
-    increment_generated_tokens: Any
-    advance_forward_ct_decode: Any
+    metrics_collector: "SchedulerMetricsCollector"
+    metrics_reporter: "SchedulerMetricsReporter"
+    draft_worker: "BaseTpWorker"
+    model_worker: "BaseTpWorker"
+    logprob_result_processor: "SchedulerLogprobResultProcessor"
+    output_streamer: "SchedulerOutputStreamer"
+    abort_request: Callable
 '''
 
 
@@ -172,6 +184,7 @@ SCHEDULER_INIT_INSERT = """\
             req_to_token_pool=self.req_to_token_pool,
             decode_offload_manager=self.decode_offload_manager,
             metrics_collector=self.metrics_collector,
+            metrics_reporter=self.metrics_reporter,
             draft_worker=self.draft_worker,
             model_worker=self.model_worker,
             logprob_result_processor=SchedulerLogprobResultProcessor(
@@ -179,19 +192,6 @@ SCHEDULER_INIT_INSERT = """\
             ),
             output_streamer=self.output_streamer,
             abort_request=self.abort_request,
-            report_prefill_stats=lambda *a, **k: self.metrics_reporter.report_prefill_stats(*a, **k),
-            report_decode_stats=lambda *a, **k: self.metrics_reporter.report_decode_stats(*a, **k),
-            update_spec_metrics=lambda *a, **k: self.metrics_reporter.update_spec_metrics(*a, **k),
-            increment_generated_tokens=lambda n: setattr(
-                self.metrics_reporter,
-                "num_generated_tokens",
-                self.metrics_reporter.num_generated_tokens + n,
-            ),
-            advance_forward_ct_decode=lambda: setattr(
-                self.metrics_reporter,
-                "forward_ct_decode",
-                (self.metrics_reporter.forward_ct_decode + 1) % (1 << 30),
-            ),
         )
 
 """
@@ -273,39 +273,19 @@ def transform(wt: Path) -> None:
         "self._maybe_collect_customized_info(",
     )
 
-    # 4. Mutator rewrites:
-    #    - ``self.num_generated_tokens += <expr>`` →
-    #      ``self.increment_generated_tokens(<expr>)``
+    # 4. Field rewrites:
+    # - ``self.metrics_reporter.X(...)`` calls stay as-is. ``metrics_reporter``
+    #   is a real ctor field on SchedulerBatchResultProcessor (Ask 6),
+    #   so ``self.metrics_reporter.X`` resolves inside the typeflipped
+    #   @staticmethod bodies.
+    # - ``self.num_generated_tokens += <expr>`` and ``self.forward_ct_decode``
+    #   reads/writes route through the reporter (these fields live on
+    #   SchedulerMetricsReporter post-C14).
     text = text.replace(
-        "self.num_generated_tokens += ",
-        "self.increment_generated_tokens(",
-    )
-    # Close out the parens at end-of-line — the original is
-    # ``self.num_generated_tokens += <expr>\n`` (no parens) so we wrap.
-    import re
-    text = re.sub(
-        r"self\.increment_generated_tokens\(([^\n]+)\n",
-        r"self.increment_generated_tokens(\1)\n",
-        text,
-    )
-    #    - ``self.forward_ct_decode = (self.forward_ct_decode + 1) % (1 << 30)``
-    #      → ``self.advance_forward_ct_decode()``
-    text = text.replace(
-        "self.forward_ct_decode = (self.forward_ct_decode + 1) % (1 << 30)",
-        "self.advance_forward_ct_decode()",
-    )
-    # Undo C14's ``self.metrics_reporter.X(`` rewrites (now plain Callables).
-    text = text.replace(
-        "self.metrics_reporter.report_prefill_stats(",
-        "self.report_prefill_stats(",
+        "self.num_generated_tokens", "self.metrics_reporter.num_generated_tokens",
     )
     text = text.replace(
-        "self.metrics_reporter.report_decode_stats(",
-        "self.report_decode_stats(",
-    )
-    text = text.replace(
-        "self.metrics_reporter.update_spec_metrics(",
-        "self.update_spec_metrics(",
+        "self.forward_ct_decode", "self.metrics_reporter.forward_ct_decode",
     )
 
     # Drop ctor flag fields → read via ``self.server_args.X``. All

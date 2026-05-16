@@ -59,19 +59,20 @@ TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 
+from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.layers.logits_processor import LogitsProcessorOutput
 from sglang.srt.managers.schedule_batch import Req
-from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID
+from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID, ServerArgs
 
 
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerLogprobResultProcessor:
-    server_args: Any
-    model_config: Any
+    server_args: ServerArgs
+    model_config: ModelConfig
 '''
 
 
@@ -101,6 +102,19 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     mixin = wt / "python/sglang/srt/managers/scheduler_output_processor_mixin.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/logprob_result_processor.py"
+
+    # 0. Drop leading underscore on _calculate_num_input_logprobs so it
+    #    becomes the public sister API consumed by the new class.
+    text = mixin.read_text()
+    text = text.replace(
+        "    def _calculate_num_input_logprobs(",
+        "    def calculate_num_input_logprobs(",
+    )
+    text = text.replace(
+        "self._calculate_num_input_logprobs(",
+        "self.calculate_num_input_logprobs(",
+    )
+    mixin.write_text(text)
 
     # 1. Create skeleton target file (class + ctor, no methods yet).
     target.parent.mkdir(parents=True, exist_ok=True)

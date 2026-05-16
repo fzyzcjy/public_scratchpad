@@ -75,7 +75,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.managers.io_struct import (
@@ -88,6 +88,16 @@ from sglang.srt.managers.io_struct import (
     SpeculativeMetrics,
 )
 
+if TYPE_CHECKING:
+    from sglang.srt.distributed.parallel_state_wrapper import ParallelState
+    from sglang.srt.managers.scheduler_components.pool_stats_observer import (
+        SchedulerPoolStatsObserver,
+    )
+    from sglang.srt.managers.tp_worker import BaseTpWorker
+    from sglang.srt.mem_cache.allocator import BaseTokenToKVPoolAllocator
+    from sglang.srt.server_args import ServerArgs
+    from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
+
 
 logger = logging.getLogger(__name__)
 
@@ -98,15 +108,15 @@ logger = logging.getLogger(__name__)
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerLoadInquirer:
-    disaggregation_mode: Any
-    ps: Any
-    server_args: Any
+    disaggregation_mode: "DisaggregationMode"
+    ps: "ParallelState"
+    server_args: "ServerArgs"
     max_total_num_tokens: int
     max_running_requests: int
-    pool_stats_observer: Any
-    tp_worker: Any
-    token_to_kv_pool_allocator: Any
-    spec_algorithm: Any
+    pool_stats_observer: "SchedulerPoolStatsObserver"
+    tp_worker: "BaseTpWorker"
+    token_to_kv_pool_allocator: "BaseTokenToKVPoolAllocator"
+    spec_algorithm: "SpeculativeAlgorithm"
     get_running_batch: Callable
     get_waiting_queue: Callable
     get_stats: Callable

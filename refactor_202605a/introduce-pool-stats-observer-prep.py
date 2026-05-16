@@ -89,9 +89,9 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 SKELETON_CLASS = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerPoolStatsObserver:
-    tree_cache: Any
-    token_to_kv_pool_allocator: Any
-    req_to_token_pool: Any
+    tree_cache: "BasePrefixCache"
+    token_to_kv_pool_allocator: "BaseTokenToKVPoolAllocator"
+    req_to_token_pool: "ReqToTokenPool"
     session_controller: Any
     hisparse_coordinator: Any
     is_hybrid_swa: bool
@@ -387,6 +387,11 @@ def transform(wt: Path) -> None:
         runtime={
             "dataclasses": ("dataclass",),
             "typing": ("Any", "Callable"),
+        },
+        type_checking={
+            "sglang.srt.mem_cache.allocator": ("BaseTokenToKVPoolAllocator",),
+            "sglang.srt.mem_cache.base_prefix_cache": ("BasePrefixCache",),
+            "sglang.srt.mem_cache.memory_pool": ("ReqToTokenPool",),
         },
     )
     if not target_text.endswith("\n"):

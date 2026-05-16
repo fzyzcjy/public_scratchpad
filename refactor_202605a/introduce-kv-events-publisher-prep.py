@@ -29,7 +29,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import ensure_imports, find_method_lines, insert_after, replace_call_site
+from _helpers import (
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    insert_after,
+    replace_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-prep"
@@ -68,13 +74,13 @@ NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True)
 class SchedulerKvEventsPublisher:
     kv_events_config: Optional[str]
-    ps: Any
+    ps: "ParallelState"
     attn_tp_rank: int
     attn_cp_rank: int
     attn_dp_rank: int
     dp_rank: Optional[int]
-    tree_cache: Any
-    send_metrics_from_scheduler: Any
+    tree_cache: "BasePrefixCache"
+    send_metrics_from_scheduler: Optional["zmq.Socket"]
     max_running_requests: int
     max_total_num_tokens: int
     get_stats: Callable
@@ -188,6 +194,34 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
 
+    # 0. Drop leading underscore on emit_kv_metrics / publish_kv_events
+    #    so they expose a public API matching the sister manager forms.
+    text = src.read_text()
+    text = text.replace(
+        "    def _emit_kv_metrics(self: Scheduler):",
+        "    def emit_kv_metrics(self: Scheduler):",
+    )
+    text = text.replace(
+        "    def _publish_kv_events(self: Scheduler):",
+        "    def publish_kv_events(self: Scheduler):",
+    )
+    text = text.replace(
+        "            self._emit_kv_metrics()\n",
+        "            self.emit_kv_metrics()\n",
+    )
+    text = text.replace(
+        "        self._publish_kv_events()\n",
+        "        self.publish_kv_events()\n",
+    )
+    src.write_text(text)
+
+    text = sched.read_text()
+    text = text.replace(
+        "        self._publish_kv_events()\n",
+        "        self.publish_kv_events()\n",
+    )
+    sched.write_text(text)
+
     # 1. Append the SchedulerKvEventsPublisher class skeleton to the target
     #    file (KvMetrics already lives there from pre-move). The skeleton
     #    needs ``dataclass`` + ``Any`` / ``Callable`` / ``Optional`` typing
@@ -200,7 +234,12 @@ def transform(wt: Path) -> None:
             "dataclasses": ("dataclass",),
             "typing": ("Any", "Callable", "Optional"),
         },
+        type_checking={
+            "sglang.srt.distributed.parallel_state_wrapper": ("ParallelState",),
+            "sglang.srt.mem_cache.base_prefix_cache": ("BasePrefixCache",),
+        },
     )
+    target_text = ensure_bare_imports(target_text, ["import zmq\n"])
     if not target_text.endswith("\n"):
         target_text += "\n"
     target.write_text(target_text + "\n" + NEW_CLASS_SKELETON)

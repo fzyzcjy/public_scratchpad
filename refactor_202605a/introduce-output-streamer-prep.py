@@ -95,6 +95,7 @@ import torch
 import zmq
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.distributed.parallel_state_wrapper import ParallelState
 from sglang.srt.environ import envs
 from sglang.srt.managers.io_struct import (
     BatchEmbeddingOutput,
@@ -103,6 +104,9 @@ from sglang.srt.managers.io_struct import (
     GetLoadsReqOutput,
 )
 from sglang.srt.managers.schedule_batch import BaseFinishReason, Req
+from sglang.srt.mem_cache.base_prefix_cache import BasePrefixCache
+from sglang.srt.server_args import ServerArgs
+from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 
 
 logger = logging.getLogger(__name__)
@@ -113,13 +117,13 @@ DEFAULT_FORCE_STREAM_INTERVAL = envs.SGLANG_FORCE_STREAM_INTERVAL.get()
 
 @dataclass(kw_only=True, slots=True)
 class SchedulerOutputStreamer:
-    send_to_detokenizer: Any
-    tree_cache: Any
-    ps: Any
-    server_args: Any
+    send_to_detokenizer: zmq.Socket
+    tree_cache: BasePrefixCache
+    ps: ParallelState
+    server_args: ServerArgs
     is_generation: bool
-    spec_algorithm: Any
-    disaggregation_mode: Any
+    spec_algorithm: SpeculativeAlgorithm
+    disaggregation_mode: DisaggregationMode
     enable_hicache_storage: Callable[[], bool]
     load_inquirer_get_loads: Callable[..., Any]
     _test_stream_output_count: int = 0
@@ -332,11 +336,13 @@ def transform(wt: Path) -> None:
         addition=SCHEDULER_INIT_INSERT,
     )
     # Cross-commit fix: receiver shim ``stream_output=self.stream_output`` →
-    # lazy lambda wrapping ``self.output_streamer.stream_output``. Lambda
-    # because the receiver ctor runs earlier in ``__init__``.
+    # lazy lambda using the static-bound sister form. The lambda defers
+    # binding until invocation, by which point output_streamer exists; the
+    # final collapse to ``self.output_streamer.stream_output(...)`` happens
+    # in -move once the method body lives on the streamer class.
     text = text.replace(
         "            stream_output=self.stream_output,\n",
-        "            stream_output=lambda *a, **kw: self.output_streamer.stream_output(*a, **kw),\n",
+        "            stream_output=lambda *a, **kw: self.stream_output(self.output_streamer, *a, **kw),\n",
     )
     # Hot-path callsite in Scheduler (event_loop_overlap_disagg_*).
     # ``self.stream_output(...)`` → ``self.stream_output(self.output_streamer, ...)``.
@@ -359,9 +365,11 @@ def transform(wt: Path) -> None:
 
     # 7. Disagg queue-class callers (live on disaggregation/{decode,prefill}.py
     # but hold a ``self.scheduler`` back-reference, not the Scheduler/mixin
-    # ``self``). Route directly to the final post-move form
-    # ``self.scheduler.output_streamer.stream_output(...)`` — bypassing the
-    # transitional static-bound shim that's used for in-class callers.
+    # ``self``). Route via the transitional static-bound sister form
+    # ``self.scheduler.stream_output(self.scheduler.output_streamer, ...)``;
+    # ``stream_output`` still lives on the mixin at this prep tip and only
+    # collapses to ``self.scheduler.output_streamer.stream_output(...)`` in
+    # the upcoming -move commit.
     for f in [
         wt / "python/sglang/srt/disaggregation/prefill.py",
         wt / "python/sglang/srt/disaggregation/decode.py",
@@ -369,7 +377,7 @@ def transform(wt: Path) -> None:
         ftext = f.read_text()
         ftext = ftext.replace(
             "self.scheduler.stream_output(",
-            "self.scheduler.output_streamer.stream_output(",
+            "self.scheduler.stream_output(self.scheduler.output_streamer, ",
         )
         f.write_text(ftext)
 

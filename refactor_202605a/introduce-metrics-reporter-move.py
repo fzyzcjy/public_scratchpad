@@ -89,8 +89,8 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 METHOD_ORDER = [
-    "init_metrics",
-    "install_device_timer_on_runners",
+    "_init_metrics",
+    "_install_device_timer_on_runners",
     "update_spec_metrics",
     "_init_estimated_perf_constants",
     "_estimate_prefill_perf",
@@ -320,6 +320,15 @@ def transform(wt: Path) -> None:
             )
         except ValueError:
             pass
+    # Collapse the FPM teardown variant where the receiver is bound to a
+    # local ``scheduler`` (not ``self``). Prep emitted
+    # ``scheduler._shutdown_fpm(scheduler.metrics_reporter)``; collapse to
+    # ``scheduler.metrics_reporter._shutdown_fpm()``.
+    text = re.sub(
+        r"scheduler\._shutdown_fpm\(\s*scheduler\.metrics_reporter\s*\)",
+        "scheduler.metrics_reporter._shutdown_fpm()",
+        text,
+    )
     sched.write_text(text)
 
     # 8. Output processor mixin: caller form collapse.

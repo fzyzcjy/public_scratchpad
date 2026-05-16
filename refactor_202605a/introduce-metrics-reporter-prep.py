@@ -114,9 +114,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
+from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector
 from sglang.srt.observability.scheduler_metrics_mixin import (
     SchedulerMetricsMixin,
 )
@@ -138,13 +139,13 @@ class SchedulerMetricsReporter:
     tp_rank: int
     pp_rank: int
     dp_rank: Optional[int]
-    metrics_collector: Any
+    metrics_collector: SchedulerMetricsCollector
+    num_retracted_reqs: int = 0
+    num_paused_reqs: int = 0
 
     def __post_init__(self) -> None:
-        self.num_retracted_reqs: int = 0
-        self.num_paused_reqs: int = 0
-        SchedulerMetricsMixin.init_metrics(self, self.tp_rank, self.pp_rank, self.dp_rank)
-        SchedulerMetricsMixin.install_device_timer_on_runners(self)
+        SchedulerMetricsMixin._init_metrics(self, self.tp_rank, self.pp_rank, self.dp_rank)
+        SchedulerMetricsMixin._install_device_timer_on_runners(self)
 '''
 
 
@@ -173,39 +174,69 @@ INLINE_CURRENT_METRICS_ENABLED = (
     "            and self.ps.attn_tp_rank == 0\n"
     "            and self.ps.attn_cp_rank == 0\n"
     "        )\n"
-    "        self.metrics_collector = None\n"
-    "        if self.enable_metrics:\n"
-    "            _engine_type = DisaggregationMode.to_engine_type(\n"
-    "                self.server_args.disaggregation_mode\n"
-    "            )\n"
-    "            _labels = {\n"
-    "                'model_name': self.server_args.served_model_name,\n"
-    "                'engine_type': _engine_type,\n"
-    "                'tp_rank': tp_rank,\n"
-    "                'pp_rank': pp_rank,\n"
-    "                'moe_ep_rank': self.ps.moe_ep_rank,\n"
-    "            }\n"
-    "            if self.enable_priority_scheduling:\n"
-    "                _labels['priority'] = ''\n"
-    "            if dp_rank is not None:\n"
-    "                _labels['dp_rank'] = dp_rank\n"
-    "            if self.server_args.extra_metric_labels:\n"
-    "                _labels.update(self.server_args.extra_metric_labels)\n"
-    "            self.metrics_collector = SchedulerMetricsCollector(\n"
-    "                labels=_labels,\n"
-    "                enable_lora=self.enable_lora,\n"
-    "                enable_hierarchical_cache=self.enable_hierarchical_cache,\n"
-    "                enable_streaming_session=self.server_args.enable_streaming_session,\n"
-    "                server_args=self.server_args,\n"
-    "            )\n"
+    "        self.metrics_collector = SchedulerMetricsCollector.init_new(\n"
+    "            server_args=self.server_args,\n"
+    "            ps=self.ps,\n"
+    "            tp_rank=tp_rank,\n"
+    "            pp_rank=pp_rank,\n"
+    "            dp_rank=dp_rank,\n"
+    "            enable_priority_scheduling=self.enable_priority_scheduling,\n"
+    "            enable_lora=self.enable_lora,\n"
+    "            enable_hierarchical_cache=self.enable_hierarchical_cache,\n"
+    "        )\n"
 )
+
+
+# Classmethod injected onto SchedulerMetricsCollector by this prep. Builds
+# labels + calls the regular ctor when metrics are enabled; otherwise
+# returns None. Encapsulates the labels-building previously inline in
+# Scheduler.__init__.
+INIT_NEW_CLASSMETHOD = '''\
+    @classmethod
+    def init_new(
+        cls,
+        *,
+        server_args: "ServerArgs",
+        ps: Any,
+        tp_rank: int,
+        pp_rank: int,
+        dp_rank: Optional[int],
+        enable_priority_scheduling: bool,
+        enable_lora: bool,
+        enable_hierarchical_cache: bool,
+    ) -> Optional["SchedulerMetricsCollector"]:
+        if not server_args.enable_metrics:
+            return None
+        engine_type = DisaggregationMode.to_engine_type(server_args.disaggregation_mode)
+        labels = {
+            "model_name": server_args.served_model_name,
+            "engine_type": engine_type,
+            "tp_rank": tp_rank,
+            "pp_rank": pp_rank,
+            "moe_ep_rank": ps.moe_ep_rank,
+        }
+        if enable_priority_scheduling:
+            labels["priority"] = ""
+        if dp_rank is not None:
+            labels["dp_rank"] = dp_rank
+        if server_args.extra_metric_labels:
+            labels.update(server_args.extra_metric_labels)
+        return cls(
+            labels=labels,
+            enable_lora=enable_lora,
+            enable_hierarchical_cache=enable_hierarchical_cache,
+            enable_streaming_session=server_args.enable_streaming_session,
+            server_args=server_args,
+        )
+
+'''
 
 
 # Methods to type-flip (15 total: 14 normal + init_metrics which is invoked
 # by ctor via SchedulerMetricsMixin.init_metrics(self, ...)).
 METHODS_TO_FLIP = [
-    "init_metrics",
-    "install_device_timer_on_runners",
+    "_init_metrics",
+    "_install_device_timer_on_runners",
     "update_spec_metrics",
     "_init_estimated_perf_constants",
     "_estimate_prefill_perf",
@@ -457,6 +488,55 @@ def transform(wt: Path) -> None:
     prefill = wt / "python/sglang/srt/disaggregation/prefill.py"
     dllm = wt / "python/sglang/srt/dllm/mixin/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/metrics_reporter.py"
+    collector = wt / "python/sglang/srt/observability/metrics_collector.py"
+
+    # -1. Inject SchedulerMetricsCollector.init_new classmethod (Ask 2).
+    # Insert immediately after the ``__init__`` method body, before the next
+    # method definition.
+    from _helpers import ensure_imports as _ensure_imports
+    ctext = collector.read_text()
+    ctext = _ensure_imports(
+        ctext,
+        runtime={
+            "sglang.srt.disaggregation.utils": ("DisaggregationMode",),
+        },
+    )
+    _ci_start, _ci_end = find_method_lines(
+        ctext, class_name="SchedulerMetricsCollector", method_name="__init__"
+    )
+    _clines = ctext.splitlines(keepends=True)
+    collector.write_text(
+        "".join(_clines[:_ci_end]) + INIT_NEW_CLASSMETHOD + "".join(_clines[_ci_end:])
+    )
+
+    # 0. Add leading underscore on update_lora_metrics / calculate_utilization
+    #    /init_metrics/install_device_timer_on_runners so they become private
+    #    intra-class helpers in the reporter (driven only by __post_init__).
+    text = src.read_text()
+    text = text.replace(
+        "    def update_lora_metrics(self: Scheduler):",
+        "    def _update_lora_metrics(self: Scheduler):",
+    )
+    text = text.replace(
+        "    def calculate_utilization(self: Scheduler):",
+        "    def _calculate_utilization(self: Scheduler):",
+    )
+    text = text.replace(
+        "    def init_metrics(",
+        "    def _init_metrics(",
+    )
+    text = text.replace(
+        "    def install_device_timer_on_runners(",
+        "    def _install_device_timer_on_runners(",
+    )
+    text = text.replace("self.update_lora_metrics(", "self._update_lora_metrics(")
+    text = text.replace("self.calculate_utilization(", "self._calculate_utilization(")
+    text = text.replace("self.init_metrics(", "self._init_metrics(")
+    text = text.replace(
+        "self.install_device_timer_on_runners(",
+        "self._install_device_timer_on_runners(",
+    )
+    src.write_text(text)
 
     # 1. Create new target file at the final destination path with skeleton.
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -609,7 +689,7 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="            scheduler._shutdown_fpm()\n",
-        new="            scheduler.metrics_reporter._shutdown_fpm()\n",
+        new="            scheduler._shutdown_fpm(scheduler.metrics_reporter)\n",
     )
     # Spec lifetime counters now reporter-owned (post-init reads from Scheduler).
     text = replace_call_site(

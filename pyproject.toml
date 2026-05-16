@@ -2,4 +2,7 @@
 name = "public-scratchpad"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "ruff>=0.15.13",
+    "typer>=0.25.1",
+]
