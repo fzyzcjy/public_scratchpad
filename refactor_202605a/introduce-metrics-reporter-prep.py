@@ -63,7 +63,7 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
   empty ``SchedulerMetricsReporter`` class skeleton (slim ctor only;
   methods land in the upcoming ``-move`` commit). The ctor takes a
   ``scheduler: "Scheduler"`` back-reference plus ``tp_rank`` /
-  ``pp_rank`` / ``dp_rank`` / ``metrics_collector`` (5 kwargs total).
+  ``pp_rank`` / ``dp_rank`` / ``metrics_collector``.
 - R4 exception documented in the class docstring: the metrics reporter
   is a panoramic read-only observer and is the only sister class
   allowed to hold a ``scheduler`` back-reference; every other sister
@@ -164,17 +164,9 @@ class SchedulerMetricsReporter:
     metrics_collector: Any
 
     def __post_init__(self) -> None:
-        # Owned counters (ownership migration from Scheduler).
         self.num_retracted_reqs: int = 0
         self.num_paused_reqs: int = 0
-        # Run the original init_metrics body via the qualified staticmethod
-        # form — methods still live on SchedulerMetricsMixin during prep;
-        # the upcoming ``-move`` commit cuts + pastes them into this class
-        # and the qualified prefix collapses to ``self.init_metrics(...)``.
         SchedulerMetricsMixin.init_metrics(self, self.tp_rank, self.pp_rank, self.dp_rank)
-        # ``install_device_timer_on_runners`` was originally called from
-        # Scheduler.__init__ right after init_model_worker; we invoke it
-        # here so callers don't need a separate hook.
         SchedulerMetricsMixin.install_device_timer_on_runners(self)
 '''
 
@@ -187,32 +179,23 @@ SCHEDULER_INIT_INSERT = """\
             dp_rank=dp_rank,
             metrics_collector=self.metrics_collector,
         )
-        # Aliases so call sites that historically read self.X (when init_metrics
-        # set those fields directly on Scheduler) still resolve.
         self.stats = self.metrics_reporter.stats
 
 """
 
 
 INLINE_CURRENT_METRICS_ENABLED = (
-    "        # Computed early because init_ipc_channels reads it; the rest of\n"
-    "        # init_metrics now runs inside the metrics_reporter ctor below.\n"
     "        self.enable_metrics = self.server_args.enable_metrics\n"
     "        self.is_stats_logging_rank = self.ps.attn_tp_rank == 0\n"
     "        self.current_scheduler_metrics_enabled = self.enable_metrics and (\n"
     "            self.is_stats_logging_rank\n"
     "            or self.server_args.enable_metrics_for_all_schedulers\n"
     "        )\n"
-    "        # init_cache_with_memory_pool reads this before the\n"
-    "        # kv_events_publisher is constructed.\n"
     "        self.enable_kv_cache_events = bool(\n"
     "            self.server_args.kv_events_config\n"
     "            and self.ps.attn_tp_rank == 0\n"
     "            and self.ps.attn_cp_rank == 0\n"
     "        )\n"
-    "        # init_model_worker calls ``self.metrics_collector.emit_constants(...)``\n"
-    "        # early; create the collector here (mirrors original ``init_metrics``\n"
-    "        # placement). metrics_reporter then receives the same instance.\n"
     "        self.metrics_collector = None\n"
     "        if self.enable_metrics:\n"
     "            _engine_type = DisaggregationMode.to_engine_type(\n"
@@ -542,9 +525,6 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        if self.enable_metrics:\n"
-            "            # metrics_collector is constructed in Scheduler.__init__\n"
-            "            # (option b ownership) and passed via ctor kwarg; do not\n"
-            "            # re-construct here (would re-register Prometheus metrics).\n"
             "            self.enable_mfu_metrics = self.server_args.enable_mfu_metrics\n"
         ),
     )
@@ -706,18 +686,6 @@ def transform(wt: Path) -> None:
             new="    s.enable_hisparse = False\n    s.enable_fpm = False\n",
         )
         test_gate.write_text(ttext)
-
-    # 4.6 Retire ``test_forward_pass_metrics`` — the upstream FPM unit test
-    #     (added by #22789) is built on ``class _DummyScheduler(SchedulerMetricsMixin)``
-    #     and mocks ``sglang.srt.observability.scheduler_metrics_mixin.time.monotonic``.
-    #     This commit retires that mixin entirely; the test would need a
-    #     ground-up rewrite to target the new ``SchedulerMetricsReporter``
-    #     (which is a frozen dataclass and cannot be subclassed + mutated the
-    #     same way). Retire the test file here; integration tests cover the
-    #     FPM end-to-end emission path.
-    test_fpm = wt / "test/registered/unit/observability/test_forward_pass_metrics.py"
-    if test_fpm.exists():
-        test_fpm.unlink()
 
     # 5. Output processor mixin callsites — static-bound sister form.
     text = output_mixin.read_text()
