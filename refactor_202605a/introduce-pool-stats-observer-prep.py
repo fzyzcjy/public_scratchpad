@@ -382,6 +382,13 @@ def transform(wt: Path) -> None:
     # 3. Append the empty SchedulerPoolStatsObserver class skeleton to the
     # target file (PoolStats already moved there in pre-move).
     target_text = target.read_text()
+    target_text = ensure_imports(
+        target_text,
+        runtime={
+            "dataclasses": ("dataclass",),
+            "typing": ("Any", "Callable"),
+        },
+    )
     if not target_text.endswith("\n"):
         target_text += "\n"
     target.write_text(target_text + "\n" + SKELETON_CLASS)
