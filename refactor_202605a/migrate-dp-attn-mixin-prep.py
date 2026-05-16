@@ -39,8 +39,8 @@ Inplace prep for the ``migrate-dp-attn-mixin`` mech move.
   (``prepare_mlp_sync_batch`` / ``maybe_prepare_mlp_sync_batch`` /
   ``get_idle_batch``) to ``@staticmethod`` with
   ``self: "SchedulerDPAttnAdapter"`` type annotation. Body bytes unchanged.
-- Callers (2 in scheduler.py, 1 in scheduler_pp_mixin.py, 1 in
-  disaggregation/prefill.py, 1 in disaggregation/decode.py) rewritten to
+- Callers in scheduler.py, scheduler_pp_mixin.py, disaggregation/prefill.py,
+  and disaggregation/decode.py are rewritten to
   ``self.<method>(self.dp_attn_adapter, ...)``.
 
 The 3 methods stay inside ``SchedulerDPAttnMixin`` in this commit; physical
