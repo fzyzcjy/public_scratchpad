@@ -69,10 +69,6 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 # mode-specific population paths still overwrite the defaults.
 DEFAULTS_BLOCK = """\
 
-        # Mode-conditional fields: pre-declare so they always exist on the
-        # instance. Subsequent init_disaggregation / init_mm / init_overlap
-        # overwrites when applicable. Eliminates getattr(self, "X", default)
-        # defenses downstream.
         self.mm_receiver = None
         self.disagg_prefill_bootstrap_queue = None
         self.disagg_prefill_inflight_queue = None
