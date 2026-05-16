@@ -30,7 +30,7 @@ SUBJECT = "Hand weight-update RPC handlers over to SchedulerWeightUpdaterManager
 BODY = """\
 Mechanical cut + paste for the ``migrate-update-weights-mixin`` mech move.
 
-Cut the 13 @staticmethods + 2 module-level helpers
+Cut the @staticmethods plus the module-level helpers
 (``_export_static_state`` / ``_import_static_state``) from
 ``scheduler_update_weights_mixin.py`` and paste them into the existing
 ``scheduler_components/weight_updater.py`` (methods into
@@ -46,7 +46,7 @@ Method bodies otherwise byte-identical. ``@staticmethod`` decorators
 dropped; ``self: "SchedulerWeightUpdaterManager"`` annotation simplified
 to bare ``self``.
 
-10 prep-form dispatch lambdas collapse to direct refs (pure prefix
+The prep-form dispatch lambdas collapse to direct refs (pure prefix
 transformation):
   ``lambda req: self.<method>(self.weight_updater, req)`` →
   ``self.weight_updater.<method>``.

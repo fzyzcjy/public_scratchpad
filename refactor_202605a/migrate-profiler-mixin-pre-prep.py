@@ -10,8 +10,8 @@ byte-identical). The follow-up ``migrate-profiler-mixin-prep`` will lift
 this inlined block into the ``SchedulerProfilerManager`` ctor body.
 
 After this commit:
-- ``Scheduler.__init__`` carries the 19-field ``init_profiler`` body
-  inline, right at the original ``self.init_profiler()`` callsite.
+- ``Scheduler.__init__`` carries the ``init_profiler`` body inline,
+  right at the original ``self.init_profiler()`` callsite.
 - ``SchedulerProfilerMixin`` no longer defines ``init_profiler``.
 """
 
@@ -37,11 +37,11 @@ Move the entire ``init_profiler`` body from ``SchedulerProfilerMixin`` into
 ``Scheduler.__init__``, replacing the ``self.init_profiler()`` call. The
 method itself is then deleted from the mixin.
 
-Diff is 2 hunks: one delete from the mixin (the full ``init_profiler``
-method), one insert into ``Scheduler.__init__`` at the original call
-site. ``git --color-moved`` should mark the relocated body as moved
-(``self.X`` refs unchanged: the 19 profiler fields live on the same
-Scheduler instance pre- and post-move).
+Diff is one delete from the mixin (the full ``init_profiler`` method)
+plus one insert into ``Scheduler.__init__`` at the original call site.
+``git --color-moved`` should mark the relocated body as moved (``self.X``
+refs unchanged: the profiler fields live on the same Scheduler instance
+pre- and post-move).
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

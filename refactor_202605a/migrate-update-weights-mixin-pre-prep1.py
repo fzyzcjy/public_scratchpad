@@ -12,9 +12,10 @@ field semantics are unchanged: ``self.offload_tags`` still lives on the
 Scheduler instance, and the ``dp_attn_adapter`` ctor still reads it via
 ``offload_tags=self.offload_tags``.
 
-Diff is 2 hunks: one delete from
-``Scheduler.init_watch_dog_memory_saver_input_blocker``, one insert into
-``Scheduler.__init__`` just before ``self.init_request_dispatcher()``.
+Diff is one delete from
+``Scheduler.init_watch_dog_memory_saver_input_blocker`` plus one insert
+into ``Scheduler.__init__`` just before
+``self.init_request_dispatcher()``.
 """
 
 # /// script
@@ -43,7 +44,7 @@ Move ``self.offload_tags = set()`` out of
 land in ``-prep``. The next commit migrates the field's ownership into
 ``SchedulerWeightUpdaterManager.__init__``.
 
-Diff is 2 hunks: one delete, one insert. Field semantics unchanged:
+Diff is one delete plus one insert. Field semantics unchanged:
 ``self.offload_tags`` still lives on Scheduler in this commit, and the
 ``dp_attn_adapter`` ctor's ``offload_tags=self.offload_tags`` kwarg still
 resolves.

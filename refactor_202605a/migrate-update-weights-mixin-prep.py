@@ -38,11 +38,11 @@ Inplace prep for the ``migrate-update-weights-mixin`` mech move.
 
 - Create ``scheduler_components/weight_updater.py`` with a
   ``SchedulerWeightUpdaterManager`` class (skeleton: ctor only, no
-  methods yet). Ctor takes 4 collaborator kwargs (``tp_worker`` /
-  ``draft_worker`` / ``tp_cpu_group`` / ``memory_saver_adapter``) + 2
-  ``Callable`` kwargs (``flush_cache`` / ``is_fully_idle``). Initializes
-  ``self.offload_tags = set()`` (ownership migrated from Scheduler per
-  pre-prep1).
+  methods yet). Ctor takes the collaborator kwargs ``tp_worker`` /
+  ``draft_worker`` / ``tp_cpu_group`` / ``memory_saver_adapter`` plus
+  the ``Callable`` kwargs ``flush_cache`` / ``is_fully_idle``.
+  Initializes ``self.offload_tags = set()`` (ownership migrated from
+  Scheduler per pre-prep1).
 - Instantiate ``self.weight_updater = SchedulerWeightUpdaterManager(...)``
   in ``Scheduler.__init__`` BEFORE ``self.init_request_dispatcher()``
   (so the dispatch lambdas can resolve ``self.weight_updater`` lazily).
@@ -51,20 +51,20 @@ Inplace prep for the ``migrate-update-weights-mixin`` mech move.
   since ownership now lives on the manager).
 - Rewire ``dp_attn_adapter`` ctor's ``offload_tags`` kwarg from
   ``self.offload_tags`` to ``self.weight_updater.offload_tags``.
-- In the mixin, type-flip all 13 methods to ``@staticmethod`` with
-  ``self: "SchedulerWeightUpdaterManager"``. Body bytes unchanged
+- In the mixin, type-flip every weight-update method to ``@staticmethod``
+  with ``self: "SchedulerWeightUpdaterManager"``. Body bytes unchanged
   (no runtime-mutable Scheduler state is read; the mixin already
   collaborates only through ``self.tp_worker`` / ``self.draft_worker``
   / etc., which become the manager's own fields).
-- Grow the 10 pre-prep2 dispatch lambdas: each lambda body gains the
+- Grow the pre-prep2 dispatch lambdas: each lambda body gains the
   ``self.weight_updater`` first arg so it invokes the staticmethod-form
   mixin method, e.g. ``lambda req: self.update_weights_from_disk(req)``
   → ``lambda req: self.update_weights_from_disk(self.weight_updater,
   req)``.
 
-The 13 methods stay inside ``SchedulerUpdateWeightsMixin`` in this commit;
-physical cut + paste to ``SchedulerWeightUpdaterManager`` body happens in
-``migrate-update-weights-mixin-move``.
+The weight-update methods stay inside ``SchedulerUpdateWeightsMixin`` in
+this commit; physical cut + paste to ``SchedulerWeightUpdaterManager``
+body happens in ``migrate-update-weights-mixin-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
