@@ -33,15 +33,17 @@ In Scheduler, ``init_cache_with_memory_pool(self)`` becomes
 body rewrite is identical to the final free-function form:
 
 - The ``self.X`` reads in the body converted to bare kwarg / local names.
-- 9 ``self.X = Y`` writes converted to local-var writes.
-- 3 None-initializers added for conditional fields.
+- The ``self.X = Y`` writes (one per ``KVCacheBuildResult`` field)
+  converted to local-var writes.
+- None-initializers added for the conditional fields.
 - ``return KVCacheBuildResult(...)`` appended.
 
 Caller in ``Scheduler.__init__`` rewritten: the
 ``self.init_cache_with_memory_pool()`` call is replaced by an inlined
-``result = Scheduler.build_kv_cache(...)`` + 9 writebacks. (The
-``hisparse_coordinator`` + ``decode_offload_manager`` tail blocks already
-live in ``Scheduler.__init__`` after the ``-pre-prep`` block-move commit.)
+``result = Scheduler.build_kv_cache(...)`` plus writebacks (one per
+``KVCacheBuildResult`` field). (The ``hisparse_coordinator`` +
+``decode_offload_manager`` tail blocks already live in
+``Scheduler.__init__`` after the ``-pre-prep`` block-move commit.)
 
 ``KVCacheBuildResult`` dataclass + needed imports are appended to
 ``mem_cache/kv_cache_builder.py`` (file already exists from earlier
