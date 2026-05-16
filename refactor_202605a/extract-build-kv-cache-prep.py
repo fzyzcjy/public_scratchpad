@@ -122,10 +122,6 @@ from sglang.srt.session.streaming_session import StreamingSession  # noqa: F401
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class KVCacheBuildResult:
-    \"\"\"Return type for ``build_kv_cache``: 9 fields the caller writes back to
-    ``Scheduler.self.X``. Field-cluster bundling (a single
-    ``self._kv_cache`` ref instead of 9) is a follow-up commit.\"\"\"
-
     is_hybrid_swa: bool
     is_hybrid_ssm: bool
     sliding_window_size: Optional[int]

@@ -133,9 +133,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerBatchResultProcessor:
-    """``Scheduler.process_batch_result`` hot-path main body. Composition
-    target on Scheduler (``self.batch_result_processor``)."""
-
     is_generation: bool
     disaggregation_mode: Any
     enable_overlap: bool

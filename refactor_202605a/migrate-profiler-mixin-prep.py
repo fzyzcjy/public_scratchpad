@@ -71,9 +71,6 @@ from sglang.srt.utils.profile_utils import ProfileManager  # noqa: F401
 
 @dataclass(kw_only=True)
 class SchedulerProfilerManager:
-    """torch profiler / RPD / cuda profiler lifecycle. Composition target on
-    Scheduler (``self.profiler_manager``). Owns 19 mutable runtime fields."""
-
     ps: Any
     dp_tp_cpu_group: Any
     get_forward_ct: Callable[[], int]

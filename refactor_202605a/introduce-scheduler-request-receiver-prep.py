@@ -84,11 +84,6 @@ from sglang.srt.utils import broadcast_pyobj, point_to_point_pyobj  # noqa: F401
 
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerRequestReceiver:
-    """Wire-level request receiver: pulls ``recv_req`` lists from zmq /
-    pipeline upstream, applies recv_skipper / input_blocker guards, broadcasts
-    across TP/DP/CP groups, runs MM-receiver pre-processing, and unwraps shm
-    features. Owns no mutable state."""
-
     recv_from_tokenizer: Any
     recv_from_rpc: Any
     recv_skipper: Any

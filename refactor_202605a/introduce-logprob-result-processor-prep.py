@@ -70,9 +70,6 @@ from sglang.srt.server_args import MIS_DELIMITER_TOKEN_ID  # noqa: F401
 
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerLogprobResultProcessor:
-    """Pure-compute logprob accumulator helpers. Composition target on
-    Scheduler (``self.logprob_result_processor``)."""
-
     server_args: Any
     model_config: Any
 '''

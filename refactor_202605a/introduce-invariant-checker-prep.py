@@ -114,9 +114,6 @@ logger = logging.getLogger(__name__)
 SKELETON_CLASS = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerInvariantChecker:
-    """KV pool / req pool / tree_cache memory invariant checks.
-    Composition target on Scheduler (``self.invariant_checker``)."""
-
     is_hybrid_swa: bool
     is_hybrid_ssm: bool
     disaggregation_mode: Any

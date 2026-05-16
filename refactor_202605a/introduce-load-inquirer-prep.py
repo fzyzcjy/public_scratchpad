@@ -98,9 +98,6 @@ logger = logging.getLogger(__name__)
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerLoadInquirer:
-    """``/v1/loads`` RPC handler. Composition target on Scheduler
-    (``self.load_inquirer``)."""
-
     disaggregation_mode: Any
     ps: Any
     server_args: Any

@@ -134,9 +134,6 @@ logger = logging.getLogger(__name__)
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True)
 class SchedulerMetricsReporter:
-    """Prometheus / Stats hot-path. Composition target on Scheduler
-    (``self.metrics_reporter``)."""
-
     scheduler: "Scheduler"
     tp_rank: int
     pp_rank: int

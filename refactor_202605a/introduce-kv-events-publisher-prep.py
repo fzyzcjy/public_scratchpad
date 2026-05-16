@@ -92,9 +92,6 @@ class SchedulerStats: ...  # type: ignore[no-redef]
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True)
 class SchedulerKvEventsPublisher:
-    """KV cache event / metrics publication channel. Composition target on
-    Scheduler (``self.kv_events_publisher``)."""
-
     kv_events_config: Optional[str]
     ps: Any
     attn_tp_rank: int

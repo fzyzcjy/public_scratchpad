@@ -113,11 +113,6 @@ DEFAULT_FORCE_STREAM_INTERVAL = envs.SGLANG_FORCE_STREAM_INTERVAL.get()
 
 @dataclass(kw_only=True, slots=True)
 class SchedulerOutputStreamer:
-    """Output adapter — serialize finished/sampling-complete reqs into
-    ``BatchTokenIDOutput`` / ``BatchEmbeddingOutput`` and write to the
-    detokenizer IPC. Composition target on Scheduler
-    (``self.output_streamer``)."""
-
     send_to_detokenizer: Any
     tree_cache: Any
     ps: Any

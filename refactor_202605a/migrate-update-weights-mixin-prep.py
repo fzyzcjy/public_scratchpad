@@ -79,10 +79,6 @@ from typing import Any, Callable, Optional  # noqa: F401
 
 @dataclass(kw_only=True, slots=True)
 class SchedulerWeightUpdaterManager:
-    """Hot weight-update / memory-occupation / model-save / weight-inspection
-    control surface. Composition target on Scheduler
-    (``self.weight_updater``)."""
-
     tp_worker: Any
     draft_worker: Any
     tp_cpu_group: Any

@@ -106,9 +106,6 @@ class SchedulerStats: ...  # type: ignore[no-redef]
 SKELETON_CLASS = '''\
 @dataclass(kw_only=True, slots=True, frozen=True)
 class SchedulerPoolStatsObserver:
-    """Read-only KV / req / session pool statistics. Composition target on
-    Scheduler (``self.pool_stats_observer``)."""
-
     tree_cache: Any
     token_to_kv_pool_allocator: Any
     req_to_token_pool: Any
