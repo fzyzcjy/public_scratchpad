@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pure block-move pre-prep for ``extract-build-kv-cache``: hoist the
-2 tail blocks (``hisparse_coordinator`` ref-grab + ``decode_offload_manager``
+tail blocks (``hisparse_coordinator`` ref-grab + ``decode_offload_manager``
 construction) out of ``Scheduler.init_cache_with_memory_pool`` and into
 ``Scheduler.__init__`` immediately after the ``self.init_cache_with_memory_pool()``
 call.
@@ -10,8 +10,8 @@ This is a standalone block-relocation commit per
 same file/class). After this commit:
 
 - ``init_cache_with_memory_pool`` method body ends with the
-  ``init_mm_embedding_cache(...)`` call (the 2 tail blocks are gone).
-- ``Scheduler.__init__`` carries the 2 tail blocks right after the
+  ``init_mm_embedding_cache(...)`` call (tail blocks are gone).
+- ``Scheduler.__init__`` carries the tail blocks right after the
   ``self.init_cache_with_memory_pool()`` call, with method-local refs
   (``server_args.X``, ``params.tp_cache_group``) rewritten to their
   Scheduler-instance equivalents.
@@ -40,15 +40,15 @@ SUBJECT = "Hoist hisparse/decode_offload tail blocks out of init_cache_with_memo
 BODY = """\
 Pure block-move pre-prep for ``extract-build-kv-cache``.
 
-Move 2 tail blocks from the body of
+Move tail blocks from the body of
 ``Scheduler.init_cache_with_memory_pool`` to ``Scheduler.__init__``,
 immediately after the ``self.init_cache_with_memory_pool()`` call:
 
-1. ``if self.enable_hisparse: ...`` (``hisparse_coordinator`` ref-grab +
-   ``set_decode_producer_stream(...)``).
-2. ``if (server_args.disaggregation_mode == "decode" and ...): ...
-   else: self.decode_offload_manager = None`` (decode-offload manager
-   construction).
+- ``if self.enable_hisparse: ...`` (``hisparse_coordinator`` ref-grab +
+  ``set_decode_producer_stream(...)``).
+- ``if (server_args.disaggregation_mode == "decode" and ...): ...
+  else: self.decode_offload_manager = None`` (decode-offload manager
+  construction).
 
 Method-local refs that no longer resolve in ``Scheduler.__init__`` are
 rewritten to their ``self.X`` form:
@@ -60,10 +60,10 @@ rewritten to their ``self.X`` form:
   ``(self.attn_tp_cpu_group if self.server_args.enable_dp_attention else
   self.tp_cpu_group)``.
 
-Diff is 2 hunks: one delete from
-``Scheduler.init_cache_with_memory_pool``, one insert into
+Diff is one delete from
+``Scheduler.init_cache_with_memory_pool`` plus one insert into
 ``Scheduler.__init__``. ``git --color-moved`` should mark the relocated
-lines as moved (modulo the 3 ref rewrites).
+lines as moved (modulo the ref rewrites listed above).
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
