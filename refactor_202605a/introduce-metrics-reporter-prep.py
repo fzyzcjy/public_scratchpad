@@ -78,8 +78,8 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
   ``self.num_paused_reqs: int = 0`` from ``Scheduler`` (now reporter-
   owned); the single external writer in ``Scheduler.run_batch``
   rewires to ``self.metrics_reporter.num_retracted_reqs = ...``.
-- In ``SchedulerMetricsMixin`` (still at the old path), convert all
-  15 methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``
+- In ``SchedulerMetricsMixin`` (still at the old path), convert the
+  methods to ``@staticmethod`` with ``self: "SchedulerMetricsReporter"``
   typed first param. Body reads of Scheduler fields rewrite to
   ``self.scheduler.X`` form (driven by an AST-based reporter-owned
   whitelist; sibling method calls stay as ``self.<m>(...)`` and are
@@ -99,9 +99,9 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
   ``emit_constants`` callsite inside ``init_model_worker`` and kwarg
   passes that hand off the field object are intentionally left alone.
 
-The 15 methods + ``PrefillStats`` + module constants stay inside the
-mixin file in this commit; physical cut + paste to the target class /
-module and ``SchedulerMetricsMixin`` retirement happen in
+The converted methods + ``PrefillStats`` + module constants stay inside
+the mixin file in this commit; physical cut + paste to the target class
+/ module and ``SchedulerMetricsMixin`` retirement happen in
 ``introduce-metrics-reporter-move``.
 """
 AREA = "mech_scheduler"
