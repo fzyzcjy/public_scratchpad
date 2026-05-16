@@ -32,7 +32,7 @@ In Scheduler, ``init_cache_with_memory_pool(self)`` becomes
 ``@staticmethod build_kv_cache(*, kwargs...) -> KVCacheBuildResult``. The
 body rewrite is identical to the final free-function form:
 
-- 22+ ``self.X`` reads converted to bare kwarg / local names.
+- The ``self.X`` reads in the body converted to bare kwarg / local names.
 - 9 ``self.X = Y`` writes converted to local-var writes.
 - 3 None-initializers added for conditional fields.
 - ``return KVCacheBuildResult(...)`` appended.
