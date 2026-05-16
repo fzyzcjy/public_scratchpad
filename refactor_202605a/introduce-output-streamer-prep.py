@@ -64,9 +64,9 @@ Inplace prep for the ``introduce-output-streamer`` mech move.
   ``stream_output=lambda *a, **kw: self.output_streamer.stream_output(*a, **kw)``
   (the receiver class itself unchanged; receiver ctor runs earlier in
   ``__init__`` so we need a lazy lambda).
-- Callsites updated: 4 in remaining output_processor mixin body
-  (``self.stream_output`` ×3 + ``self._get_cached_tokens_details``),
-  1 in Scheduler hot-path (``self.stream_output(``), and 2 external
+- Callsites updated: the remaining output_processor mixin body
+  (``self.stream_output`` calls + ``self._get_cached_tokens_details``),
+  the Scheduler hot-path (``self.stream_output(``), and external
   callers (``disaggregation/prefill.py``, ``dllm/mixin/scheduler.py``).
 
 PRAGMATIC DEVIATION (per ``MECH_COMMIT_SPLIT.md``): the Callable lambda
@@ -108,7 +108,6 @@ from sglang.srt.managers.schedule_batch import BaseFinishReason, Req  # noqa: F4
 logger = logging.getLogger(__name__)
 
 
-# Module-level constant copied from the original output_processor mixin.
 DEFAULT_FORCE_STREAM_INTERVAL = envs.SGLANG_FORCE_STREAM_INTERVAL.get()
 
 
