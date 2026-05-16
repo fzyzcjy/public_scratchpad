@@ -213,7 +213,6 @@ class IdleSleeper:
 
     sockets: Any
     last_empty_time: float = field(default_factory=real_time)
-    # Built in __post_init__; declared so slots=True permits attribute set.
     poller: Any = None
     empty_cache_interval: int = 0
 
@@ -243,9 +242,6 @@ def _move_idle_sleeper(wt: Path) -> None:
     cut_lines(sched, s, e)
 
     new_file_text = (
-        '"""``IdleSleeper`` — zmq Poller wrapper with empty-cache throttling.\n\n'
-        "Reduces system power consumption during long inactive periods.\n"
-        '"""\n\n'
         "from dataclasses import dataclass, field\n"
         "from typing import Any\n\n"
         "import zmq\n\n"
@@ -359,10 +355,6 @@ def _move_sender_wrapper(wt: Path) -> None:
     block = cut_lines(sched, s, e)
 
     new_file_text = (
-        '"""``SenderWrapper`` — zmq.Socket wrapper for scheduler → tokenizer /\n'
-        "detokenizer output channel. Copies ``http_worker_ipc`` from recv_obj\n"
-        "to output when needed (multi-http-worker IPC handoff).\n"
-        '"""\n\n'
         "from typing import Optional, Union\n\n"
         "import zmq\n\n"
         "from sglang.srt.managers.io_struct import BaseBatchReq, BaseReq\n\n\n"
