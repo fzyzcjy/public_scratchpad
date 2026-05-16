@@ -30,10 +30,10 @@ Inplace prep for the ``introduce-logprob-result-processor`` mech move.
 
 - Create ``scheduler_components/logprob_result_processor.py`` with an empty
   ``SchedulerLogprobResultProcessor`` class (ctor takes ``server_args`` +
-  ``model_config`` — 2 narrow kwargs).
+  ``model_config`` — narrow kwargs).
 - Instantiate ``self.logprob_result_processor = SchedulerLogprobResultProcessor(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``.
-- In ``SchedulerOutputProcessorMixin``, convert 9 logprob methods
+- In ``SchedulerOutputProcessorMixin``, convert the logprob methods
   (``_initialize_empty_logprob_containers``, ``add_logprob_return_values``,
   ``add_input_logprob_return_values``, ``_is_multi_item_scoring``,
   ``calculate_num_input_logprobs`` [renamed by ``-pre-rename`` already],
@@ -46,8 +46,8 @@ Inplace prep for the ``introduce-logprob-result-processor`` mech move.
   ``disaggregation/prefill.py`` are rewritten to
   ``self.<method>(self.logprob_result_processor, ...)``.
 
-The 9 methods stay inside the mixin in this commit; physical cut + paste
-to ``SchedulerLogprobResultProcessor`` body happens in
+The converted methods stay inside the mixin in this commit; physical
+cut + paste to ``SchedulerLogprobResultProcessor`` body happens in
 ``introduce-logprob-result-processor-move``.
 """
 AREA = "mech_scheduler"
