@@ -26,7 +26,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "migrate-dp-attn-mixin-prep"
-SUBJECT = "Stage DP-attention adapter methods for handoff to SchedulerDPAttnAdapter"
+SUBJECT = "Introduce SchedulerDPAttnAdapter to own DP-attention state"
 BODY = """\
 Inplace prep for the ``migrate-dp-attn-mixin`` mech move.
 

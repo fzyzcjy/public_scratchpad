@@ -24,7 +24,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "extract-build-kv-cache-prep"
-SUBJECT = "Rewrite init_cache_with_memory_pool body to build_kv_cache form (prep for move)"
+SUBJECT = "Reshape init_cache_with_memory_pool to match the future build_kv_cache signature"
 BODY = """\
 Inplace prep for the ``extract-build-kv-cache`` mech move.
 

@@ -26,7 +26,7 @@ from _helpers import cut_lines, find_function_lines, find_method_lines, replace_
 from _runner import run_pr
 
 ID = "migrate-update-weights-mixin-move"
-SUBJECT = "Hand weight-update RPC handlers over to SchedulerWeightUpdaterManager"
+SUBJECT = "Move weight-update RPC handlers to SchedulerWeightUpdaterManager"
 BODY = """\
 Mechanical cut + paste for the ``migrate-update-weights-mixin`` mech move.
 

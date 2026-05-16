@@ -26,7 +26,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site, rewrite_me
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-move"
-SUBJECT = "Hand invariant checks over to SchedulerInvariantChecker (retire runtime_checker mixin)"
+SUBJECT = "Move invariant checks to SchedulerInvariantChecker and retire runtime_checker mixin"
 BODY = """\
 Mechanical cut + paste for the ``introduce-invariant-checker`` mech move
 (tail commit of the ``SchedulerRuntimeCheckerMixin`` split).

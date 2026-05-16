@@ -24,7 +24,7 @@ sys.path.insert(0, str(HERE))
 from _runner import run_pr
 
 ID = "introduce-metrics-reporter-pre-rename"
-SUBJECT = "Add leading _ on update_lora_metrics / calculate_utilization (pre-rename for metrics-reporter)"
+SUBJECT = "Mark update_lora_metrics and calculate_utilization as private"
 BODY = """\
 Privacy flip pre-rename for the ``introduce-metrics-reporter`` mech
 move. Two ``SchedulerMetricsMixin`` methods are made private because

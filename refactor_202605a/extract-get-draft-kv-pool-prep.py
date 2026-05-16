@@ -27,7 +27,7 @@ from _helpers import find_method_lines
 from _runner import run_pr
 
 ID = "extract-get-draft-kv-pool-prep"
-SUBJECT = "Convert _get_draft_kv_pool to @staticmethod (prep for move)"
+SUBJECT = "Decouple _get_draft_kv_pool from self before extraction"
 BODY = """\
 Inplace prep step for the ``extract-get-draft-kv-pool`` mech move.
 

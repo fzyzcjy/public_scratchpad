@@ -31,7 +31,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-output-streamer-prep"
-SUBJECT = "Stage output streaming for handoff to SchedulerOutputStreamer"
+SUBJECT = "Stand up SchedulerOutputStreamer; migrate output-streaming state to it"
 BODY = """\
 Inplace prep for the ``introduce-output-streamer`` mech move.
 

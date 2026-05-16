@@ -21,7 +21,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-logprob-result-processor-move"
-SUBJECT = "Hand logprob assembly over to SchedulerLogprobResultProcessor"
+SUBJECT = "Move logprob assembly to SchedulerLogprobResultProcessor"
 BODY = """\
 Mechanical cut + paste for the ``introduce-logprob-result-processor`` mech move.
 

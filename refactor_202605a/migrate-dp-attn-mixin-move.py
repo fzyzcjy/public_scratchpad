@@ -44,7 +44,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "migrate-dp-attn-mixin-move"
-SUBJECT = "Hand DP-attention adapter methods over to SchedulerDPAttnAdapter"
+SUBJECT = "Move DP-attention adapter methods to SchedulerDPAttnAdapter"
 BODY = """\
 Mechanical cut + paste for the ``migrate-dp-attn-mixin`` mech move.
 

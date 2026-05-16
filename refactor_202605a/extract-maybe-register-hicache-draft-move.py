@@ -33,7 +33,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-maybe-register-hicache-draft-move"
-SUBJECT = "Move maybe_register_hicache_draft to mem_cache/kv_cache_builder.py"
+SUBJECT = "Move maybe_register_hicache_draft to mem_cache.kv_cache_builder"
 BODY = """\
 Mechanical cut + paste for the ``extract-maybe-register-hicache-draft``
 mech move.

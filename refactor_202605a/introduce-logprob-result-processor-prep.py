@@ -24,7 +24,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-logprob-result-processor-prep"
-SUBJECT = "Stage logprob assembly for handoff to SchedulerLogprobResultProcessor"
+SUBJECT = "Introduce SchedulerLogprobResultProcessor to own logprob state"
 BODY = """\
 Inplace prep for the ``introduce-logprob-result-processor`` mech move.
 

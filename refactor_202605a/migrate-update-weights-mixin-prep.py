@@ -32,7 +32,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "migrate-update-weights-mixin-prep"
-SUBJECT = "Stage weight-update RPC handlers for handoff to SchedulerWeightUpdaterManager"
+SUBJECT = "Carve out SchedulerWeightUpdaterManager for weight-update state"
 BODY = """\
 Inplace prep for the ``migrate-update-weights-mixin`` mech move.
 

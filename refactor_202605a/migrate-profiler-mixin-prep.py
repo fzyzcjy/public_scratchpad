@@ -28,7 +28,7 @@ from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "migrate-profiler-mixin-prep"
-SUBJECT = "Stage profiler controls for handoff to SchedulerProfilerManager"
+SUBJECT = "Stand up SchedulerProfilerManager; migrate profiler state to it"
 BODY = """\
 Inplace prep for the ``migrate-profiler-mixin`` mech move.
 

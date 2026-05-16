@@ -30,7 +30,7 @@ from _helpers import cut_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "move-on-idle-to-scheduler-main"
-SUBJECT = "Move on_idle from runtime_checker mixin to Scheduler main class"
+SUBJECT = "Move on_idle from runtime_checker mixin into Scheduler"
 BODY = """\
 Move ``on_idle`` (the idle housekeeping orchestrator) from
 ``scheduler_runtime_checker_mixin.py`` into the Scheduler main class

@@ -33,7 +33,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-batch-result-processor-prep"
-SUBJECT = "Stage batch-result processing for handoff to SchedulerBatchResultProcessor"
+SUBJECT = "Carve out SchedulerBatchResultProcessor for batch-result state"
 BODY = """\
 Inplace prep for the ``introduce-batch-result-processor`` mech move (the
 last extract from ``SchedulerOutputProcessorMixin``).

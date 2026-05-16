@@ -26,7 +26,7 @@ sys.path.insert(0, str(HERE))
 from _runner import run_pr
 
 ID = "migrate-profiler-mixin-pre-rename"
-SUBJECT = "Add leading _ on init_profile/start_profile/stop_profile/profile (pre-rename for profiler-mixin)"
+SUBJECT = "Mark init_profile/start_profile/stop_profile/profile as private"
 BODY = """\
 Privacy flip pre-rename for the ``migrate-profiler-mixin`` mech move.
 Four ``SchedulerProfilerMixin`` methods are made private because their

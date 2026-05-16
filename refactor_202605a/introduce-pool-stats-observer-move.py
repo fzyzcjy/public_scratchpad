@@ -24,7 +24,7 @@ from _helpers import cut_lines, find_method_lines
 from _runner import run_pr
 
 ID = "introduce-pool-stats-observer-move"
-SUBJECT = "Hand pool-stats sampling over to SchedulerPoolStatsObserver"
+SUBJECT = "Move pool-stats sampling to SchedulerPoolStatsObserver"
 BODY = """\
 Mechanical cut + paste for the ``introduce-pool-stats-observer`` mech move.
 

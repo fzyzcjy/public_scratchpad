@@ -34,7 +34,7 @@ from _helpers import cut_lines, find_function_lines, insert_after, replace_call_
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-pre-prep"
-SUBJECT = "Move create_scheduler_watchdog from runtime_checker mixin to scheduler.py (block move)"
+SUBJECT = "Move create_scheduler_watchdog from runtime_checker mixin to scheduler.py"
 BODY = """\
 Pre-prep for the ``introduce-invariant-checker`` mech split.
 

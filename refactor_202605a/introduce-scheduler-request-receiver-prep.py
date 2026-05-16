@@ -24,7 +24,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-scheduler-request-receiver-prep"
-SUBJECT = "Stage request-ingress methods for handoff to SchedulerRequestReceiver"
+SUBJECT = "Add SchedulerRequestReceiver and route request-ingress state through it"
 BODY = """\
 Inplace prep for the ``introduce-scheduler-request-receiver`` mech move.
 

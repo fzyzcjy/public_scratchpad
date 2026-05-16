@@ -44,7 +44,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-invariant-checker-prep"
-SUBJECT = "Stage invariant checks for handoff to SchedulerInvariantChecker"
+SUBJECT = "Introduce SchedulerInvariantChecker to own invariant-check state"
 BODY = """\
 Inplace prep for the ``introduce-invariant-checker`` mech move.
 

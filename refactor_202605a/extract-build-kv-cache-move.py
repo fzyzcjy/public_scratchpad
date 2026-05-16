@@ -27,7 +27,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-build-kv-cache-move"
-SUBJECT = "Move build_kv_cache to mem_cache/kv_cache_builder.py"
+SUBJECT = "Move build_kv_cache to mem_cache.kv_cache_builder"
 BODY = """\
 Mechanical cut + paste for the ``extract-build-kv-cache`` mech move.
 

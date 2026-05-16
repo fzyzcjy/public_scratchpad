@@ -30,7 +30,7 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "extract-get-draft-kv-pool-move"
-SUBJECT = "Move get_draft_kv_pool to mem_cache/kv_cache_builder.py"
+SUBJECT = "Move get_draft_kv_pool to mem_cache.kv_cache_builder"
 BODY = """\
 Mechanical cut + paste for the ``extract-get-draft-kv-pool`` mech move.
 

@@ -32,7 +32,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "migrate-update-weights-mixin-pre-prep1"
-SUBJECT = "Relocate self.offload_tags assignment near future weight_updater ctor (block move)"
+SUBJECT = "Park self.offload_tags next to the upcoming weight-updater constructor"
 BODY = """\
 Pure block-move pre-prep1 for ``migrate-update-weights-mixin``.
 

@@ -36,7 +36,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "extract-build-kv-cache-pre-prep"
-SUBJECT = "Hoist hisparse/decode_offload tail blocks out of init_cache_with_memory_pool (block move)"
+SUBJECT = "Hoist hisparse and decode-offload setup out of init_cache_with_memory_pool"
 BODY = """\
 Pure block-move pre-prep for ``extract-build-kv-cache``.
 

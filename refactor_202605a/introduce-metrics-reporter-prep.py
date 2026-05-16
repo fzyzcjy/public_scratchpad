@@ -47,7 +47,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-metrics-reporter-prep"
-SUBJECT = "Stage metrics reporting + PrefillStats for handoff to SchedulerMetricsReporter"
+SUBJECT = "Add SchedulerMetricsReporter and route metrics state through it"
 BODY = """\
 Inplace prep for the ``introduce-metrics-reporter`` mech move.
 

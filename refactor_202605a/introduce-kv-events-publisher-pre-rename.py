@@ -25,7 +25,7 @@ from _helpers import replace_call_site  # noqa: F401  (kept for parity)
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-pre-rename"
-SUBJECT = "Drop leading _ on emit_kv_metrics / publish_kv_events (pre-rename for kv-events-publisher)"
+SUBJECT = "Make emit_kv_metrics and publish_kv_events public"
 BODY = """\
 Privacy flip pre-rename for the ``introduce-kv-events-publisher`` mech
 move. ``SchedulerMetricsMixin`` methods are made public ahead of the

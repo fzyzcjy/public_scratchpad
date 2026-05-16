@@ -29,7 +29,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "init-mode-conditional-defaults"
-SUBJECT = "Pre-declare mode-conditional Scheduler fields with None defaults"
+SUBJECT = "Pre-declare mode-conditional Scheduler fields with explicit defaults"
 BODY = """\
 Pre-declare the mode-conditional Scheduler fields with ``None`` /
 ``False`` defaults at the top of ``Scheduler.__init__``:

@@ -30,7 +30,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "migrate-update-weights-mixin-pre-prep2"
-SUBJECT = "Wrap weight-update RPC dispatch tuples in lambdas (dispatch tuple reshape)"
+SUBJECT = "Wrap weight-update RPC dispatch tuples in lambdas"
 BODY = """\
 Pure dispatch-tuple reshape pre-prep2 for ``migrate-update-weights-mixin``.
 

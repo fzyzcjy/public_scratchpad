@@ -23,7 +23,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "introduce-logprob-result-processor-pre-rename"
-SUBJECT = "Drop underscore from _calculate_num_input_logprobs (pre-rename for introduce-logprob-result-processor)"
+SUBJECT = "Make _calculate_num_input_logprobs public"
 BODY = """\
 Privacy flip ``_calculate_num_input_logprobs`` →
 ``calculate_num_input_logprobs`` inside

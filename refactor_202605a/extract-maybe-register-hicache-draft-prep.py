@@ -26,7 +26,7 @@ from _helpers import find_method_lines
 from _runner import run_pr
 
 ID = "extract-maybe-register-hicache-draft-prep"
-SUBJECT = "Convert _maybe_register_hicache_draft to @staticmethod (prep for move)"
+SUBJECT = "Decouple _maybe_register_hicache_draft from self"
 BODY = """\
 Inplace prep for the ``extract-maybe-register-hicache-draft`` mech move.
 

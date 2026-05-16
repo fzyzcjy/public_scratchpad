@@ -19,7 +19,7 @@ from _helpers import cut_lines, find_function_lines
 from _runner import run_pr
 
 ID = "cleanup-scheduler-py-free-items"
-SUBJECT = "Delete dead is_work_request from scheduler.py"
+SUBJECT = "Delete the now-unused is_work_request from scheduler.py"
 BODY = """\
 Non-mech cleanup tail commit for the preceding free-item relocation.
 

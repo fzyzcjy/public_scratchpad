@@ -29,7 +29,7 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "migrate-profiler-mixin-pre-prep"
-SUBJECT = "Inline init_profiler body into Scheduler.__init__ (block move)"
+SUBJECT = "Inline init_profiler into Scheduler.__init__"
 BODY = """\
 Pure block-move pre-prep for ``migrate-profiler-mixin``.
 

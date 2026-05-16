@@ -32,7 +32,7 @@ from _helpers import find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-load-inquirer-prep"
-SUBJECT = "Stage queue-load reporting for handoff to SchedulerLoadInquirer"
+SUBJECT = "Carve out SchedulerLoadInquirer for queue-load state"
 BODY = """\
 Inplace prep for the ``introduce-load-inquirer`` mech move.
 

@@ -22,7 +22,7 @@ from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
 from _runner import run_pr
 
 ID = "introduce-load-inquirer-move"
-SUBJECT = "Hand queue-load reporting over to SchedulerLoadInquirer"
+SUBJECT = "Move queue-load reporting to SchedulerLoadInquirer"
 BODY = """\
 Mechanical cut + paste for the ``introduce-load-inquirer`` mech move.
 
