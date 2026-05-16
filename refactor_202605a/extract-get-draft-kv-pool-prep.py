@@ -11,10 +11,6 @@ Scheduler** in this commit; the physical move to ``kv_cache.py`` happens in
 After this commit, scheduler.py contains a `@staticmethod` whose body bytes
 will be byte-equivalent (mod dedent + decorator) to the body in the target
 module after ``extract-get-draft-kv-pool-move``.
-
-# TODO: type annotation for draft_worker — TpModelWorker subclass type is not
-# imported in scheduler.py at module level (only inside functions), so we
-# leave draft_worker untyped to avoid introducing a new top-level import.
 """
 
 # /// script
@@ -57,7 +53,7 @@ NEW_SIGNATURE = (
     "    @staticmethod\n"
     "    def get_draft_kv_pool(\n"
     "        *,\n"
-    "        draft_worker,\n"
+    "        draft_worker: \"BaseTpWorker\",\n"
     "        spec_algorithm: SpeculativeAlgorithm,\n"
     "        server_args: ServerArgs,\n"
     "        enable_overlap: bool,\n"
