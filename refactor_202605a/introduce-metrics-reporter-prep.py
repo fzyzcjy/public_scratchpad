@@ -11,14 +11,6 @@ qualify internal sibling calls as
 mixin / disagg / dllm callers into the static-bound sister form
 ``self.<method>(self.metrics_reporter, ...)``.
 
-R4 exception note: ``SchedulerMetricsReporter`` is allowed to hold a
-``scheduler: Scheduler`` back-reference because metrics is a read-only
-panoramic observer — replacing every ``self.scheduler.X`` access with a
-Callable getter (the alternative) is just back-reference in disguise,
-and obscures the fact that the reporter genuinely needs to see most of
-Scheduler's surface to emit complete metrics. Other sister classes do
-NOT get this exemption.
-
 After this commit:
 
   * ``managers/scheduler_components/metrics_reporter.py`` exists with
@@ -64,10 +56,6 @@ Inplace prep for the ``introduce-metrics-reporter`` mech move.
   methods land in the upcoming ``-move`` commit). The ctor takes a
   ``scheduler: "Scheduler"`` back-reference plus ``tp_rank`` /
   ``pp_rank`` / ``dp_rank`` / ``metrics_collector``.
-- R4 exception documented in the class docstring: the metrics reporter
-  is a panoramic read-only observer and is the only sister class
-  allowed to hold a ``scheduler`` back-reference; every other sister
-  class must stick to explicit field injection.
 - ``__post_init__`` runs the original ``init_metrics`` body via
   ``SchedulerMetricsMixin.init_metrics(self, tp_rank, pp_rank, dp_rank)``
   qualified call (and ``install_device_timer_on_runners`` likewise) —
@@ -147,15 +135,7 @@ NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True)
 class SchedulerMetricsReporter:
     """Prometheus / Stats hot-path. Composition target on Scheduler
-    (``self.metrics_reporter``).
-
-    R4 exception: this is the ONLY sister class that holds a
-    ``scheduler: Scheduler`` back-reference. Metric emission is a
-    read-only panoramic observer over Scheduler state — forcing every
-    field access through Callable getters (the alternative) is
-    back-reference in disguise and obscures the genuine "see most of
-    Scheduler" requirement. Other sister classes do not get this
-    exemption."""
+    (``self.metrics_reporter``)."""
 
     scheduler: "Scheduler"
     tp_rank: int
