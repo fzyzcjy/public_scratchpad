@@ -29,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import find_method_lines, insert_after, replace_call_site
+from _helpers import ensure_imports, find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-prep"
@@ -189,8 +189,18 @@ def transform(wt: Path) -> None:
     target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
 
     # 1. Append the SchedulerKvEventsPublisher class skeleton to the target
-    #    file (KvMetrics already lives there from pre-move).
+    #    file (KvMetrics already lives there from pre-move). The skeleton
+    #    needs ``dataclass`` + ``Any`` / ``Callable`` / ``Optional`` typing
+    #    imports; pre-move's file may have had them stripped by isort/ruff
+    #    if KvMetrics alone didn't use them.
     target_text = target.read_text()
+    target_text = ensure_imports(
+        target_text,
+        runtime={
+            "dataclasses": ("dataclass",),
+            "typing": ("Any", "Callable", "Optional"),
+        },
+    )
     if not target_text.endswith("\n"):
         target_text += "\n"
     target.write_text(target_text + "\n" + NEW_CLASS_SKELETON)

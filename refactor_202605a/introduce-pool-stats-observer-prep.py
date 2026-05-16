@@ -38,7 +38,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import find_method_lines, insert_after, replace_call_site
+from _helpers import ensure_imports, find_method_lines, insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-pool-stats-observer-prep"
