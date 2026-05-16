@@ -72,12 +72,12 @@ Inplace prep for the ``introduce-invariant-checker`` mech move.
 - Callers rewritten to the sister staticmethod-on-mixin form
   ``self.<method>(self.invariant_checker, ...)`` (mirrors
   ``introduce-load-inquirer-prep``'s pattern; the move commit reduces
-  this to ``self.invariant_checker.<method>(...)``). 5 callsites in
+  this to ``self.invariant_checker.<method>(...)``). Callsites in
   ``scheduler.py``: ``_check_all_pools`` / ``_report_leak`` /
   ``_check_req_pool`` / ``_check_tree_cache`` (in ``on_idle`` /
   ``_maybe_log_idle_metrics``); ``self_check_during_busy`` (in
-  ``run_batch``, appears twice — direct + overlap variant). 1 callsite
-  in the ``create_scheduler_watchdog`` free function (moved into
+  ``run_batch``, direct + overlap variant). Also a callsite in the
+  ``create_scheduler_watchdog`` free function (moved into
   ``scheduler.py`` in the pre-prep commit).
 
 The 10 methods stay inside ``SchedulerRuntimeCheckerMixin`` in this
