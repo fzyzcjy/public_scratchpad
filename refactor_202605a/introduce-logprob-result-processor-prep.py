@@ -42,8 +42,8 @@ Inplace prep for the ``introduce-logprob-result-processor`` mech move.
   ``@staticmethod`` with ``self: "SchedulerLogprobResultProcessor"`` type annotation.
 - Drop the original ``self: Scheduler`` annotation; otherwise method bodies
   byte-identical.
-- Callers (3 callsites in ``scheduler_output_processor_mixin.py`` and 2
-  in ``disaggregation/prefill.py``) rewritten to
+- Callers in ``scheduler_output_processor_mixin.py`` and
+  ``disaggregation/prefill.py`` are rewritten to
   ``self.<method>(self.logprob_result_processor, ...)``.
 
 The 9 methods stay inside the mixin in this commit; physical cut + paste
