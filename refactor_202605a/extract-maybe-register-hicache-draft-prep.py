@@ -33,7 +33,7 @@ Inplace prep for the ``extract-maybe-register-hicache-draft`` mech move.
 In Scheduler, ``_maybe_register_hicache_draft(self) -> None`` becomes
 ``@staticmethod maybe_register_hicache_draft(*, tree_cache, draft_worker,
 spec_algorithm, server_args, enable_hierarchical_cache, enable_overlap,
-page_size) -> None``. The 7 ``self.X`` reads become bare kwarg names.
+page_size) -> None``. The ``self.X`` reads become bare kwarg names.
 Privacy underscore dropped for the upcoming module-level public API.
 
 Sole callsite ``Scheduler.__init__`` rewritten to class-qualified form.
