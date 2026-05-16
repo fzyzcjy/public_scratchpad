@@ -30,11 +30,11 @@ from _helpers import replace_call_site
 from _runner import run_pr
 
 ID = "migrate-update-weights-mixin-pre-prep2"
-SUBJECT = "Wrap 13 weight-update RPC dispatch tuples in lambdas (dispatch tuple reshape)"
+SUBJECT = "Wrap weight-update RPC dispatch tuples in lambdas (dispatch tuple reshape)"
 BODY = """\
 Pure dispatch-tuple reshape pre-prep2 for ``migrate-update-weights-mixin``.
 
-Rewrap the 13 RPC dispatch tuples in
+Rewrap the weight-update RPC dispatch tuples in
 ``Scheduler.init_request_dispatcher`` that currently use direct bound
 method refs (e.g. ``(UpdateWeightFromDiskReqInput,
 self.update_weights_from_disk)``) into lambda form (``(MessageClass,
@@ -47,14 +47,15 @@ typeflip lets the ``-prep`` commit grow the lambda body with the
 tuple form. The ``-move`` commit then collapses each lambda to a direct
 ``self.weight_updater.<method>`` reference (pure prefix transformation).
 
-13 sites covered:
-- flush_cache_after_weight_update is not in the dispatcher (called from
-  within mixin); the 13 RPC sites here are: update_weights_from_disk,
-  init_weights_update_group, destroy_weights_update_group,
-  update_weights_from_distributed, update_weights_from_tensor,
-  update_weights_from_ipc, get_weights_by_name, release_memory_occupation,
-  resume_memory_occupation, check_weights, plus 3 more registered via the
-  dispatcher tuple — see ``init_request_dispatcher`` source.
+Sites covered: ``flush_cache_after_weight_update`` is not in the
+dispatcher (called from within the mixin); the RPC sites here are
+``update_weights_from_disk``, ``init_weights_update_group``,
+``destroy_weights_update_group``, ``update_weights_from_distributed``,
+``update_weights_from_tensor``, ``update_weights_from_ipc``,
+``get_weights_by_name``, ``release_memory_occupation``,
+``resume_memory_occupation``, ``check_weights``, plus the remaining
+entries registered via the dispatcher tuple — see
+``init_request_dispatcher`` source.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
