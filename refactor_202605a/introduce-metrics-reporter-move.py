@@ -392,6 +392,107 @@ def transform(wt: Path) -> None:
     )
     schedule_batch.write_text(text)
 
+    # 12. test_forward_pass_metrics.py: rewrite to construct
+    #     SchedulerMetricsReporter directly. _DummyScheduler(SchedulerMetricsMixin)
+    #     inheritance pattern → SimpleNamespace scheduler + reporter object;
+    #     init_metrics → _init_fpm (scoped to FPM init, the only path the test
+    #     exercises); 4 monotonic patch paths get rewritten.
+    test_fwd = wt / "test/registered/unit/observability/test_forward_pass_metrics.py"
+    text = test_fwd.read_text()
+    text = text.replace(
+        "from sglang.srt.observability.scheduler_metrics_mixin import (\n"
+        "    PrefillStats,\n"
+        "    SchedulerMetricsMixin,\n"
+        ")\n",
+        "from sglang.srt.managers.scheduler_components.metrics_reporter import (\n"
+        "    PrefillStats,\n"
+        "    SchedulerMetricsReporter,\n"
+        ")\n",
+    )
+    text = text.replace(
+        "class _DummyScheduler(SchedulerMetricsMixin):\n    pass\n",
+        "def _make_reporter(scheduler) -> SchedulerMetricsReporter:\n"
+        "    return SchedulerMetricsReporter(\n"
+        "        scheduler=scheduler,\n"
+        "        tp_rank=0,\n"
+        "        pp_rank=0,\n"
+        "        dp_rank=0,\n"
+        "        metrics_collector=None,\n"
+        "    )\n",
+    )
+    text = text.replace(
+        "    def setUp(self):\n"
+        "        self.scheduler = _DummyScheduler()\n"
+        "        self.scheduler.enable_fpm = True\n",
+        "    def setUp(self):\n"
+        "        self.scheduler = types.SimpleNamespace()\n"
+        "        self.scheduler.enable_fpm = True\n",
+    )
+    text = text.replace(
+        "        self.scheduler.disaggregation_mode = DisaggregationMode.NULL\n\n"
+        "    def _make_batch(self, **overrides):\n",
+        "        self.scheduler.disaggregation_mode = DisaggregationMode.NULL\n"
+        "        self.reporter = _make_reporter(self.scheduler)\n\n"
+        "    def _make_batch(self, **overrides):\n",
+    )
+    text = text.replace(
+        "            self.scheduler._emit_forward_pass_metrics(",
+        "            self.reporter._emit_forward_pass_metrics(",
+    )
+    text = text.replace(
+        "        self.scheduler._emit_forward_pass_metrics(",
+        "        self.reporter._emit_forward_pass_metrics(",
+    )
+    text = text.replace(
+        "        self.scheduler.forward_pass_device_timer = types.SimpleNamespace(\n"
+        "            _report=lambda: None,\n"
+        "        )\n",
+        "        self.reporter.forward_pass_device_timer = types.SimpleNamespace(\n"
+        "            _report=lambda: None,\n"
+        "        )\n",
+    )
+    text = text.replace(
+        "sglang.srt.observability.scheduler_metrics_mixin.time.monotonic",
+        "sglang.srt.managers.scheduler_components.metrics_reporter.time.monotonic",
+    )
+    text = text.replace(
+        "        scheduler = _DummyScheduler()\n",
+        "        scheduler = types.SimpleNamespace()\n",
+    )
+    text = text.replace(
+        "        scheduler.enable_kv_cache_events = False\n\n"
+        "        with patch(\n"
+        "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
+        "            _DummyPublisherThread,\n"
+        "        ):\n"
+        "            scheduler.init_metrics(tp_rank=0, pp_rank=0, dp_rank=2)\n",
+        "        scheduler.enable_kv_cache_events = False\n"
+        "        reporter = _make_reporter(scheduler)\n"
+        "        reporter.forward_pass_device_timer = None\n\n"
+        "        with patch(\n"
+        "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
+        "            _DummyPublisherThread,\n"
+        "        ):\n"
+        "            reporter._init_fpm()\n",
+    )
+    text = text.replace(
+        "        scheduler.enable_kv_cache_events = False\n\n"
+        "        with patch(\n"
+        "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
+        "            _DummyPublisherThread,\n"
+        "        ):\n"
+        "            scheduler.init_metrics(tp_rank=0, pp_rank=0, dp_rank=0)\n",
+        "        scheduler.enable_kv_cache_events = False\n"
+        "        reporter = _make_reporter(scheduler)\n"
+        "        reporter.forward_pass_device_timer = None\n\n"
+        "        with patch(\n"
+        "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
+        "            _DummyPublisherThread,\n"
+        "        ):\n"
+        "            reporter._init_fpm()\n",
+    )
+    test_fwd.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(

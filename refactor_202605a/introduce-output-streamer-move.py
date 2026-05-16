@@ -190,6 +190,29 @@ def transform(wt: Path) -> None:
     )
     sched.write_text(text)
 
+    # Test mock fix-up: two unit tests mock ``scheduler.stream_output``; after
+    # the move the real callsites go through ``scheduler.output_streamer.stream_output``,
+    # so the mocks (and the matching assertion) must follow.
+    test_prio = wt / "test/registered/unit/managers/test_priority_scheduling_disaggregation.py"
+    ttext = test_prio.read_text()
+    ttext = ttext.replace(
+        "        scheduler.stream_output = MagicMock()\n",
+        "        scheduler.output_streamer = MagicMock()\n",
+    )
+    ttext = ttext.replace(
+        "        queue.scheduler.stream_output.assert_called_once_with(\n",
+        "        queue.scheduler.output_streamer.stream_output.assert_called_once_with(\n",
+    )
+    test_prio.write_text(ttext)
+
+    test_radix = wt / "test/registered/unit/mem_cache/test_decode_radix_lock_ref.py"
+    rtext = test_radix.read_text()
+    rtext = rtext.replace(
+        "        scheduler.stream_output = MagicMock()\n",
+        "        scheduler.output_streamer = MagicMock()\n",
+    )
+    test_radix.write_text(rtext)
+
 
 if __name__ == "__main__":
     run_pr(
