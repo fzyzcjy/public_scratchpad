@@ -11,6 +11,10 @@ Scheduler** in this commit; the physical move to ``kv_cache.py`` happens in
 After this commit, scheduler.py contains a `@staticmethod` whose body bytes
 will be byte-equivalent (mod dedent + decorator) to the body in the target
 module after ``extract-get-draft-kv-pool-move``.
+
+# TODO: type annotation for draft_worker — TpModelWorker subclass type is not
+# imported in scheduler.py at module level (only inside functions), so we
+# leave draft_worker untyped to avoid introducing a new top-level import.
 """
 
 # /// script
@@ -37,7 +41,7 @@ server_args, enable_overlap)``. The 4 ``self.X`` reads in the body become
 bare kwarg names. Privacy underscore dropped for the upcoming module-level
 public API.
 
-2 callsites in Scheduler updated to class-qualified form
+The callsites in Scheduler are updated to the class-qualified form
 ``Scheduler.get_draft_kv_pool(draft_worker=self.draft_worker, ...)``.
 
 The method stays inside Scheduler. The physical cut + paste to
@@ -54,8 +58,8 @@ NEW_SIGNATURE = (
     "    def get_draft_kv_pool(\n"
     "        *,\n"
     "        draft_worker,\n"
-    "        spec_algorithm,\n"
-    "        server_args,\n"
+    "        spec_algorithm: SpeculativeAlgorithm,\n"
+    "        server_args: ServerArgs,\n"
     "        enable_overlap: bool,\n"
     "    ):"
 )
