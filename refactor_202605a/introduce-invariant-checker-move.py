@@ -29,7 +29,7 @@ ID = "introduce-invariant-checker-move"
 SUBJECT = "Hand invariant checks over to SchedulerInvariantChecker (retire runtime_checker mixin)"
 BODY = """\
 Mechanical cut + paste for the ``introduce-invariant-checker`` mech move
-(tail commit of the ``SchedulerRuntimeCheckerMixin`` 1:N split).
+(tail commit of the ``SchedulerRuntimeCheckerMixin`` split).
 
 Cut the invariant-check methods (the @staticmethod-converted ones from
 prep plus the already-static ``_check_pool_invariant``) from

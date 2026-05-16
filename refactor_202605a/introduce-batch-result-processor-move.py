@@ -31,7 +31,7 @@ BODY = """\
 Mechanical cut + paste for the ``introduce-batch-result-processor`` mech
 move (final extract from ``SchedulerOutputProcessorMixin``).
 
-Cut the 11 remaining process/collect @staticmethods (after prep) from
+Cut the remaining process/collect @staticmethods (after prep) from
 ``SchedulerOutputProcessorMixin`` and paste them into
 ``SchedulerBatchResultProcessor`` body in
 ``scheduler_components/batch_result_processor.py``.

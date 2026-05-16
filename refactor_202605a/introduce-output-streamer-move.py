@@ -25,7 +25,7 @@ SUBJECT = "Hand output streaming over to SchedulerOutputStreamer"
 BODY = """\
 Mechanical cut + paste for the ``introduce-output-streamer`` mech move.
 
-Cut the 6 stream @staticmethods (after prep) from
+Cut the stream @staticmethods (after prep) from
 ``SchedulerOutputProcessorMixin`` and paste them into
 ``SchedulerOutputStreamer`` body in
 ``scheduler_components/output_streamer.py``.

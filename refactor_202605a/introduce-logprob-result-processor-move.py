@@ -25,7 +25,7 @@ SUBJECT = "Hand logprob assembly over to SchedulerLogprobResultProcessor"
 BODY = """\
 Mechanical cut + paste for the ``introduce-logprob-result-processor`` mech move.
 
-Cut the 9 logprob @staticmethods (after prep) from
+Cut the logprob @staticmethods (after prep) from
 ``SchedulerOutputProcessorMixin`` and paste them into
 ``SchedulerLogprobResultProcessor`` body in
 ``scheduler_components/logprob_result_processor.py``.
