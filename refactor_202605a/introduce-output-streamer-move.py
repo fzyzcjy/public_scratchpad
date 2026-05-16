@@ -17,7 +17,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-output-streamer-move"
@@ -109,6 +115,22 @@ def transform(wt: Path) -> None:
 
     rtext = target.read_text()
     rtext = rtext.rstrip() + "\n\n" + methods_text.rstrip() + "\n"
+    # Re-inject imports the method bodies need (prep wrote these; ruff F401
+    # stripped them while the bodies were absent).
+    rtext = ensure_bare_imports(rtext, ["import torch\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "typing": ("List", "Optional"),
+            "sglang.srt.disaggregation.utils": "DisaggregationMode",
+            "sglang.srt.managers.io_struct": (
+                "BatchEmbeddingOutput",
+                "BatchTokenIDOutput",
+                "GetLoadsReqInput",
+            ),
+            "sglang.srt.managers.schedule_batch": ("BaseFinishReason", "Req"),
+        },
+    )
     target.write_text(rtext)
 
     # Caller rewrites — use the robust helper (handles single-line and

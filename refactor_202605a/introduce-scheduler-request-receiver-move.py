@@ -17,7 +17,12 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+)
 from _runner import run_pr
 
 ID = "introduce-scheduler-request-receiver-move"
@@ -84,6 +89,26 @@ def transform(wt: Path) -> None:
     # already have 4-space indent matching class body).
     rtext = receiver.read_text()
     rtext = rtext.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
+    # Re-inject imports the method bodies need (prep wrote these; ruff F401
+    # stripped them while the bodies were absent).
+    rtext = ensure_bare_imports(rtext, ["import zmq\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "http": "HTTPStatus",
+            "typing": ("List", "Union"),
+            "torch.distributed": "barrier",
+            "sglang.srt.disaggregation.utils": "prepare_abort",
+            "sglang.srt.managers.io_struct": (
+                "BatchTokenizedEmbeddingReqInput",
+                "BatchTokenizedGenerateReqInput",
+                "TokenizedEmbeddingReqInput",
+                "TokenizedGenerateReqInput",
+            ),
+            "sglang.srt.managers.mm_utils": ("has_shm_features", "unwrap_shm_features"),
+            "sglang.srt.utils": ("broadcast_pyobj", "point_to_point_pyobj"),
+        },
+    )
     receiver.write_text(rtext)
 
     # Caller rewrites: pure prefix transformation.

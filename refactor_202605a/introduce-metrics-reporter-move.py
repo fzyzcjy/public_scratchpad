@@ -30,6 +30,8 @@ HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 from _helpers import (
     cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
     find_class_lines,
     find_method_lines,
     rewrite_method_call_site,
@@ -244,13 +246,11 @@ def transform(wt: Path) -> None:
     )
     target.write_text(new_target_text)
 
-    # 5. The target file now has all needed content. Replace its skeleton-only
-    #    import header with the full set of imports needed by the relocated
-    #    methods (taken verbatim from the original mixin header). The
-    #    ``from sglang.srt.observability.scheduler_metrics_mixin import (
-    #    SchedulerMetricsMixin,)`` import in target is now stale (no qualified
-    #    references remain) — drop it. Append the additional imports the moved
-    #    method bodies need.
+    # 5. The target file now has all needed content. Drop the stale
+    #    ``from ... import SchedulerMetricsMixin`` (no qualified
+    #    references remain) and ensure the imports the moved bodies need
+    #    are present (independent of whether ruff F401 stripped them
+    #    during prep).
     target_text = target.read_text()
     target_text = target_text.replace(
         "from sglang.srt.observability.scheduler_metrics_mixin import (\n"
@@ -258,40 +258,34 @@ def transform(wt: Path) -> None:
         ")\n",
         "",
     )
-    # Add the imports the moved bodies need (deduped against the skeleton's
-    # existing import set). Inserted after the existing
-    # ``from sglang.srt.disaggregation.utils import DisaggregationMode`` line.
-    target_text = target_text.replace(
-        "from sglang.srt.disaggregation.utils import DisaggregationMode\n",
-        "import dataclasses\n"
-        "import tempfile\n"
-        "import time\n"
-        "from collections import defaultdict\n"
-        "from typing import List, Tuple, Union\n"
-        "\n"
-        "from sglang.srt.disaggregation.utils import DisaggregationMode\n"
-        "from sglang.srt.environ import envs\n"
-        "from sglang.srt.managers.schedule_batch import ScheduleBatch\n"
-        "from sglang.srt.managers.utils import GenerationBatchResult\n"
-        "from sglang.srt.observability.metrics_collector import (\n"
-        "    DPCooperationInfo,\n"
-        "    QueueCount,\n"
-        "    SchedulerMetricsCollector,\n"
-        "    SchedulerStats,\n"
-        "    compute_routing_key_stats,\n"
-        ")\n"
-        "from sglang.srt.utils.device_timer import DeviceTimer\n"
-        "from sglang.srt.utils.scheduler_status_logger import SchedulerStatusLogger\n",
+    target_text = ensure_bare_imports(
+        target_text,
+        ["import dataclasses\n", "import tempfile\n", "import time\n"],
     )
-    # Add TYPE_CHECKING entries the moved bodies reference (Req, PrefillAdder,
-    # EmbeddingBatchResult) alongside the existing Scheduler import.
-    target_text = target_text.replace(
-        "if TYPE_CHECKING:\n"
-        "    from sglang.srt.managers.scheduler import Scheduler\n",
-        "if TYPE_CHECKING:\n"
-        "    from sglang.srt.managers.schedule_batch import Req\n"
-        "    from sglang.srt.managers.schedule_policy import PrefillAdder\n"
-        "    from sglang.srt.managers.scheduler import EmbeddingBatchResult, Scheduler\n",
+    target_text = ensure_imports(
+        target_text,
+        runtime={
+            "collections": "defaultdict",
+            "typing": ("List", "Tuple", "Union"),
+            "sglang.srt.disaggregation.utils": "DisaggregationMode",
+            "sglang.srt.environ": "envs",
+            "sglang.srt.managers.schedule_batch": "ScheduleBatch",
+            "sglang.srt.managers.utils": "GenerationBatchResult",
+            "sglang.srt.observability.metrics_collector": (
+                "DPCooperationInfo",
+                "QueueCount",
+                "SchedulerMetricsCollector",
+                "SchedulerStats",
+                "compute_routing_key_stats",
+            ),
+            "sglang.srt.utils.device_timer": "DeviceTimer",
+            "sglang.srt.utils.scheduler_status_logger": "SchedulerStatusLogger",
+        },
+        type_checking={
+            "sglang.srt.managers.schedule_batch": "Req",
+            "sglang.srt.managers.schedule_policy": "PrefillAdder",
+            "sglang.srt.managers.scheduler": ("EmbeddingBatchResult", "Scheduler"),
+        },
     )
     target.write_text(target_text)
 

@@ -18,7 +18,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-load-inquirer-move"
@@ -81,6 +87,27 @@ def transform(wt: Path) -> None:
     # Cut _get_num_pending_tokens first (preserves line numbers for get_loads).
     _cut_method_to_target(src, target, method_name="_get_num_pending_tokens")
     _cut_method_to_target(src, target, method_name="get_loads")
+
+    # Re-inject imports the method bodies need (prep wrote these; ruff F401
+    # stripped them while the bodies were absent).
+    rtext = target.read_text()
+    rtext = ensure_bare_imports(rtext, ["import time\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "sglang.srt.disaggregation.utils": "DisaggregationMode",
+            "sglang.srt.managers.io_struct": (
+                "DisaggregationMetrics",
+                "GetLoadsReqInput",
+                "GetLoadsReqOutput",
+                "LoRAMetrics",
+                "MemoryMetrics",
+                "QueueMetrics",
+                "SpeculativeMetrics",
+            ),
+        },
+    )
+    target.write_text(rtext)
 
     # Caller rewrites — use the robust helper (handles single-line and
     # multi-line black-formatted calls alike).

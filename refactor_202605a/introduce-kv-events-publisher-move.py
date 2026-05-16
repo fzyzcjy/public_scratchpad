@@ -17,7 +17,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_bare_imports,
+    ensure_imports,
+    find_method_lines,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "introduce-kv-events-publisher-move"
@@ -82,6 +88,18 @@ def transform(wt: Path) -> None:
 
     rtext = target.read_text()
     rtext = rtext.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
+    # Re-inject imports the method bodies need (prep wrote these; ruff F401
+    # stripped them while the bodies were absent).
+    rtext = ensure_bare_imports(rtext, ["import time\n"])
+    rtext = ensure_imports(
+        rtext,
+        runtime={
+            "sglang.srt.disaggregation.kv_events": (
+                "EventPublisherFactory",
+                "KVEventBatch",
+            ),
+        },
+    )
     target.write_text(rtext)
 
     # Caller rewrites — use the robust helper (handles single-line and

@@ -21,6 +21,7 @@ from _helpers import (
     append_to_file,
     cut_lines,
     dedent_method_to_function,
+    ensure_imports,
     find_method_lines,
     replace_call_site,
 )
@@ -60,6 +61,31 @@ def transform(wt: Path) -> None:
     function_text = dedent_method_to_function(function_text)
 
     append_to_file(kvc, function_text)
+
+    # Re-inject imports the function body needs (prep wrote these; ruff F401
+    # stripped them while the body wasn't yet present).
+    kvc_text = kvc.read_text()
+    kvc_text = ensure_imports(
+        kvc_text,
+        runtime={
+            "typing": "Optional",
+            "sglang.srt.configs.model_config": "ModelImpl",
+            "sglang.srt.environ": "envs",
+            "sglang.srt.managers.mm_utils": "init_mm_embedding_cache",
+            "sglang.srt.mem_cache.cache_init_params": "CacheInitParams",
+            "sglang.srt.mem_cache.radix_cache": "RadixCache",
+            "sglang.srt.model_loader.utils": "get_resolved_model_impl",
+            "sglang.srt.session.streaming_session": "StreamingSession",
+        },
+        type_checking={
+            "sglang.srt.configs.model_config": "ModelConfig",
+            "sglang.srt.distributed.parallel_state": "GroupCoordinator",
+            "sglang.srt.distributed.parallel_state_wrapper": "ParallelState",
+            "sglang.srt.mem_cache.base_prefix_cache": "BasePrefixCache",
+            "torch.distributed": "ProcessGroup",
+        },
+    )
+    kvc.write_text(kvc_text)
 
     # Pure prefix replace for the caller.
     text = sched.read_text()

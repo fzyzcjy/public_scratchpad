@@ -21,7 +21,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_method_lines, replace_call_site, rewrite_method_call_site
+from _helpers import (
+    cut_lines,
+    ensure_imports,
+    find_method_lines,
+    replace_call_site,
+    rewrite_method_call_site,
+)
 from _runner import run_pr
 
 ID = "migrate-profiler-mixin-move"
@@ -133,13 +139,11 @@ def transform(wt: Path) -> None:
 
     # 3. Splice the supporting module-level prelude (NPU patches, logger,
     #    extra imports) into the target file, between the existing imports
-    #    block and the class declaration.
-    #    Target file currently starts with: imports header (no TYPE_CHECKING)
-    #    then ``class SchedulerProfilerManager:``. We add ``TYPE_CHECKING``
-    #    to the typing import and insert the prelude.
-    target_text = target_text.replace(
-        "from typing import Callable, List, Optional",
-        "from typing import TYPE_CHECKING, Callable, List, Optional",
+    #    block and the class declaration. Use ensure_imports so we don't
+    #    depend on ruff F401 leaving the prep imports intact.
+    target_text = ensure_imports(
+        target_text,
+        runtime={"typing": "TYPE_CHECKING"},
     )
     target_text = target_text.replace(
         "from sglang.srt.environ import envs\n",
