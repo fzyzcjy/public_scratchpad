@@ -33,7 +33,7 @@ Inplace prep step for the ``extract-get-draft-kv-pool`` mech move.
 
 In Scheduler, ``_get_draft_kv_pool(self)`` becomes
 ``@staticmethod get_draft_kv_pool(*, draft_worker, spec_algorithm,
-server_args, enable_overlap)``. The 4 ``self.X`` reads in the body become
+server_args, enable_overlap)``. The ``self.X`` reads in the body become
 bare kwarg names. Privacy underscore dropped for the upcoming module-level
 public API.
 
