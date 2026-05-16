@@ -40,8 +40,8 @@ Inplace prep for the ``introduce-scheduler-request-receiver`` mech move.
 - In ``recv_requests``, strip the inline ``last_forward_mode`` computation
   block and add ``last_forward_mode`` as a keyword-only parameter (R4 kwarg
   add — pragmatic deviation; documented).
-- Callers (2 in scheduler.py, 3 in scheduler_pp_mixin.py, 4 in disagg /
-  mlx / multiplex mixins) rewritten to
+- Callers in scheduler.py, scheduler_pp_mixin.py, and the disagg / mlx /
+  multiplex mixins are rewritten to
   ``self.recv_requests(self.request_receiver, last_forward_mode=...)``.
 
 Note on the C4 block-move audit (``2026-05-11-mech-scheduler-block-move-
