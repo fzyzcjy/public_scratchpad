@@ -329,6 +329,22 @@ def transform(wt: Path) -> None:
         "scheduler.metrics_reporter._shutdown_fpm()",
         text,
     )
+    # Collapse the ctor-body bootstrap calls emitted by prep (replacing
+    # __post_init__). After move the bodies live on the reporter class
+    # itself, so ``SchedulerMetricsMixin.<m>(self.metrics_reporter, ...)``
+    # becomes ``self.metrics_reporter.<m>(...)``. Use regex to tolerate
+    # whatever line wrapping black applied to the multi-arg call.
+    text = re.sub(
+        r"SchedulerMetricsMixin\._init_metrics\(\s*self\.metrics_reporter\s*,\s*"
+        r"tp_rank\s*,\s*pp_rank\s*,\s*dp_rank\s*,?\s*\)",
+        "self.metrics_reporter._init_metrics(tp_rank, pp_rank, dp_rank)",
+        text,
+        flags=re.DOTALL,
+    )
+    text = text.replace(
+        "SchedulerMetricsMixin._install_device_timer_on_runners(self.metrics_reporter)",
+        "self.metrics_reporter._install_device_timer_on_runners()",
+    )
     sched.write_text(text)
 
     # 8. Output processor mixin: caller form collapse.

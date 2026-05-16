@@ -142,10 +142,6 @@ class SchedulerMetricsReporter:
     metrics_collector: SchedulerMetricsCollector
     num_retracted_reqs: int = 0
     num_paused_reqs: int = 0
-
-    def __post_init__(self) -> None:
-        SchedulerMetricsMixin._init_metrics(self, self.tp_rank, self.pp_rank, self.dp_rank)
-        SchedulerMetricsMixin._install_device_timer_on_runners(self)
 '''
 
 
@@ -157,6 +153,10 @@ SCHEDULER_INIT_INSERT = """\
             dp_rank=dp_rank,
             metrics_collector=self.metrics_collector,
         )
+        SchedulerMetricsMixin._init_metrics(
+            self.metrics_reporter, tp_rank, pp_rank, dp_rank,
+        )
+        SchedulerMetricsMixin._install_device_timer_on_runners(self.metrics_reporter)
         self.stats = self.metrics_reporter.stats
 
 """

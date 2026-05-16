@@ -193,9 +193,9 @@ class IdleSleeper:
     data that needs handling immediately.
     """
 
-    sockets: Any
+    sockets: list[zmq.Socket]
     last_empty_time: float = field(default_factory=real_time)
-    poller: Any = None
+    poller: Optional[zmq.Poller] = None
     empty_cache_interval: int = 0
 
     def __post_init__(self) -> None:
@@ -225,7 +225,7 @@ def _move_idle_sleeper(wt: Path) -> None:
 
     new_file_text = (
         "from dataclasses import dataclass, field\n"
-        "from typing import Any\n\n"
+        "from typing import Optional\n\n"
         "import zmq\n\n"
         "from sglang.srt.environ import envs\n"
         "from sglang.srt.observability.req_time_stats import real_time\n"

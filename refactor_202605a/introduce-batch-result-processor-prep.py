@@ -108,7 +108,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, TYPE_CHECKING, List, Union
+from typing import Callable, Optional, TYPE_CHECKING, List, Union
 
 import torch
 
@@ -124,6 +124,10 @@ from sglang.srt.state_capturer.routed_experts import get_global_experts_capturer
 
 if TYPE_CHECKING:
     from sglang.srt.configs.model_config import ModelConfig
+    from sglang.srt.disaggregation.decode_kvcache_offload_manager import (
+        DecodeKVCacheOffloadManager,
+    )
+    from sglang.srt.managers.hisparse_coordinator import HiSparseCoordinator
     from sglang.srt.managers.scheduler import (
         EmbeddingBatchResult,
         GenerationBatchResult,
@@ -157,9 +161,9 @@ class SchedulerBatchResultProcessor:
     model_config: "ModelConfig"
     token_to_kv_pool_allocator: "BaseTokenToKVPoolAllocator"
     tree_cache: "BasePrefixCache"
-    hisparse_coordinator: Any
+    hisparse_coordinator: Optional["HiSparseCoordinator"]
     req_to_token_pool: "ReqToTokenPool"
-    decode_offload_manager: Any
+    decode_offload_manager: Optional["DecodeKVCacheOffloadManager"]
     metrics_collector: "SchedulerMetricsCollector"
     metrics_reporter: "SchedulerMetricsReporter"
     draft_worker: "BaseTpWorker"

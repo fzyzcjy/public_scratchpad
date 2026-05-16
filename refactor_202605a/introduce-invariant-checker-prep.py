@@ -94,7 +94,7 @@ from __future__ import annotations
 import logging
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple, TYPE_CHECKING
+from typing import Callable, List, Optional, Tuple, TYPE_CHECKING
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.environ import envs
@@ -122,8 +122,8 @@ class SchedulerInvariantChecker:
     is_hybrid_ssm: bool
     disaggregation_mode: DisaggregationMode
     page_size: int
-    full_tokens_per_layer: Any
-    swa_tokens_per_layer: Any
+    full_tokens_per_layer: Optional[int]
+    swa_tokens_per_layer: Optional[int]
     max_total_num_tokens: int
     server_args: ServerArgs
     tree_cache: BasePrefixCache
