@@ -96,9 +96,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Tuple  # noqa: F401
 
 
-# ``SchedulerStats`` is referenced only for the ``update_scheduler_stats``
-# annotation; importing the type directly would cause a circular import in
-# practice, so leave it as a forward reference.
 class SchedulerStats: ...  # type: ignore[no-redef]
 
 
