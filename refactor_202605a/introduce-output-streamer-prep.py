@@ -36,14 +36,14 @@ BODY = """\
 Inplace prep for the ``introduce-output-streamer`` mech move.
 
 - Create ``scheduler_components/output_streamer.py`` with an empty
-  ``SchedulerOutputStreamer`` class (ctor takes 2 collaborators
-  ``send_to_detokenizer`` + ``tree_cache``, 6 configs ``ps`` /
+  ``SchedulerOutputStreamer`` class (ctor takes the collaborators
+  ``send_to_detokenizer`` + ``tree_cache``, configs ``ps`` /
   ``server_args`` / ``is_generation`` / ``stream_interval`` /
-  ``spec_algorithm`` / ``disaggregation_mode``, and 2 Callables
+  ``spec_algorithm`` / ``disaggregation_mode``, and Callables
   ``enable_hicache_storage`` + ``load_inquirer_get_loads``).
 - Instantiate ``self.output_streamer = SchedulerOutputStreamer(...)`` in
   ``Scheduler.__init__`` immediately after the ``logprob_computer`` ctor.
-- In ``SchedulerOutputProcessorMixin``, convert 6 stream methods
+- In ``SchedulerOutputProcessorMixin``, convert the stream methods
   (``_get_storage_backend_type``, ``_get_cached_tokens_details``,
   ``stream_output``, ``_trigger_crash_for_tests``,
   ``stream_output_generation``, ``stream_output_embedding``) to
@@ -55,7 +55,7 @@ Inplace prep for the ``introduce-output-streamer`` mech move.
   - ``self.load_inquirer.get_loads(...)`` multi-kwarg call → single-arg
     ``self.load_inquirer_get_loads(GetLoadsReqInput(include=["core"]))``
     (kwargs wrapped by the lambda passed in Scheduler init insert).
-- 3 privacy flips: ``_get_cached_tokens_details`` →
+- Privacy flips: ``_get_cached_tokens_details`` →
   ``get_cached_tokens_details``, ``stream_output_generation`` →
   ``_stream_output_generation``, ``stream_output_embedding`` →
   ``_stream_output_embedding``. Definitions + intra-mixin callsites.
@@ -75,8 +75,8 @@ should live in a follow-up nonmech commit. We bundle them into this prep
 to keep the chain buildable while the bodies stay verbatim across the
 ``-move`` step.
 
-The 6 methods stay inside the mixin in this commit; physical cut + paste
-to ``SchedulerOutputStreamer`` body happens in
+The converted methods stay inside the mixin in this commit; physical
+cut + paste to ``SchedulerOutputStreamer`` body happens in
 ``introduce-output-streamer-move``.
 """
 AREA = "mech_scheduler"
