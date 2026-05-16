@@ -39,24 +39,24 @@ Inplace prep for the ``introduce-batch-result-processor`` mech move (the
 last extract from ``SchedulerOutputProcessorMixin``).
 
 - Create ``scheduler_components/batch_result_processor.py`` with an empty
-  ``SchedulerBatchResultProcessor`` class. Ctor takes 8 configs, 7
-  collaborators, 2 sisters (``logprob_computer``, ``output_streamer``)
-  and 6 Callable callbacks (``abort_request``, ``report_prefill_stats``,
+  ``SchedulerBatchResultProcessor`` class. Ctor takes the configs,
+  collaborators, sisters (``logprob_computer``, ``output_streamer``) and
+  Callable callbacks (``abort_request``, ``report_prefill_stats``,
   ``report_decode_stats``, ``update_spec_metrics``,
   ``increment_generated_tokens``, ``advance_forward_ct_decode``).
 - Instantiate ``self.batch_result_processor = SchedulerBatchResultProcessor(...)``
   in ``Scheduler.__init__`` immediately after the ``output_streamer`` ctor.
   Callbacks wrapped in lambdas so they resolve ``self.metrics_reporter``
   lazily.
-- In ``SchedulerOutputProcessorMixin``, convert the remaining 11
+- In ``SchedulerOutputProcessorMixin``, convert the remaining
   process/collect methods to ``@staticmethod`` with
   ``self: "SchedulerBatchResultProcessor"`` type annotation. Drop
   ``: Scheduler`` annotation.
-- 3 privacy flips: ``maybe_collect_routed_experts`` /
+- Privacy flips: ``maybe_collect_routed_experts`` /
   ``maybe_collect_indexer_topk`` / ``maybe_collect_customized_info`` add
   ``_`` (internal-only, called from ``process_batch_result_prefill``).
 - Body substitutions for Callable routing:
-  - Undo C14's ``self.metrics_reporter.report_prefill_stats(`` /
+  - Undo the metrics-reporter ``self.metrics_reporter.report_prefill_stats(`` /
     ``report_decode_stats`` / ``update_spec_metrics`` rewrites (now plain
     Callables on the processor).
   - ``self.num_generated_tokens += <expr>`` →
@@ -68,15 +68,15 @@ last extract from ``SchedulerOutputProcessorMixin``).
   disaggregation/{prefill,decode}.py + dllm/mixin/scheduler.py rewritten
   to ``self.<m>(self.batch_result_processor, ...)``.
 
-PRAGMATIC DEVIATION (per ``MECH_COMMIT_SPLIT.md``): the 6 Callable ctor
+PRAGMATIC DEVIATION (per ``MECH_COMMIT_SPLIT.md``): the Callable ctor
 kwargs + their body substitutions + the mutator rewrites are fancy
 reshape and should live in a follow-up nonmech commit. We bundle them
 here to keep the chain buildable and the moved bodies byte-identical
 across the ``-move`` step.
 
-The 11 methods stay inside the mixin in this commit; physical cut +
-paste to ``SchedulerBatchResultProcessor`` body (and deletion of the
-mixin file) happens in ``introduce-batch-result-processor-move``.
+The converted methods stay inside the mixin in this commit; physical
+cut + paste to ``SchedulerBatchResultProcessor`` body (and deletion of
+the mixin file) happens in ``introduce-batch-result-processor-move``.
 """
 AREA = "mech_scheduler"
 BASE = "tom_refactor_202605a/primary/mech_preflight"
