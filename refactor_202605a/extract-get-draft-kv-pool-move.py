@@ -39,7 +39,7 @@ commit) and paste it as a module-level free function in
 ``python/sglang/srt/mem_cache/kv_cache_builder.py`` (new
 package). Drop ``@staticmethod`` decorator; body bytes unchanged.
 
-2 caller sites updated: ``Scheduler.get_draft_kv_pool(...)`` →
+Caller sites updated: ``Scheduler.get_draft_kv_pool(...)`` →
 ``kv_cache_builder.get_draft_kv_pool(...)`` (pure prefix replacement). Add import
 ``from sglang.srt.mem_cache import kv_cache_builder``.
 
