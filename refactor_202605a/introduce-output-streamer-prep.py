@@ -335,6 +335,14 @@ def transform(wt: Path) -> None:
         ),
         addition=SCHEDULER_INIT_INSERT,
     )
+    # Hot-path callsite in Scheduler (event_loop_overlap_disagg_*).
+    # ``self.stream_output(...)`` → ``self.stream_output(self.output_streamer, ...)``.
+    # NOTE: this MUST run before the receiver-shim lambda rewrite below — otherwise
+    # the bare ``self.stream_output(`` pattern would match inside the lambda body
+    # we just emitted and double-inject ``self.output_streamer,``.
+    text = text.replace(
+        "self.stream_output(", "self.stream_output(self.output_streamer, "
+    )
     # Cross-commit fix: receiver shim ``stream_output=self.stream_output`` →
     # lazy lambda using the static-bound sister form. The lambda defers
     # binding until invocation, by which point output_streamer exists; the
@@ -343,11 +351,6 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "            stream_output=self.stream_output,\n",
         "            stream_output=lambda *a, **kw: self.stream_output(self.output_streamer, *a, **kw),\n",
-    )
-    # Hot-path callsite in Scheduler (event_loop_overlap_disagg_*).
-    # ``self.stream_output(...)`` → ``self.stream_output(self.output_streamer, ...)``.
-    text = text.replace(
-        "self.stream_output(", "self.stream_output(self.output_streamer, "
     )
     sched.write_text(text)
 
