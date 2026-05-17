@@ -35,6 +35,16 @@ SUBJECT = "Stand up SchedulerProfilerManager; migrate profiler state to it"
 BODY = """\
 Inplace prep for the ``migrate-profiler-mixin`` mech move.
 
+- Privacy flip (absorbed from the former ``-pre-rename`` straggler): 4
+  ``SchedulerProfilerMixin`` methods are made private because their
+  post-move home (``SchedulerProfilerManager``) treats them as ``_*``
+  helpers; lifecycle is driven by the manager's owner via composition.
+    * ``init_profile``  → ``_init_profile``
+    * ``start_profile`` → ``_start_profile``
+    * ``stop_profile``  → ``_stop_profile``
+    * ``profile``       → ``_profile``
+  Bodies byte-identical; cross-method callsites updated to the renamed
+  forms; one ``test_profile_merger.py`` reference updated.
 - Create ``scheduler_components/profiler_manager.py`` with a
   ``SchedulerProfilerManager`` class (skeleton: ctor only, no methods
   yet). Ctor takes ``ps`` + ``dp_tp_cpu_group`` static kwargs plus a
@@ -166,6 +176,33 @@ def transform(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/profiler_manager.py"
+    test_profile = wt / "test/registered/unit/utils/test_profile_merger.py"
+
+    # 0. Privacy flip (absorbed from former ``migrate-profiler-mixin-pre-rename``
+    #    straggler): mark 4 ``SchedulerProfilerMixin`` methods as private
+    #    (``_*``) because their post-move home (``SchedulerProfilerManager``)
+    #    treats them as ``_*`` helpers driven by the manager's owner via
+    #    composition. Body byte-identical wrt main; cross-method callsites
+    #    updated to the renamed forms.
+    text = mixin.read_text()
+    text = text.replace("    def init_profile(\n", "    def _init_profile(\n")
+    text = text.replace("    def start_profile(\n", "    def _start_profile(\n")
+    text = text.replace("    def stop_profile(\n", "    def _stop_profile(\n")
+    text = text.replace(
+        "    def profile(self: Scheduler, recv_req: ProfileReq):",
+        "    def _profile(self: Scheduler, recv_req: ProfileReq):",
+    )
+    text = text.replace("self.init_profile(", "self._init_profile(")
+    text = text.replace("self.start_profile(", "self._start_profile(")
+    text = text.replace("self.stop_profile(", "self._stop_profile(")
+    mixin.write_text(text)
+
+    test_text = test_profile.read_text()
+    test_text = test_text.replace(
+        "sig = inspect.signature(SchedulerProfilerMixin.init_profile)",
+        "sig = inspect.signature(SchedulerProfilerMixin._init_profile)",
+    )
+    test_profile.write_text(test_text)
 
     # 1. Cut the ``init_profiler`` method block from the mixin (byte-identical;
     #    return-short-circuit preserved).

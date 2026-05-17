@@ -89,8 +89,14 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 METHOD_ORDER = [
+    # Source order mirrors main's scheduler_metrics_mixin.py. Keeping the
+    # relative order matches what reviewers see when diffing the moved file
+    # against the original mixin (per [[feedback-move-refactor-char-equal]]).
     "_init_metrics",
     "_install_device_timer_on_runners",
+    "_init_fpm",
+    "_build_scheduled_request_metrics",
+    "_build_queued_request_metrics",
     "update_spec_metrics",
     "_init_estimated_perf_constants",
     "_estimate_prefill_perf",
@@ -99,17 +105,13 @@ METHOD_ORDER = [
     "report_prefill_stats",
     "report_decode_stats",
     "log_batch_result_stats",
+    "_emit_forward_pass_metrics",
+    "_shutdown_fpm",
     "_log_hicache_stats",
     "_update_lora_metrics",
     "_calculate_utilization",
     "update_device_timer",
     "reset_device_timer_window",
-    # FPM (forward-pass-metrics) family added on the preflight branch.
-    "_init_fpm",
-    "_shutdown_fpm",
-    "_emit_forward_pass_metrics",
-    "_build_scheduled_request_metrics",
-    "_build_queued_request_metrics",
 ]
 
 

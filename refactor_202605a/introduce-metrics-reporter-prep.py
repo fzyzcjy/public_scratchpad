@@ -142,6 +142,33 @@ class SchedulerMetricsReporter:
     metrics_collector: SchedulerMetricsCollector
     num_retracted_reqs: int = 0
     num_paused_reqs: int = 0
+
+    def __post_init__(self) -> None:
+        # The 4 "metrics enablement" booleans now live on the reporter (was
+        # Scheduler in main). ``enable_metrics`` / ``is_stats_logging_rank`` /
+        # ``current_scheduler_metrics_enabled`` get re-assigned inside
+        # ``_init_metrics`` too (kept in REPORTER_OWNED_ATTRS so the body
+        # rewrite leaves them on ``self``); we set them up-front here so any
+        # reader between ``__post_init__`` and ``_init_metrics`` is correct.
+        self.enable_metrics = self.scheduler.server_args.enable_metrics
+        self.is_stats_logging_rank = self.scheduler.ps.attn_tp_rank == 0
+        self.current_scheduler_metrics_enabled = self.enable_metrics and (
+            self.is_stats_logging_rank
+            or self.scheduler.server_args.enable_metrics_for_all_schedulers
+        )
+        self.enable_kv_cache_events = bool(
+            self.scheduler.server_args.kv_events_config
+            and self.scheduler.ps.attn_tp_rank == 0
+            and self.scheduler.ps.attn_cp_rank == 0
+        )
+        # Bootstrap calls below were previously emitted as separate Scheduler
+        # statements at construction time; consolidating them into
+        # ``__post_init__`` tightens ownership (the reporter is responsible for
+        # its own bring-up).
+        SchedulerMetricsMixin._init_metrics(
+            self, self.tp_rank, self.pp_rank, self.dp_rank
+        )
+        SchedulerMetricsMixin._install_device_timer_on_runners(self)
 '''
 
 
@@ -153,27 +180,11 @@ SCHEDULER_INIT_INSERT = """\
             dp_rank=dp_rank,
             metrics_collector=self.metrics_collector,
         )
-        SchedulerMetricsMixin._init_metrics(
-            self.metrics_reporter, tp_rank, pp_rank, dp_rank,
-        )
-        SchedulerMetricsMixin._install_device_timer_on_runners(self.metrics_reporter)
-        self.stats = self.metrics_reporter.stats
 
 """
 
 
 INLINE_CURRENT_METRICS_ENABLED = (
-    "        self.enable_metrics = self.server_args.enable_metrics\n"
-    "        self.is_stats_logging_rank = self.ps.attn_tp_rank == 0\n"
-    "        self.current_scheduler_metrics_enabled = self.enable_metrics and (\n"
-    "            self.is_stats_logging_rank\n"
-    "            or self.server_args.enable_metrics_for_all_schedulers\n"
-    "        )\n"
-    "        self.enable_kv_cache_events = bool(\n"
-    "            self.server_args.kv_events_config\n"
-    "            and self.ps.attn_tp_rank == 0\n"
-    "            and self.ps.attn_cp_rank == 0\n"
-    "        )\n"
     "        self.metrics_collector = SchedulerMetricsCollector.init_new(\n"
     "            server_args=self.server_args,\n"
     "            ps=self.ps,\n"
@@ -320,6 +331,7 @@ REPORTER_OWNED_ATTRS = frozenset({
     "enable_metrics",
     "is_stats_logging_rank",
     "current_scheduler_metrics_enabled",
+    "enable_kv_cache_events",
     "enable_mfu_metrics",
     "fwd_occupancy",
     "forward_pass_device_timer",
@@ -720,6 +732,60 @@ def transform(wt: Path) -> None:
         text,
         old="                self.metrics_collector.increment_retracted_reqs(\n",
         new="                self.metrics_reporter.metrics_collector.increment_retracted_reqs(\n",
+    )
+
+    # Ownership tightening (D2): ``get_stats=lambda: self.stats`` in the two
+    # callsite shims (kv_events_publisher + load_inquirer ctor) now defers to
+    # ``self.metrics_reporter.stats``. The lambda is deferred — by the time
+    # it fires (publish_kv_events / get_loads in the event loop) the reporter
+    # is constructed and populated by __post_init__ -> _init_metrics.
+    text = text.replace(
+        "            get_stats=lambda: self.stats,\n",
+        "            get_stats=lambda: self.metrics_reporter.stats,\n",
+    )
+
+    # Ownership tightening (D3): the 4 "metrics enablement" booleans now live
+    # on the reporter (set inside __post_init__). Rewrite all Scheduler-side
+    # readers. The build_kv_cache call at line 437-438 runs BEFORE the reporter
+    # is constructed, so route those two through ``self.server_args`` directly
+    # rather than the reporter.
+    text = replace_call_site(
+        text,
+        old="            enable_metrics=self.enable_metrics,\n"
+        "            enable_kv_cache_events=self.enable_kv_cache_events,\n",
+        new="            enable_metrics=self.server_args.enable_metrics,\n"
+        "            enable_kv_cache_events=bool(\n"
+        "                self.server_args.kv_events_config\n"
+        "                and self.ps.attn_tp_rank == 0\n"
+        "                and self.ps.attn_cp_rank == 0\n"
+        "            ),\n",
+    )
+    # current_scheduler_metrics_enabled reader lives inside ``init_ipc_channels``
+    # which fires BEFORE ``self.metrics_reporter`` is constructed. Inline the
+    # boolean expression so the reader is independent of the reporter lifecycle.
+    text = text.replace(
+        "        if self.current_scheduler_metrics_enabled:\n",
+        "        if self.server_args.enable_metrics and (\n"
+        "            self.ps.attn_tp_rank == 0\n"
+        "            or self.server_args.enable_metrics_for_all_schedulers\n"
+        "        ):\n",
+    )
+    # Remaining ``self.enable_metrics`` readers (all post-reporter construction).
+    text = text.replace(
+        "self.metrics_collector if self.enable_metrics else None",
+        "self.metrics_collector if self.metrics_reporter.enable_metrics else None",
+    )
+    text = text.replace(
+        "            if self.enable_metrics and len(retracted_reqs) > 0:\n",
+        "            if self.metrics_reporter.enable_metrics and len(retracted_reqs) > 0:\n",
+    )
+    text = text.replace(
+        "            if self.enable_metrics:\n",
+        "            if self.metrics_reporter.enable_metrics:\n",
+    )
+    text = text.replace(
+        "        if self.enable_metrics:\n",
+        "        if self.metrics_reporter.enable_metrics:\n",
     )
     # NOTE: ``_maybe_log_idle_metrics`` body reads (``self.metrics_collector.
     # last_log_time`` / ``self.metrics_collector.log_stats(...)``) stay as

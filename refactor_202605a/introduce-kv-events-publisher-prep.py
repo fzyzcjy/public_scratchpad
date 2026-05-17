@@ -32,6 +32,7 @@ sys.path.insert(0, str(HERE))
 from _helpers import (
     ensure_bare_imports,
     ensure_imports,
+    find_class_lines,
     find_method_lines,
     insert_after,
     replace_call_site,
@@ -43,10 +44,15 @@ SUBJECT = "Stand up SchedulerKvEventsPublisher; migrate KV-event state to it"
 BODY = """\
 Inplace prep for the ``introduce-kv-events-publisher`` mech move.
 
+- KvMetrics dataclass move (absorbed from former ``-pre-move`` straggler):
+  cut the ``KvMetrics`` dataclass body byte-identical from
+  ``observability/scheduler_metrics_mixin.py`` into the new module
+  ``scheduler_components/kv_events_publisher.py``. Rewire the mixin to
+  re-import ``KvMetrics`` from the new module so the existing
+  ``KvMetrics()`` reference in ``emit_kv_metrics`` continues to resolve.
 - Append an empty ``SchedulerKvEventsPublisher`` class skeleton (ctor;
-  no methods yet) to ``scheduler_components/kv_events_publisher.py``
-  (the ``KvMetrics`` dataclass already lives there from the preceding
-  ``pre-move``). Ctor adds ``get_stats: Callable[[], SchedulerStats]``
+  no methods yet) to the same ``scheduler_components/kv_events_publisher.py``
+  module. Ctor adds ``get_stats: Callable[[], SchedulerStats]``
   for runtime-mutable scheduler stats (CLAUDE.md §4 form).
 - Instantiate ``self.kv_events_publisher = SchedulerKvEventsPublisher(...)``
   in ``Scheduler.__init__`` just before ``self.is_initializing = False``,
@@ -68,8 +74,27 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-# Class skeleton appended to the target module (KvMetrics dataclass
-# already lives there from the preceding pre-move).
+# Target file header (KvMetrics dataclass moves into this module FIRST,
+# then the SchedulerKvEventsPublisher class skeleton is appended).
+TARGET_FILE_HEADER = '''\
+from __future__ import annotations
+
+import dataclasses
+import time
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
+
+from sglang.srt.disaggregation.kv_events import EventPublisherFactory, KVEventBatch
+
+
+class SchedulerStats: ...  # type: ignore[no-redef]
+
+
+'''
+
+
+# Class skeleton appended to the target module (KvMetrics dataclass lands
+# in the module FIRST, via the pre-move step that opens this transform).
 NEW_CLASS_SKELETON = '''\
 @dataclass(kw_only=True, slots=True)
 class SchedulerKvEventsPublisher:
@@ -193,6 +218,30 @@ def transform(wt: Path) -> None:
     src = wt / "python/sglang/srt/observability/scheduler_metrics_mixin.py"
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     target = wt / "python/sglang/srt/managers/scheduler_components/kv_events_publisher.py"
+    pkg_init = wt / "python/sglang/srt/managers/scheduler_components/__init__.py"
+
+    # -1. KvMetrics dataclass move (absorbed from former ``-pre-move`` straggler):
+    #     cut the dataclass out of the mixin, paste it verbatim into the new
+    #     target module, then re-import KvMetrics from the new module so the
+    #     existing ``KvMetrics()`` reference in ``emit_kv_metrics`` resolves.
+    src_text = src.read_text()
+    s, e = find_class_lines(src_text, class_name="KvMetrics")
+    kv_metrics_block = "".join(src_text.splitlines(keepends=True)[s:e]).rstrip() + "\n"
+    lines = src_text.splitlines(keepends=True)
+    del lines[s:e]
+    src_text = "".join(lines)
+    src_text = insert_after(
+        src_text,
+        anchor="from sglang.srt.utils.scheduler_status_logger import SchedulerStatusLogger\n",
+        addition="from sglang.srt.managers.scheduler_components.kv_events_publisher import KvMetrics\n",
+    )
+    src.write_text(src_text)
+
+    pkg_init.parent.mkdir(parents=True, exist_ok=True)
+    if not pkg_init.exists():
+        pkg_init.write_text("")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(TARGET_FILE_HEADER + kv_metrics_block)
 
     # 0. Drop leading underscore on emit_kv_metrics / publish_kv_events
     #    so they expose a public API matching the sister manager forms.
