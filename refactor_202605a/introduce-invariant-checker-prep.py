@@ -52,22 +52,19 @@ Inplace prep for the ``introduce-invariant-checker`` mech move.
   ``SchedulerInvariantChecker`` class skeleton (ctor only; no methods
   yet). Ctor takes the static fields (collaborators + configs +
   ``pool_stats_observer``) plus the Callable getters
-  (``get_last_batch`` / ``get_running_batch`` / ``get_pool_stats``) plus
-  the mutable counter fields ``count_req_pool_leak_warnings`` /
-  ``count_memory_leak_warnings`` fresh-initialised to 0.
+  (``get_last_batch`` / ``get_running_batch``) plus the mutable counter
+  fields ``count_req_pool_leak_warnings`` / ``count_memory_leak_warnings``
+  fresh-initialised to 0.
 - Instantiate ``self.invariant_checker = SchedulerInvariantChecker(...)``
   in ``Scheduler.__init__`` just after ``self.pool_stats_observer`` so
-  the sister composition dep resolves. ``get_pool_stats`` is wrapped via
-  ``lambda`` so the bound observer call captures the current
-  ``last_batch`` / ``running_batch`` at invocation time.
+  the sister composition dep resolves.
 - In ``SchedulerRuntimeCheckerMixin``, convert the instance methods to
   ``@staticmethod`` with ``self: "SchedulerInvariantChecker"`` type
   annotation. (``_check_pool_invariant`` is already a stateless
   ``@staticmethod``.) Body reads of runtime-mutable ``Scheduler`` state
   are rewritten through the Callable getters: ``self.last_batch`` →
   ``self.get_last_batch()``, ``self.running_batch`` →
-  ``self.get_running_batch()``, and ``self.pool_stats_observer.get_pool_stats(last_batch=...,
-  running_batch=...)`` → ``self.get_pool_stats()``.
+  ``self.get_running_batch()``.
 - Callers rewritten to the sister staticmethod-on-mixin form
   ``self.<method>(self.invariant_checker, ...)`` (mirrors
   ``introduce-load-inquirer-prep``'s pattern; the move commit reduces
@@ -116,11 +113,6 @@ logger = logging.getLogger(__name__)
 
 
 SKELETON_CLASS = '''\
-# NOTE: this dataclass is intentionally NOT ``frozen=True`` (the project
-# default per ``feedback_dataclass_defaults``): ``raise_error_or_warn``
-# increments ``count_*_warnings`` via ``setattr`` on ``self``, which would
-# raise ``FrozenInstanceError`` against a frozen dataclass. The two
-# warning counters are mutable internal state.
 @dataclass(kw_only=True, slots=True)
 class SchedulerInvariantChecker:
     is_hybrid_swa: bool
@@ -137,7 +129,6 @@ class SchedulerInvariantChecker:
     pool_stats_observer: SchedulerPoolStatsObserver
     get_last_batch: Callable
     get_running_batch: Callable
-    get_pool_stats: Callable
     count_req_pool_leak_warnings: int = 0
     count_memory_leak_warnings: int = 0
 '''
@@ -159,10 +150,6 @@ SCHEDULER_INIT_INSERT = """\
             pool_stats_observer=self.pool_stats_observer,
             get_last_batch=lambda: self.last_batch,
             get_running_batch=lambda: self.running_batch,
-            get_pool_stats=lambda: self.pool_stats_observer.get_pool_stats(
-                last_batch=self.last_batch,
-                running_batch=self.running_batch,
-            ),
         )
 
 """
@@ -172,15 +159,6 @@ SCHEDULER_INIT_INSERT = """\
 # to be rewritten through ``self.get_X()`` Callable getters. Each pair is a
 # fragment-level replacement applied to each method body in turn.
 BODY_GETTER_REPLACEMENTS = [
-    # self_check_during_busy: collapse the pool_stats_observer derived view
-    # to the Callable getter.
-    (
-        "        ps = self.pool_stats_observer.get_pool_stats(\n"
-        "            last_batch=self.last_batch,\n"
-        "            running_batch=self.running_batch,\n"
-        "        )\n",
-        "        ps = self.get_pool_stats()\n",
-    ),
     # _check_full_pool / _check_swa_pool / _check_mamba_pool: rewrite the
     # session_held_*_tokens kwargs through the getters. The
     # ``pool_stats_observer`` attribute remains a static ctor field so the

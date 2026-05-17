@@ -55,7 +55,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 ADAPTER_HEADER = '''from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.distributed.parallel_state_wrapper import ParallelState
@@ -81,7 +81,7 @@ class SchedulerDPAttnAdapter:
     model_config: ModelConfig
     enable_overlap: bool
     spec_algorithm: SpeculativeAlgorithm
-    require_mlp_sync: bool
+    get_require_mlp_sync: Callable[[], bool]
 '''
 
 
@@ -96,7 +96,7 @@ INIT_INSERT = '''        self.dp_attn_adapter = SchedulerDPAttnAdapter(
             model_config=self.model_config,
             enable_overlap=self.enable_overlap,
             spec_algorithm=self.spec_algorithm,
-            require_mlp_sync=self.require_mlp_sync,
+            get_require_mlp_sync=lambda: self.require_mlp_sync,
         )
 
 '''
@@ -184,6 +184,20 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "            batch = self.prepare_mlp_sync_batch(batch)\n",
         "            batch = SchedulerDPAttnMixin.prepare_mlp_sync_batch(self, batch)\n",
+    )
+
+    # Retarget ``self.require_mlp_sync`` (Scheduler bool attr) inside the
+    # adapter staticmethod body to the deferred Callable field
+    # ``self.get_require_mlp_sync()`` — the adapter is constructed before
+    # ``Scheduler.require_mlp_sync`` is computed (must wait until after
+    # ``initialize_moe_config``), so deferred read avoids AttributeError.
+    text = text.replace(
+        "        if need_sync if need_sync is not None else self.require_mlp_sync:\n",
+        "        if need_sync if need_sync is not None else self.get_require_mlp_sync():\n",
+    )
+    text = text.replace(
+        "            need_sync: If specified, overrides self.require_mlp_sync for prepare_mlp_sync_batch decision\n",
+        "            need_sync: If specified, overrides self.get_require_mlp_sync() for prepare_mlp_sync_batch decision\n",
     )
 
     mixin.write_text(text)

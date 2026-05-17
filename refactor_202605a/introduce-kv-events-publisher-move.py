@@ -100,6 +100,19 @@ def transform(wt: Path) -> None:
             ),
         },
     )
+    # Collapse ``__post_init__`` to call the now-local ``init_kv_events``
+    # directly (prep had to qualify via ``SchedulerMetricsMixin`` because
+    # the method still lived on the mixin then).
+    rtext = rtext.replace(
+        "    def __post_init__(self) -> None:\n"
+        "        from sglang.srt.observability.scheduler_metrics_mixin import (\n"
+        "            SchedulerMetricsMixin,\n"
+        "        )\n"
+        "\n"
+        "        SchedulerMetricsMixin.init_kv_events(self, self.kv_events_config)\n",
+        "    def __post_init__(self) -> None:\n"
+        "        self.init_kv_events(self.kv_events_config)\n",
+    )
     target.write_text(rtext)
 
     # Caller rewrites — use the robust helper (handles single-line and

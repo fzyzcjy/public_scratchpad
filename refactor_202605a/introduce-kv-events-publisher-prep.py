@@ -111,6 +111,13 @@ class SchedulerKvEventsPublisher:
     get_stats: Callable
     enable_kv_cache_events: bool = False
     kv_event_publisher: Any = None
+
+    def __post_init__(self) -> None:
+        from sglang.srt.observability.scheduler_metrics_mixin import (
+            SchedulerMetricsMixin,
+        )
+
+        SchedulerMetricsMixin.init_kv_events(self, self.kv_events_config)
 '''
 
 
@@ -127,9 +134,6 @@ SCHEDULER_INIT_INSERT = '''\
             max_running_requests=self.max_running_requests,
             max_total_num_tokens=self.max_total_num_tokens,
             get_stats=lambda: self.stats,
-        )
-        self.init_kv_events(
-            self.kv_events_publisher, self.server_args.kv_events_config
         )
 
 '''
