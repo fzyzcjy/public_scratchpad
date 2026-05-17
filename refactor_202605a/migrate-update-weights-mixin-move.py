@@ -206,6 +206,35 @@ def transform(wt: Path) -> None:
         text,
     )
 
+    # 9. ``save_remote_model`` / ``save_sharded_model`` are NOT dispatched via
+    #    the lambda table; they ride the generic ``collective_rpc`` path
+    #    which resolves the method via ``getattr(self_scheduler, name)``
+    #    inside ``handle_rpc_request``. Now that the mixin is retired those
+    #    two attributes are gone from Scheduler, so any
+    #    ``Engine.save_remote_model(...)`` / ``Engine.save_sharded_model(...)``
+    #    call would AttributeError at the dispatch point.
+    #
+    #    Re-expose them as thin Scheduler shims that forward to the
+    #    weight_updater. The shim takes ``**kwargs`` (matching the way
+    #    ``handle_rpc_request`` unpacks ``recv_req.parameters``) and re-packs
+    #    into the single positional dict that the weight_updater methods
+    #    expect.
+    text = replace_call_site(
+        text,
+        old="        return RpcReqOutput(success, \"\" if not exec else str(exec))\n"
+        "\n"
+        "    def abort_request(self, recv_req: AbortReq):\n",
+        new="        return RpcReqOutput(success, \"\" if not exec else str(exec))\n"
+        "\n"
+        "    def save_remote_model(self, **kwargs):\n"
+        "        return self.weight_updater.save_remote_model(kwargs)\n"
+        "\n"
+        "    def save_sharded_model(self, **kwargs):\n"
+        "        return self.weight_updater.save_sharded_model(kwargs)\n"
+        "\n"
+        "    def abort_request(self, recv_req: AbortReq):\n",
+    )
+
     sched.write_text(text)
 
 

@@ -228,7 +228,16 @@ def transform(wt: Path) -> None:
 
         # Body substitutions confined to this method block (Callable shims).
         # These are placed here in prep so move can keep bodies byte-identical.
-        if name in ("stream_output", "stream_output_generation", "stream_output_embedding"):
+        # ``_get_cached_tokens_details`` reads ``self.enable_hicache_storage``
+        # as a bool; once the field becomes a Callable getter on the streamer
+        # the raw read is always truthy, so it MUST be invoked. The streaming
+        # methods share the same substitution.
+        if name in (
+            "_get_cached_tokens_details",
+            "stream_output",
+            "stream_output_generation",
+            "stream_output_embedding",
+        ):
             new_method = new_method.replace(
                 "self.enable_hicache_storage", "self.enable_hicache_storage()"
             )

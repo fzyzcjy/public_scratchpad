@@ -117,7 +117,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
-from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector
+from sglang.srt.observability.metrics_collector import (
+    SchedulerMetricsCollector,
+    SchedulerMetricsCollectorContext,
+)
 from sglang.srt.observability.scheduler_metrics_mixin import (
     SchedulerMetricsMixin,
 )
@@ -139,32 +142,18 @@ class SchedulerMetricsReporter:
     tp_rank: int
     pp_rank: int
     dp_rank: Optional[int]
-    metrics_collector: SchedulerMetricsCollector
+    metrics_collector_context: SchedulerMetricsCollectorContext
+    metrics_collector: Optional[SchedulerMetricsCollector]
     num_retracted_reqs: int = 0
     num_paused_reqs: int = 0
 
     def __post_init__(self) -> None:
-        # The 4 "metrics enablement" booleans now live on the reporter (was
-        # Scheduler in main). ``enable_metrics`` / ``is_stats_logging_rank`` /
-        # ``current_scheduler_metrics_enabled`` get re-assigned inside
-        # ``_init_metrics`` too (kept in REPORTER_OWNED_ATTRS so the body
-        # rewrite leaves them on ``self``); we set them up-front here so any
-        # reader between ``__post_init__`` and ``_init_metrics`` is correct.
-        self.enable_metrics = self.scheduler.server_args.enable_metrics
-        self.is_stats_logging_rank = self.scheduler.ps.attn_tp_rank == 0
-        self.current_scheduler_metrics_enabled = self.enable_metrics and (
-            self.is_stats_logging_rank
-            or self.scheduler.server_args.enable_metrics_for_all_schedulers
+        self.enable_metrics = self.metrics_collector_context.enable_metrics
+        self.is_stats_logging_rank = self.metrics_collector_context.is_stats_logging_rank
+        self.current_scheduler_metrics_enabled = (
+            self.metrics_collector_context.current_scheduler_metrics_enabled
         )
-        self.enable_kv_cache_events = bool(
-            self.scheduler.server_args.kv_events_config
-            and self.scheduler.ps.attn_tp_rank == 0
-            and self.scheduler.ps.attn_cp_rank == 0
-        )
-        # Bootstrap calls below were previously emitted as separate Scheduler
-        # statements at construction time; consolidating them into
-        # ``__post_init__`` tightens ownership (the reporter is responsible for
-        # its own bring-up).
+        self.enable_kv_cache_events = self.metrics_collector_context.enable_kv_cache_events
         SchedulerMetricsMixin._init_metrics(
             self, self.tp_rank, self.pp_rank, self.dp_rank
         )
@@ -178,6 +167,7 @@ SCHEDULER_INIT_INSERT = """\
             tp_rank=tp_rank,
             pp_rank=pp_rank,
             dp_rank=dp_rank,
+            metrics_collector_context=self.metrics_collector_context,
             metrics_collector=self.metrics_collector,
         )
 
@@ -185,7 +175,7 @@ SCHEDULER_INIT_INSERT = """\
 
 
 INLINE_CURRENT_METRICS_ENABLED = (
-    "        self.metrics_collector = SchedulerMetricsCollector.init_new(\n"
+    "        self.metrics_collector_context = SchedulerMetricsCollector.init_new(\n"
     "            server_args=self.server_args,\n"
     "            ps=self.ps,\n"
     "            tp_rank=tp_rank,\n"
@@ -195,13 +185,14 @@ INLINE_CURRENT_METRICS_ENABLED = (
     "            enable_lora=self.enable_lora,\n"
     "            enable_hierarchical_cache=self.enable_hierarchical_cache,\n"
     "        )\n"
+    "        self.metrics_collector = self.metrics_collector_context.collector\n"
 )
 
 
-# Classmethod injected onto SchedulerMetricsCollector by this prep. Builds
-# labels + calls the regular ctor when metrics are enabled; otherwise
-# returns None. Encapsulates the labels-building previously inline in
-# Scheduler.__init__.
+# Classmethod injected onto SchedulerMetricsCollector by this prep. Computes
+# the four metrics-enablement booleans, builds the underlying collector when
+# enable_metrics is True, and returns a SchedulerMetricsCollectorContext
+# bundling both.
 INIT_NEW_CLASSMETHOD = '''\
     @classmethod
     def init_new(
@@ -215,30 +206,64 @@ INIT_NEW_CLASSMETHOD = '''\
         enable_priority_scheduling: bool,
         enable_lora: bool,
         enable_hierarchical_cache: bool,
-    ) -> Optional["SchedulerMetricsCollector"]:
-        if not server_args.enable_metrics:
-            return None
-        engine_type = DisaggregationMode.to_engine_type(server_args.disaggregation_mode)
-        labels = {
-            "model_name": server_args.served_model_name,
-            "engine_type": engine_type,
-            "tp_rank": tp_rank,
-            "pp_rank": pp_rank,
-            "moe_ep_rank": ps.moe_ep_rank,
-        }
-        if enable_priority_scheduling:
-            labels["priority"] = ""
-        if dp_rank is not None:
-            labels["dp_rank"] = dp_rank
-        if server_args.extra_metric_labels:
-            labels.update(server_args.extra_metric_labels)
-        return cls(
-            labels=labels,
-            enable_lora=enable_lora,
-            enable_hierarchical_cache=enable_hierarchical_cache,
-            enable_streaming_session=server_args.enable_streaming_session,
-            server_args=server_args,
+    ) -> "SchedulerMetricsCollectorContext":
+        enable_metrics = server_args.enable_metrics
+        is_stats_logging_rank = ps.attn_tp_rank == 0
+        current_scheduler_metrics_enabled = enable_metrics and (
+            is_stats_logging_rank or server_args.enable_metrics_for_all_schedulers
         )
+        enable_kv_cache_events = bool(
+            server_args.kv_events_config
+            and ps.attn_tp_rank == 0
+            and ps.attn_cp_rank == 0
+        )
+        collector: Optional["SchedulerMetricsCollector"] = None
+        if enable_metrics:
+            engine_type = DisaggregationMode.to_engine_type(
+                server_args.disaggregation_mode
+            )
+            labels = {
+                "model_name": server_args.served_model_name,
+                "engine_type": engine_type,
+                "tp_rank": tp_rank,
+                "pp_rank": pp_rank,
+                "moe_ep_rank": ps.moe_ep_rank,
+            }
+            if enable_priority_scheduling:
+                labels["priority"] = ""
+            if dp_rank is not None:
+                labels["dp_rank"] = dp_rank
+            if server_args.extra_metric_labels:
+                labels.update(server_args.extra_metric_labels)
+            collector = cls(
+                labels=labels,
+                enable_lora=enable_lora,
+                enable_hierarchical_cache=enable_hierarchical_cache,
+                enable_streaming_session=server_args.enable_streaming_session,
+                server_args=server_args,
+            )
+        return SchedulerMetricsCollectorContext(
+            enable_metrics=enable_metrics,
+            is_stats_logging_rank=is_stats_logging_rank,
+            current_scheduler_metrics_enabled=current_scheduler_metrics_enabled,
+            enable_kv_cache_events=enable_kv_cache_events,
+            collector=collector,
+        )
+
+'''
+
+
+# Dataclass injected at module scope onto metrics_collector.py before the
+# SchedulerMetricsCollector class.
+COLLECTOR_CONTEXT_DATACLASS = '''\
+@dataclass(kw_only=True, frozen=True, slots=True)
+class SchedulerMetricsCollectorContext:
+    enable_metrics: bool
+    is_stats_logging_rank: bool
+    current_scheduler_metrics_enabled: bool
+    enable_kv_cache_events: bool
+    collector: Optional["SchedulerMetricsCollector"]
+
 
 '''
 
@@ -309,6 +334,7 @@ REPORTER_OWNED_ATTRS = frozenset({
     "pp_rank",
     "dp_rank",
     "metrics_collector",
+    "metrics_collector_context",
     # __post_init__ counters
     "num_retracted_reqs",
     "num_paused_reqs",
@@ -502,10 +528,14 @@ def transform(wt: Path) -> None:
     target = wt / "python/sglang/srt/managers/scheduler_components/metrics_reporter.py"
     collector = wt / "python/sglang/srt/observability/metrics_collector.py"
 
-    # -1. Inject SchedulerMetricsCollector.init_new classmethod (Ask 2).
-    # Insert immediately after the ``__init__`` method body, before the next
-    # method definition.
+    # -1. Inject SchedulerMetricsCollectorContext dataclass + init_new
+    # classmethod onto SchedulerMetricsCollector. The context dataclass lives
+    # at module scope right before the collector class so that the classmethod
+    # return-type annotation resolves. The init_new body computes the four
+    # metrics-enablement booleans, builds the underlying collector only when
+    # enable_metrics is True, and returns the context.
     from _helpers import ensure_imports as _ensure_imports
+    from _helpers import find_class_lines as _find_class_lines
     ctext = collector.read_text()
     ctext = _ensure_imports(
         ctext,
@@ -513,6 +543,9 @@ def transform(wt: Path) -> None:
             "sglang.srt.disaggregation.utils": ("DisaggregationMode",),
         },
     )
+    _ctx_start, _ = _find_class_lines(ctext, class_name="SchedulerMetricsCollector")
+    _clines = ctext.splitlines(keepends=True)
+    ctext = "".join(_clines[:_ctx_start]) + COLLECTOR_CONTEXT_DATACLASS + "".join(_clines[_ctx_start:])
     _ci_start, _ci_end = find_method_lines(
         ctext, class_name="SchedulerMetricsCollector", method_name="__init__"
     )
@@ -604,6 +637,29 @@ def transform(wt: Path) -> None:
         text,
         old="    SchedulerMetricsCollector,\n",
         new="",
+    )
+
+    # 2b. PRE-typeflip: strip the 3-bool ``enable_metrics`` /
+    # ``is_stats_logging_rank`` / ``current_scheduler_metrics_enabled`` block
+    # from ``init_metrics`` body. ``__post_init__`` now populates these from
+    # ``metrics_collector_context``; the recomputation here would shadow that.
+    # ``enable_mfu_metrics = False`` stays — its default applies even when
+    # ``enable_metrics`` is False.
+    text = replace_call_site(
+        text,
+        old=(
+            "        # Metrics\n"
+            "        self.enable_metrics = self.server_args.enable_metrics\n"
+            "        self.is_stats_logging_rank = self.ps.attn_tp_rank == 0\n"
+            "        self.current_scheduler_metrics_enabled = self.enable_metrics and (\n"
+            "            self.is_stats_logging_rank\n"
+            "            or self.server_args.enable_metrics_for_all_schedulers\n"
+            "        )\n"
+            "        self.enable_mfu_metrics = False\n"
+        ),
+        new=(
+            "        self.enable_mfu_metrics = False\n"
+        ),
     )
 
     # 3. Type-flip each of the 15 methods to @staticmethod with
@@ -770,6 +826,16 @@ def transform(wt: Path) -> None:
         "            or self.server_args.enable_metrics_for_all_schedulers\n"
         "        ):\n",
     )
+    # Pre-reporter callsite inside ``init_model_worker`` (``emit_constants``
+    # under the avail-mem log) fires BEFORE ``self.metrics_reporter`` exists —
+    # inline the source ``server_args`` read so the reader is independent of
+    # the reporter lifecycle.
+    text = text.replace(
+        "        if self.enable_metrics:\n"
+        "            self.metrics_collector.emit_constants(\n",
+        "        if self.server_args.enable_metrics:\n"
+        "            self.metrics_collector.emit_constants(\n",
+    )
     # Remaining ``self.enable_metrics`` readers (all post-reporter construction).
     text = text.replace(
         "self.metrics_collector if self.enable_metrics else None",
@@ -836,7 +902,46 @@ def transform(wt: Path) -> None:
         r"\1self.report_prefill_stats(self.metrics_reporter, ",
         text,
     )
+    text = text.replace(
+        "self.scheduler.enable_metrics", "self.scheduler.metrics_reporter.enable_metrics"
+    )
+    # ``SchedulerDisaggregationPrefillMixin`` (mixed into Scheduler) reads
+    # ``self.enable_metrics`` directly — that attribute moved off Scheduler
+    # onto the reporter. Use word-boundary regex so we don't touch
+    # ``self.enable_metrics_for_all_schedulers`` or similar.
+    text = re.sub(
+        r"\bself\.enable_metrics\b(?!_)",
+        "self.metrics_reporter.enable_metrics",
+        text,
+    )
+    # ``kv_transfer_latency_ms`` / ``kv_transfer_speed_gb_s`` writes in the
+    # prefill mixin land on Scheduler today; those fields move onto the
+    # reporter in this prep (REPORTER_OWNED_ATTRS) so route the writes too.
+    text = text.replace(
+        "self.kv_transfer_latency_ms = ",
+        "self.metrics_reporter.kv_transfer_latency_ms = ",
+    )
+    text = text.replace(
+        "self.kv_transfer_speed_gb_s = ",
+        "self.metrics_reporter.kv_transfer_speed_gb_s = ",
+    )
     prefill.write_text(text)
+
+    # 6b. Disaggregation decode.
+    decode = wt / "python/sglang/srt/disaggregation/decode.py"
+    text = decode.read_text()
+    text = text.replace(
+        "self.scheduler.enable_metrics", "self.scheduler.metrics_reporter.enable_metrics"
+    )
+    decode.write_text(text)
+
+    # 6c. Disaggregation encode_receiver.
+    encode_recv = wt / "python/sglang/srt/disaggregation/encode_receiver.py"
+    text = encode_recv.read_text()
+    text = text.replace(
+        "self.scheduler.enable_metrics", "self.scheduler.metrics_reporter.enable_metrics"
+    )
+    encode_recv.write_text(text)
 
     # 7. dllm mixin.
     text = dllm.read_text()

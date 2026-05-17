@@ -31,19 +31,14 @@ from _runner import run_pr
 ID = "init-mode-conditional-defaults"
 SUBJECT = "Pre-declare mode-conditional Scheduler fields with explicit defaults"
 BODY = """\
-Pre-declare the mode-conditional Scheduler fields with ``None`` /
-``False`` defaults at the top of ``Scheduler.__init__``:
+Pre-declare the mode-conditional Scheduler fields with ``None`` defaults
+at the top of ``Scheduler.__init__``:
 
 - ``self.mm_receiver`` — populated by ``init_disaggregation`` under mm mode
 - ``self.disagg_prefill_bootstrap_queue`` — populated under disagg-prefill mode
 - ``self.disagg_prefill_inflight_queue`` — populated under disagg-prefill mode
 - ``self.disagg_decode_prealloc_queue`` — populated under disagg-decode mode
 - ``self.disagg_decode_transfer_queue`` — populated under disagg-decode mode
-- ``self.enable_overlap_mlx`` — re-assigned unconditionally just below; the
-  pre-init is harmless (overwritten on the very next line) but kept for
-  symmetry with the disagg / mm fields so the upcoming sister-introducing
-  commits can write ``self.enable_overlap_mlx`` everywhere without a
-  ``getattr`` fallback.
 
 These fields are read eagerly by sister-component ctors that the next
 mech commits (``introduce-scheduler-request-receiver-prep`` onwards)
@@ -51,6 +46,13 @@ will introduce. Without this pre-init, those eager reads would either
 need ``getattr(self, "X", DEFAULT)`` defenses (violates
 ``coding-style.md``) or only-work-in-mode-X conditional logic. With this
 pre-init, every read site can use plain ``self.X``.
+
+``self.enable_overlap_mlx`` is intentionally NOT pre-declared here even
+though it is mode-conditional: the real assignment runs earlier in
+``__init__`` (before this insertion point), so any pre-init at this
+location would silently overwrite the correct value and disable MLX
+overlap. The field is already unconditionally bound by the real
+assignment, so no defensive pre-init is required.
 
 Single commit, single logical change: establish "field always exists"
 invariant. Follows ``MECH_COMMIT_SPLIT.md`` "trivial ``getattr`` → direct
@@ -74,7 +76,6 @@ DEFAULTS_BLOCK = """\
         self.disagg_prefill_inflight_queue = None
         self.disagg_decode_prealloc_queue = None
         self.disagg_decode_transfer_queue = None
-        self.enable_overlap_mlx = False
 """
 
 

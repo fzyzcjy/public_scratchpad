@@ -220,6 +220,22 @@ def transform(wt: Path) -> None:
 
     sched.write_text(text)
 
+    # 6. ``SchedulerMlxOverlapMixin`` (mixed into Scheduler) calls
+    #    ``self.self_check_during_busy()`` in two places. The prep step
+    #    only rewrites ``scheduler.py`` callsites (via direct ``text.replace``),
+    #    so the MLX mixin keeps the bare form and would AttributeError
+    #    once ``self_check_during_busy`` no longer lives on Scheduler.
+    mlx_path = (
+        wt / "python/sglang/srt/hardware_backend/mlx/scheduler_mixin.py"
+    )
+    if mlx_path.exists():
+        mtext = mlx_path.read_text()
+        mtext = mtext.replace(
+            "self.self_check_during_busy()",
+            "self.invariant_checker.self_check_during_busy()",
+        )
+        mlx_path.write_text(mtext)
+
 
 if __name__ == "__main__":
     run_pr(

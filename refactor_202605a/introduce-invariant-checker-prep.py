@@ -116,7 +116,12 @@ logger = logging.getLogger(__name__)
 
 
 SKELETON_CLASS = '''\
-@dataclass(kw_only=True, slots=True, frozen=True)
+# NOTE: this dataclass is intentionally NOT ``frozen=True`` (the project
+# default per ``feedback_dataclass_defaults``): ``raise_error_or_warn``
+# increments ``count_*_warnings`` via ``setattr`` on ``self``, which would
+# raise ``FrozenInstanceError`` against a frozen dataclass. The two
+# warning counters are mutable internal state.
+@dataclass(kw_only=True, slots=True)
 class SchedulerInvariantChecker:
     is_hybrid_swa: bool
     is_hybrid_ssm: bool

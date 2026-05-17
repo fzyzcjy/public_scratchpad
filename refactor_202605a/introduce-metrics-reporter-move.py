@@ -331,22 +331,6 @@ def transform(wt: Path) -> None:
         "scheduler.metrics_reporter._shutdown_fpm()",
         text,
     )
-    # Collapse the ctor-body bootstrap calls emitted by prep (replacing
-    # __post_init__). After move the bodies live on the reporter class
-    # itself, so ``SchedulerMetricsMixin.<m>(self.metrics_reporter, ...)``
-    # becomes ``self.metrics_reporter.<m>(...)``. Use regex to tolerate
-    # whatever line wrapping black applied to the multi-arg call.
-    text = re.sub(
-        r"SchedulerMetricsMixin\._init_metrics\(\s*self\.metrics_reporter\s*,\s*"
-        r"tp_rank\s*,\s*pp_rank\s*,\s*dp_rank\s*,?\s*\)",
-        "self.metrics_reporter._init_metrics(tp_rank, pp_rank, dp_rank)",
-        text,
-        flags=re.DOTALL,
-    )
-    text = text.replace(
-        "SchedulerMetricsMixin._install_device_timer_on_runners(self.metrics_reporter)",
-        "self.metrics_reporter._install_device_timer_on_runners()",
-    )
     sched.write_text(text)
 
     # 8. Output processor mixin: caller form collapse.
@@ -414,11 +398,41 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "class _DummyScheduler(SchedulerMetricsMixin):\n    pass\n",
         "def _make_reporter(scheduler) -> SchedulerMetricsReporter:\n"
+        "    if not hasattr(scheduler, 'server_args'):\n"
+        "        scheduler.server_args = types.SimpleNamespace(\n"
+        "            enable_metrics=False,\n"
+        "            enable_metrics_for_all_schedulers=False,\n"
+        "            kv_events_config=None,\n"
+        "            enable_mfu_metrics=False,\n"
+        "            enable_forward_pass_metrics=False,\n"
+        "        )\n"
+        "    if not hasattr(scheduler, 'ps'):\n"
+        "        scheduler.ps = types.SimpleNamespace(attn_tp_rank=0, attn_cp_rank=0)\n"
+        "    if not hasattr(scheduler, 'kv_events_publisher'):\n"
+        "        scheduler.kv_events_publisher = types.SimpleNamespace(\n"
+        "            init_kv_events=lambda *a, **kw: None,\n"
+        "        )\n"
+        "    if not hasattr(scheduler, 'tp_workers'):\n"
+        "        scheduler.tp_workers = []\n"
+        "    if not hasattr(scheduler, 'tp_worker'):\n"
+        "        scheduler.tp_worker = types.SimpleNamespace(\n"
+        "            model_runner=types.SimpleNamespace(),\n"
+        "        )\n"
+        "    if not hasattr(scheduler, 'draft_worker'):\n"
+        "        scheduler.draft_worker = None\n"
+        "    context = types.SimpleNamespace(\n"
+        "        enable_metrics=False,\n"
+        "        is_stats_logging_rank=True,\n"
+        "        current_scheduler_metrics_enabled=False,\n"
+        "        enable_kv_cache_events=False,\n"
+        "        collector=None,\n"
+        "    )\n"
         "    return SchedulerMetricsReporter(\n"
         "        scheduler=scheduler,\n"
         "        tp_rank=0,\n"
         "        pp_rank=0,\n"
         "        dp_rank=0,\n"
+        "        metrics_collector_context=context,\n"
         "        metrics_collector=None,\n"
         "    )\n",
     )
@@ -427,14 +441,14 @@ def transform(wt: Path) -> None:
         "        self.scheduler = _DummyScheduler()\n"
         "        self.scheduler.enable_fpm = True\n",
         "    def setUp(self):\n"
-        "        self.scheduler = types.SimpleNamespace()\n"
-        "        self.scheduler.enable_fpm = True\n",
+        "        self.scheduler = types.SimpleNamespace()\n",
     )
     text = text.replace(
         "        self.scheduler.disaggregation_mode = DisaggregationMode.NULL\n\n"
         "    def _make_batch(self, **overrides):\n",
         "        self.scheduler.disaggregation_mode = DisaggregationMode.NULL\n"
-        "        self.reporter = _make_reporter(self.scheduler)\n\n"
+        "        self.reporter = _make_reporter(self.scheduler)\n"
+        "        self.scheduler.enable_fpm = True\n\n"
         "    def _make_batch(self, **overrides):\n",
     )
     text = text.replace(
@@ -468,14 +482,12 @@ def transform(wt: Path) -> None:
         "            _DummyPublisherThread,\n"
         "        ):\n"
         "            scheduler.init_metrics(tp_rank=0, pp_rank=0, dp_rank=2)\n",
-        "        scheduler.enable_kv_cache_events = False\n"
-        "        reporter = _make_reporter(scheduler)\n"
-        "        reporter.forward_pass_device_timer = None\n\n"
+        "        scheduler.enable_kv_cache_events = False\n\n"
         "        with patch(\n"
         "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
         "            _DummyPublisherThread,\n"
         "        ):\n"
-        "            reporter._init_fpm()\n",
+        "            reporter = _make_reporter(scheduler)\n",
     )
     text = text.replace(
         "        scheduler.enable_kv_cache_events = False\n\n"
@@ -484,14 +496,12 @@ def transform(wt: Path) -> None:
         "            _DummyPublisherThread,\n"
         "        ):\n"
         "            scheduler.init_metrics(tp_rank=0, pp_rank=0, dp_rank=0)\n",
-        "        scheduler.enable_kv_cache_events = False\n"
-        "        reporter = _make_reporter(scheduler)\n"
-        "        reporter.forward_pass_device_timer = None\n\n"
+        "        scheduler.enable_kv_cache_events = False\n\n"
         "        with patch(\n"
         "            \"sglang.srt.observability.forward_pass_metrics._FpmPublisherThread\",\n"
         "            _DummyPublisherThread,\n"
         "        ):\n"
-        "            reporter._init_fpm()\n",
+        "            reporter = _make_reporter(scheduler)\n",
     )
     test_fwd.write_text(text)
 
