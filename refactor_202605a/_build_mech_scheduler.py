@@ -31,7 +31,7 @@ REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
 WT = Path("/tmp/refactor-wt-mech-scheduler")
 BASE = "main"
 # Pin to the exact SHA temp-abc was built on, so regen tree can be compared byte-for-byte.
-PIN_BASE_SHA = "6dcacb1159d6c825da5f934b6454b5115341ddd1"
+PIN_BASE_SHA = "229cadec0409478977859abace5abb53264624b3"
 CHAIN_BRANCH = "tom_refactor_202605a/primary/mech_scheduler"
 SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 

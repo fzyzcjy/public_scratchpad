@@ -662,18 +662,6 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # 2c. PRE-typeflip: strip the ``init_kv_events`` call from ``init_metrics``
-    # body. The call now lives directly in ``Scheduler.__init__`` right after
-    # the ``kv_events_publisher`` ctor (see step 4 below) — keeping it in the
-    # reporter body would either fail (reporter ctor runs before publisher
-    # exists) or duplicate the side effect once the reporter is constructed
-    # earlier.
-    text = replace_call_site(
-        text,
-        old="        self.kv_events_publisher.init_kv_events(self.server_args.kv_events_config)\n\n",
-        new="",
-    )
-
     # 3. Type-flip each of the 15 methods to @staticmethod with
     #    self: "SchedulerMetricsReporter" AND apply the back-reference body
     #    rewrite. Iterate bottom-up so earlier line ranges are not invalidated
@@ -706,28 +694,25 @@ def transform(wt: Path) -> None:
             "from sglang.srt.observability.metrics_collector import SchedulerMetricsCollector\n"
         ),
     )
-    # Replace init_metrics call with the inline early-fields block, and append
-    # the reporter ctor immediately after the metrics_collector setup. The
-    # reporter must be constructed BEFORE ``init_ipc_channels`` (and the rest
-    # of ``__init__``) because downstream callsites — kv_events_publisher
-    # ``get_stats`` lambda, the inlined ``current_scheduler_metrics_enabled``
-    # / ``enable_metrics`` reads in init_ipc_channels — resolve through
-    # ``self.metrics_reporter`` and need it populated. ``SCHEDULER_INIT_INSERT``
-    # already ends with one blank line; the original source line after
-    # ``init_metrics`` provides the blank line before
-    # ``# Init inter-process communication`` so we don't add another.
+    # Replace init_metrics call with the inline early-fields block that owns
+    # the ``metrics_collector_context`` / ``metrics_collector`` construction.
+    # The reporter ctor itself is appended later (after ``load_inquirer``) so
+    # the reporter's ``get_stats`` / spec-counter lambdas on the inquirer can
+    # be wired up first.
     text = replace_call_site(
         text,
         old="        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
-        new=INLINE_CURRENT_METRICS_ENABLED + "\n" + SCHEDULER_INIT_INSERT.rstrip("\n") + "\n",
+        new=INLINE_CURRENT_METRICS_ENABLED,
     )
-    # Wire the kv_events_publisher boot call (formerly run from
-    # ``init_metrics``) into ``Scheduler.__init__`` right after the
-    # publisher ctor, so the kv-events plumbing still runs exactly once.
+    # Append the reporter ctor immediately after the ``load_inquirer`` block —
+    # right before ``self.is_initializing = False`` — so the reporter sees the
+    # collector + ctx already built (step above) and the inquirer's
+    # ``get_stats`` / spec lambdas (rewritten below) get wired before the
+    # reporter's __post_init__ populates ``self.stats`` / spec counters.
     text = replace_call_site(
         text,
-        old="        self.load_inquirer = SchedulerLoadInquirer(\n",
-        new="        self.kv_events_publisher.init_kv_events(self.server_args.kv_events_config)\n\n        self.load_inquirer = SchedulerLoadInquirer(\n",
+        old="        self.is_initializing = False\n",
+        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
     )
     # Drop owned counter init lines (now reporter-owned).
     text = replace_call_site(text, old="        self.num_retracted_reqs: int = 0\n", new="")
@@ -825,19 +810,15 @@ def transform(wt: Path) -> None:
 
     # Ownership tightening (D3): the 4 "metrics enablement" booleans now live
     # on the reporter (set inside __post_init__). Rewrite all Scheduler-side
-    # readers. The build_kv_cache call at line 437-438 runs BEFORE the reporter
-    # is constructed, so route those two through ``self.server_args`` directly
-    # rather than the reporter.
+    # readers. The build_kv_cache call runs BEFORE the reporter is constructed,
+    # so route ``enable_metrics`` through ``self.server_args`` directly. The
+    # paired ``enable_kv_cache_events`` was already inlined to the ``bool(...)``
+    # form by ``introduce-kv-events-publisher-prep`` (commit 24), so only the
+    # ``enable_metrics`` half remains to rewrite here.
     text = replace_call_site(
         text,
-        old="            enable_metrics=self.enable_metrics,\n"
-        "            enable_kv_cache_events=self.enable_kv_cache_events,\n",
-        new="            enable_metrics=self.server_args.enable_metrics,\n"
-        "            enable_kv_cache_events=bool(\n"
-        "                self.server_args.kv_events_config\n"
-        "                and self.ps.attn_tp_rank == 0\n"
-        "                and self.ps.attn_cp_rank == 0\n"
-        "            ),\n",
+        old="            enable_metrics=self.enable_metrics,\n",
+        new="            enable_metrics=self.server_args.enable_metrics,\n",
     )
     # current_scheduler_metrics_enabled reader lives inside ``init_ipc_channels``
     # which fires BEFORE ``self.metrics_reporter`` is constructed. Inline the

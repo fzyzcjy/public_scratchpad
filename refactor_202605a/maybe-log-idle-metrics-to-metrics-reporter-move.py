@@ -68,17 +68,22 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 BODY_SUBSTITUTIONS = [
     # Pool-stats sibling reads — pool_stats_observer is on Scheduler (C9
     # introduced it as a sister class), reached via the back-reference.
+    # Note: pre-move source body already references
+    # ``self.pool_stats_observer.X()`` (the C9 cascade rewrote the
+    # legacy ``self.get_pool_stats()`` / ``self._streaming_session_count()``
+    # / ``self._session_held_tokens()`` form), so the substitution here
+    # only inserts the ``scheduler`` back-reference hop.
     (
-        "self.get_pool_stats()",
+        "self.pool_stats_observer.get_pool_stats()",
         "self.scheduler.pool_stats_observer.get_pool_stats()",
     ),
     (
-        "self.stats.num_streaming_sessions = self._streaming_session_count()",
-        "self.stats.num_streaming_sessions = self.scheduler.pool_stats_observer.streaming_session_count()",
+        "self.pool_stats_observer.streaming_session_count()",
+        "self.scheduler.pool_stats_observer.streaming_session_count()",
     ),
     (
-        "self.stats.streaming_session_held_tokens = self._session_held_tokens()",
-        "self.stats.streaming_session_held_tokens = self.scheduler.pool_stats_observer.session_held_tokens()",
+        "self.pool_stats_observer.session_held_tokens()",
+        "self.scheduler.pool_stats_observer.session_held_tokens()",
     ),
     # Scheduler-owned state — route through the back-reference.
     ("self.running_batch.reqs", "self.scheduler.running_batch.reqs"),
