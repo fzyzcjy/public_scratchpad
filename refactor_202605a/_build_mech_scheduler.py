@@ -30,6 +30,8 @@ HERE = Path(__file__).parent
 REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
 WT = Path("/tmp/refactor-wt-mech-scheduler")
 BASE = "main"
+# Pin to the exact SHA temp-abc was built on, so regen tree can be compared byte-for-byte.
+PIN_BASE_SHA = "6dcacb1159d6c825da5f934b6454b5115341ddd1"
 CHAIN_BRANCH = "tom_refactor_202605a/primary/mech_scheduler"
 SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 
@@ -97,8 +99,7 @@ def make_worktree() -> None:
         run(["git", "worktree", "remove", "--force", str(WT)], cwd=REPO, check=False)
         if WT.exists():
             shutil.rmtree(WT)
-    run(["git", "fetch", "upstream", BASE], cwd=REPO)
-    run(["git", "worktree", "add", "--detach", str(WT), f"upstream/{BASE}"], cwd=REPO)
+    run(["git", "worktree", "add", "--detach", str(WT), PIN_BASE_SHA], cwd=REPO)
 
 
 def load_script(id: str):

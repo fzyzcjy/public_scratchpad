@@ -175,6 +175,17 @@ def transform(wt: Path) -> None:
             1,
         )
 
+    # Rewrite intra-mixin sibling staticmethod calls (otherwise ``self`` here
+    # is a ``SchedulerDPAttnAdapter`` and the bound-method lookup fails).
+    text = text.replace(
+        "            get_idle_batch=self.get_idle_batch,\n",
+        "            get_idle_batch=lambda: SchedulerDPAttnMixin.get_idle_batch(self),\n",
+    )
+    text = text.replace(
+        "            batch = self.prepare_mlp_sync_batch(batch)\n",
+        "            batch = SchedulerDPAttnMixin.prepare_mlp_sync_batch(self, batch)\n",
+    )
+
     mixin.write_text(text)
 
     # 3. In scheduler.py, add import + ctor instantiation.

@@ -310,6 +310,54 @@ def transform(wt: Path) -> None:
         "self.stream_interval", "self.server_args.stream_interval"
     )
 
+    # 4b. Retarget calls that live INSIDE the now-converted static methods.
+    # Their ``self`` already IS the streamer, so ``self.X(self.output_streamer,
+    # ...)`` form (left over from the section-4 blanket) is wrong: there is no
+    # ``self.output_streamer`` on the streamer, and the method must be reached
+    # via class qualification with ``self`` as the first arg.
+    #
+    # Inside ``stream_output``:
+    text = text.replace(
+        "        if self.is_generation:\n"
+        "            self._stream_output_generation(\n"
+        "                self.output_streamer, reqs, return_logprob, skip_req\n"
+        "            )\n"
+        "        else:  # embedding or reward model\n"
+        "            self._stream_output_embedding(self.output_streamer, reqs)\n"
+        "\n"
+        "        if envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get() > 0:\n"
+        "            self._trigger_crash_for_tests(\n"
+        "                envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get()\n"
+        "            )\n",
+        "        if self.is_generation:\n"
+        "            SchedulerOutputProcessorMixin._stream_output_generation(\n"
+        "                self, reqs, return_logprob, skip_req\n"
+        "            )\n"
+        "        else:  # embedding or reward model\n"
+        "            SchedulerOutputProcessorMixin._stream_output_embedding(self, reqs)\n"
+        "\n"
+        "        if envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get() > 0:\n"
+        "            SchedulerOutputProcessorMixin._trigger_crash_for_tests(\n"
+        "                self, envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get()\n"
+        "            )\n",
+    )
+    # Inside ``_stream_output_generation`` and ``_stream_output_embedding``
+    # (same call pattern appears in both):
+    text = text.replace(
+        "                cached_tokens_details.append(\n"
+        "                    self.get_cached_tokens_details(self.output_streamer, req)\n"
+        "                )\n",
+        "                cached_tokens_details.append(\n"
+        "                    SchedulerOutputProcessorMixin.get_cached_tokens_details(self, req)\n"
+        "                )\n",
+    )
+    # Inside ``get_cached_tokens_details`` (``_get_storage_backend_type`` is
+    # NOT in callsite_methods so no ``self.output_streamer,`` was injected):
+    text = text.replace(
+        'details["storage_backend"] = self._get_storage_backend_type()',
+        'details["storage_backend"] = SchedulerOutputProcessorMixin._get_storage_backend_type(self)',
+    )
+
     # Add TYPE_CHECKING import for the new TargetClass so the
     # ``self: "SchedulerOutputStreamer"`` annotation resolves under pyflakes.
     if "from sglang.srt.managers.scheduler_components.output_streamer import SchedulerOutputStreamer" not in text:

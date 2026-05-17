@@ -230,6 +230,17 @@ def transform(wt: Path) -> None:
         _make_caller_replacement_4space(),
     )
 
+    # 4a. Rewrite intra-Scheduler calls to the now-@staticmethod helpers so
+    # ``self`` is forwarded explicitly (otherwise the bound-method shim drops it).
+    text = text.replace(
+        "                        if self.recv_limit_reached(len(recv_reqs)):\n",
+        "                        if Scheduler.recv_limit_reached(self, len(recv_reqs)):\n",
+    )
+    text = text.replace(
+        "                work_reqs, control_reqs = self._split_work_and_control_reqs(recv_reqs)\n",
+        "                work_reqs, control_reqs = Scheduler._split_work_and_control_reqs(self, recv_reqs)\n",
+    )
+
     sched.write_text(text)
 
     # 5. Callsite rewrites in scheduler_pp_mixin.py (3 sites).

@@ -277,6 +277,27 @@ def transform(wt: Path) -> None:
         "self._maybe_collect_customized_info(",
     )
 
+    # 3b. Retarget sibling-helper calls in the mixin body to mixin-qualified
+    #     form. The 7 helpers below are converted to ``@staticmethod`` above,
+    #     so a bound ``self._foo(...)`` call would silently drop ``self`` from
+    #     the staticmethod's argument list. Rewrite each callsite to
+    #     ``SchedulerOutputProcessorMixin._foo(self, ...)`` so ``self`` is
+    #     forwarded explicitly. Must run AFTER the privacy flips so the
+    #     ``_maybe_collect_*`` names are in their underscored form.
+    for _staticmethod_name in (
+        "_maybe_update_reasoning_tokens",
+        "_maybe_collect_routed_experts",
+        "_maybe_collect_indexer_topk",
+        "_maybe_collect_customized_info",
+        "_resolve_spec_overlap_tokens",
+        "_mamba_prefix_cache_update",
+        "_handle_finished_req",
+    ):
+        text = text.replace(
+            f"self.{_staticmethod_name}(",
+            f"SchedulerOutputProcessorMixin.{_staticmethod_name}(self, ",
+        )
+
     # 4. Field rewrites:
     # - ``self.metrics_reporter.X(...)`` calls stay as-is. ``metrics_reporter``
     #   is a real ctor field on SchedulerBatchResultProcessor (Ask 6),
@@ -344,19 +365,11 @@ def transform(wt: Path) -> None:
         raise RuntimeError("output_streamer ctor block not found in scheduler.py")
     text = text[: m.end()] + SCHEDULER_INIT_INSERT + text[m.end():]
 
-    # 7. Nesting: drop the standalone ``self.logprob_result_processor =
-    #    SchedulerLogprobResultProcessor(...)`` field on Scheduler (C15 added
-    #    it as a sister). It now lives inside ``batch_result_processor`` —
-    #    constructed inline by SCHEDULER_INIT_INSERT above. Callers reach it
-    #    via ``self.batch_result_processor.logprob_result_processor``.
-    text = _re.sub(
-        r"        self\.logprob_result_processor = SchedulerLogprobResultProcessor\(\n"
-        r"(?:.*\n)+?"
-        r"        \)\n\n",
-        "",
-        text,
-        count=1,
-    )
+    # 7. Nesting note: the standalone ``self.logprob_result_processor =
+    #    SchedulerLogprobResultProcessor(...)`` field on Scheduler is kept
+    #    in place. ``batch_result_processor`` constructs its own inline copy
+    #    (via SCHEDULER_INIT_INSERT above); disagg callers route through
+    #    ``self.batch_result_processor.logprob_result_processor`` (step 8).
     sched.write_text(text)
 
     # 8. Disagg-prefill mixin caller fix-up: a couple of call sites read

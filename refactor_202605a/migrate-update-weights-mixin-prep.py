@@ -271,6 +271,13 @@ def transform(wt: Path) -> None:
         "if TYPE_CHECKING:\n"
         "    from sglang.srt.managers.scheduler_components.weight_updater import SchedulerWeightUpdaterManager\n",
     )
+    # Rewrite the 4 intra-mixin ``self.flush_cache_after_weight_update(recv_req)``
+    # call sites to the explicit class-qualified form so the staticmethod
+    # dispatches receive the manager as first arg.
+    text = text.replace(
+        "self.flush_cache_after_weight_update(recv_req)",
+        "SchedulerUpdateWeightsMixin.flush_cache_after_weight_update(self, recv_req)",
+    )
     mixin.write_text(text)
 
     # 4. In scheduler.py: add import, delete the original
@@ -324,6 +331,22 @@ def transform(wt: Path) -> None:
     #    lambdas (no intermediate ``lambda req: self.method(req)`` step).
     for old, new in RPC_LAMBDA_WRAPS:
         text = replace_call_site(text, old=old, new=new)
+
+    # 6. ``save_remote_model`` / ``save_sharded_model`` are invoked directly on
+    #    ``Scheduler`` (not through the RPC dispatcher), so the staticmethod
+    #    type-flip breaks their call sites. Add thin wrapper methods on
+    #    ``Scheduler`` that forward to the staticmethod with the manager.
+    text = replace_call_site(
+        text,
+        old="    def handle_rpc_request(self, recv_req: RpcReqInput):\n",
+        new="    def save_remote_model(self, **kwargs):\n"
+        "        SchedulerUpdateWeightsMixin.save_remote_model(self.weight_updater, kwargs)\n"
+        "\n"
+        "    def save_sharded_model(self, **kwargs):\n"
+        "        SchedulerUpdateWeightsMixin.save_sharded_model(self.weight_updater, kwargs)\n"
+        "\n"
+        "    def handle_rpc_request(self, recv_req: RpcReqInput):\n",
+    )
 
     sched.write_text(text)
 

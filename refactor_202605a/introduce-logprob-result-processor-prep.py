@@ -199,6 +199,48 @@ def transform(wt: Path) -> None:
     )
     sched.write_text(text)
 
+    # 3b. Retarget intra-body ``self.<m>(...)`` calls between the 9 converted
+    #     staticmethods to ``SchedulerOutputProcessorMixin.<m>(self, ...)``.
+    #     After step 2, ``self`` inside these bodies is typed as
+    #     ``SchedulerLogprobResultProcessor`` (which doesn't carry these
+    #     methods), so the original ``self.<m>(...)`` form no longer resolves.
+    #     Done before step 4 so the global ``self.<m>(`` rewrites below only
+    #     hit the out-of-body call sites.
+    text = mixin.read_text()
+    text = text.replace(
+        "self._is_multi_item_scoring(req)",
+        "SchedulerOutputProcessorMixin._is_multi_item_scoring(self, req)",
+    )
+    text = text.replace(
+        "self._process_input_token_logprobs(req, input_token_logprobs)",
+        "SchedulerOutputProcessorMixin._process_input_token_logprobs(self, req, input_token_logprobs)",
+    )
+    text = text.replace(
+        "self._process_input_top_logprobs(req)",
+        "SchedulerOutputProcessorMixin._process_input_top_logprobs(self, req)",
+    )
+    text = text.replace(
+        "self._process_input_token_ids_logprobs(req)",
+        "SchedulerOutputProcessorMixin._process_input_token_ids_logprobs(self, req)",
+    )
+    text = text.replace(
+        "self._calculate_relevant_tokens_len(req)",
+        "SchedulerOutputProcessorMixin._calculate_relevant_tokens_len(self, req)",
+    )
+    text = text.replace(
+        "self._initialize_empty_logprob_containers(req)",
+        "SchedulerOutputProcessorMixin._initialize_empty_logprob_containers(self, req)",
+    )
+    text = text.replace(
+        "            self.add_input_logprob_return_values(\n"
+        "                i, req, output, pt, num_input_logprobs, last_prefill_chunk=True\n"
+        "            )",
+        "            SchedulerOutputProcessorMixin.add_input_logprob_return_values(\n"
+        "                self, i, req, output, pt, num_input_logprobs, last_prefill_chunk=True\n"
+        "            )",
+    )
+    mixin.write_text(text)
+
     # 4. Callsite rewrites: mixin body (still in place) + external callers
     #    in disaggregation/prefill.py. Form is
     #    ``self.<method>(self.logprob_result_processor, <existing-args>)``.

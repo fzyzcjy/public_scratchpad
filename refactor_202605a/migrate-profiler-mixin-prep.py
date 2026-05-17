@@ -247,6 +247,53 @@ def transform(wt: Path) -> None:
         '    @staticmethod\n    def _profile(self: "SchedulerProfilerManager", recv_req: ProfileReq):',
     )
 
+    # 3b. Inside the now-@staticmethod mixin methods, ``self`` is a
+    #     ``SchedulerProfilerManager`` so ``self._foo(...)`` no longer
+    #     resolves to the sibling mixin methods. Rewrite intra-mixin
+    #     callsites to the class-qualified ``SchedulerProfilerMixin._foo(self, ...)``
+    #     static-call form. ``move`` collapses these to
+    #     ``self._foo(...)`` once the methods live on the manager.
+    text = text.replace(
+        "merge_message = self._merge_profile_traces()",
+        "merge_message = SchedulerProfilerMixin._merge_profile_traces(self)",
+    )
+    text = text.replace(
+        "self._start_profile(batch.forward_mode)",
+        "SchedulerProfilerMixin._start_profile(self, batch.forward_mode)",
+    )
+    text = text.replace(
+        "self._stop_profile(stage=ForwardMode.EXTEND)",
+        "SchedulerProfilerMixin._stop_profile(self, stage=ForwardMode.EXTEND)",
+    )
+    text = text.replace(
+        "self._stop_profile(stage=ForwardMode.DECODE)",
+        "SchedulerProfilerMixin._stop_profile(self, stage=ForwardMode.DECODE)",
+    )
+    text = text.replace(
+        "                self._stop_profile()\n",
+        "                SchedulerProfilerMixin._stop_profile(self)\n",
+    )
+    text = text.replace(
+        "                self._start_profile()\n",
+        "                SchedulerProfilerMixin._start_profile(self)\n",
+    )
+    text = text.replace(
+        "                return self._init_profile(\n",
+        "                return SchedulerProfilerMixin._init_profile(\n                    self,\n",
+    )
+    text = text.replace(
+        "                self._init_profile(\n",
+        "                SchedulerProfilerMixin._init_profile(\n                    self,\n",
+    )
+    text = text.replace(
+        "                return self._start_profile()\n",
+        "                return SchedulerProfilerMixin._start_profile(self)\n",
+    )
+    text = text.replace(
+        "            return self._stop_profile()\n",
+        "            return SchedulerProfilerMixin._stop_profile(self)\n",
+    )
+
     # 4. Body: ``self.forward_ct`` reads → ``self.get_forward_ct()``
     #    (Callable getter form for runtime-mutable Scheduler state).
     text = text.replace("self.forward_ct", "self.get_forward_ct()")

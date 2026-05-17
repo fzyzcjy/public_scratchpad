@@ -186,6 +186,28 @@ def transform(wt: Path) -> None:
                 )
         f.write_text(text)
 
+    # ``_maybe_log_idle_metrics`` callsites in the mixin source use bare
+    # ``self.<method>()`` (and stale underscore-prefixed names) that don't
+    # match the regex shapes above. Route them through ``pool_stats_observer``
+    # explicitly.
+    text = src.read_text()
+    text = text.replace(
+        "self.get_pool_stats().update_scheduler_stats(self.stats)",
+        "self.pool_stats_observer.get_pool_stats().update_scheduler_stats(self.stats)",
+        1,
+    )
+    text = text.replace(
+        "self.stats.num_streaming_sessions = self._streaming_session_count()",
+        "self.stats.num_streaming_sessions = self.pool_stats_observer.streaming_session_count()",
+        1,
+    )
+    text = text.replace(
+        "self.stats.streaming_session_held_tokens = self._session_held_tokens()",
+        "self.stats.streaming_session_held_tokens = self.pool_stats_observer.session_held_tokens()",
+        1,
+    )
+    src.write_text(text)
+
 
 if __name__ == "__main__":
     run_pr(

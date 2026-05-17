@@ -128,6 +128,9 @@ SCHEDULER_INIT_INSERT = '''\
             max_total_num_tokens=self.max_total_num_tokens,
             get_stats=lambda: self.stats,
         )
+        self.init_kv_events(
+            self.kv_events_publisher, self.server_args.kv_events_config
+        )
 
 '''
 
@@ -331,12 +334,12 @@ def transform(wt: Path) -> None:
         "        self.publish_kv_events()\n",
         "        self.publish_kv_events(self.kv_events_publisher)\n",
     )
-    # ``init_kv_events`` is still called from ``init_metrics`` body.
+    # ``init_kv_events`` is no longer called from ``init_metrics``; the
+    # call moves into ``Scheduler.__init__`` right after the publisher ctor
+    # (see SCHEDULER_INIT_INSERT below).
     text = text.replace(
-        "        self.init_kv_events(self.server_args.kv_events_config)\n",
-        "        self.init_kv_events(\n"
-        "            self.kv_events_publisher, self.server_args.kv_events_config\n"
-        "        )\n",
+        "        self.init_kv_events(self.server_args.kv_events_config)\n\n",
+        "",
     )
     # Add TYPE_CHECKING import for the new TargetClass so the
     # ``self: "SchedulerKvEventsPublisher"`` annotation resolves under pyflakes.
@@ -359,6 +362,17 @@ def transform(wt: Path) -> None:
             "    SchedulerKvEventsPublisher,\n"
             ")\n"
         ),
+    )
+    # The publisher is not built yet at the ``build_kv_cache(...)`` call site,
+    # so ``self.enable_kv_cache_events`` (which now lives on the publisher)
+    # is unavailable. Inline the formula it used to compute.
+    text = text.replace(
+        "            enable_kv_cache_events=self.enable_kv_cache_events,\n",
+        "            enable_kv_cache_events=bool(\n"
+        "                self.server_args.kv_events_config\n"
+        "                and self.ps.attn_tp_rank == 0\n"
+        "                and self.ps.attn_cp_rank == 0\n"
+        "            ),\n",
     )
     text = replace_call_site(
         text,

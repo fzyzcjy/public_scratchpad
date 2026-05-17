@@ -492,6 +492,24 @@ def transform(wt: Path) -> None:
         "                self.pool_stats_observer,\n"
         "            ),\n",
     )
+    # _maybe_log_idle_metrics callsites (3) — same patterns as scheduler.py
+    # section 5 but located in this mixin file.
+    text = text.replace(
+        "        self.get_pool_stats().update_scheduler_stats(self.stats)\n",
+        "        self.get_pool_stats(self.pool_stats_observer).update_scheduler_stats(self.stats)\n",
+    )
+    text = text.replace(
+        "        self.stats.num_streaming_sessions = self._streaming_session_count()\n",
+        "        self.stats.num_streaming_sessions = self.streaming_session_count(\n"
+        "            self.pool_stats_observer,\n"
+        "        )\n",
+    )
+    text = text.replace(
+        "        self.stats.streaming_session_held_tokens = self._session_held_tokens()\n",
+        "        self.stats.streaming_session_held_tokens = self.session_held_tokens(\n"
+        "            self.pool_stats_observer,\n"
+        "        )\n",
+    )
     # create_scheduler_watchdog dump_info: scheduler.get_pool_stats().
     text = text.replace(
         "        _, messages = scheduler._check_all_pools(scheduler.get_pool_stats())\n",

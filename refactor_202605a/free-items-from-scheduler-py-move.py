@@ -98,10 +98,19 @@ def _move_embedding_batch_result(wt: Path) -> None:
     # metrics_reporter.py: keep Scheduler from scheduler, switch
     # EmbeddingBatchResult source to utils.
     text = metrics_reporter.read_text()
+    text = replace_call_site(
+        text,
+        old=(
+            "    from sglang.srt.managers.scheduler import (\n"
+            "        EmbeddingBatchResult,\n"
+            "        Scheduler,\n"
+            "    )\n"
+        ),
+        new="    from sglang.srt.managers.scheduler import Scheduler\n",
+    )
     text = ensure_imports(
         text,
         type_checking={
-            "sglang.srt.managers.scheduler": "Scheduler",
             "sglang.srt.managers.utils": "EmbeddingBatchResult",
         },
     )
@@ -212,7 +221,7 @@ class IdleSleeper:
             and real_time() - self.last_empty_time > self.empty_cache_interval
         ):
             self.last_empty_time = real_time()
-            empty_device_cache()
+            current_platform.empty_cache()
 '''
 
 
@@ -229,7 +238,7 @@ def _move_idle_sleeper(wt: Path) -> None:
         "import zmq\n\n"
         "from sglang.srt.environ import envs\n"
         "from sglang.srt.observability.req_time_stats import real_time\n"
-        "from sglang.srt.utils import empty_device_cache\n\n\n"
+        "from sglang.srt.platforms import current_platform\n\n\n"
     ) + IDLE_SLEEPER_CLASS
     idle_sleeper.write_text(new_file_text)
 
