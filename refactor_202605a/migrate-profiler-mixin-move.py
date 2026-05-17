@@ -16,6 +16,7 @@ transformation).
 # dependencies = ["typer"]
 # ///
 
+import re
 import sys
 from pathlib import Path
 
@@ -128,6 +129,16 @@ def transform(wt: Path) -> None:
         # Drop @staticmethod + simplify type-flip annotation.
         block = block.replace("    @staticmethod\n", "", 1)
         block = block.replace('self: "SchedulerProfilerManager"', "self")
+        # Strip ``SchedulerProfilerMixin.<sibling>(self, ...)`` qualified
+        # form on internal sibling calls. Prep emitted them while the
+        # methods still lived on the mixin; post-move ``self`` IS the
+        # profiler manager instance.
+        block = re.sub(
+            r"SchedulerProfilerMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+            r"self.\1(",
+            block,
+            flags=re.DOTALL,
+        )
         method_blocks.append(block)
     method_blocks.reverse()
 

@@ -28,6 +28,7 @@ Scheduler inheritance + import, and updates callers
 # dependencies = ["typer"]
 # ///
 
+import re
 import sys
 from pathlib import Path
 
@@ -110,10 +111,27 @@ _ENABLE_METRICS_DP_ATTENTION = envs.SGLANG_ENABLE_METRICS_DP_ATTENTION.get()
 def _strip_staticmethod_typeflip(method_text: str) -> str:
     """Drop ``@staticmethod`` decorator and simplify the
     ``self: "SchedulerDPAttnAdapter"`` annotation back to bare ``self``.
-    Body bytes otherwise unchanged.
+    Also revert prep-side sibling-dispatch wrappers (``SchedulerDPAttnMixin.X(self, ...)``
+    and the ``lambda: SchedulerDPAttnMixin.get_idle_batch(self)`` callable form):
+    post-move ``self`` IS the adapter instance so the methods are direct
+    attributes.
     """
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace('self: "SchedulerDPAttnAdapter"', "self")
+    # Revert the prep-side lambda wrapper around get_idle_batch — post-move
+    # the method is directly on ``self``.
+    text = text.replace(
+        "lambda: SchedulerDPAttnMixin.get_idle_batch(self)",
+        "self.get_idle_batch",
+    )
+    # Strip ``SchedulerDPAttnMixin.<sibling>(self, ...)`` qualified form on
+    # internal sibling calls.
+    text = re.sub(
+        r"SchedulerDPAttnMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 

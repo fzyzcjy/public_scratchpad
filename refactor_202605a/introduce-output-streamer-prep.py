@@ -316,40 +316,37 @@ def transform(wt: Path) -> None:
     # ``self.output_streamer`` on the streamer, and the method must be reached
     # via class qualification with ``self`` as the first arg.
     #
-    # Inside ``stream_output``:
+    # NOTE: anchors here match the SCRIPT-RUNTIME form, which for the
+    # ``stream_output`` body and the ``cached_tokens_details.append(...)``
+    # callsites is SINGLE-LINE (sections 1-4 emit single-line calls; black
+    # only reformats them later via pre-commit). Don't anchor on the post-
+    # pre-commit multi-line shape — that runs after this script returns.
+    #
+    # Inside ``stream_output`` — two single-line lines from section 4, plus a
+    # multi-line ``_trigger_crash_for_tests`` block that was already multi-
+    # line in the base file (and is NOT in section-4's callsite_methods, so
+    # no ``self.output_streamer,`` injection).
     text = text.replace(
-        "        if self.is_generation:\n"
-        "            self._stream_output_generation(\n"
-        "                self.output_streamer, reqs, return_logprob, skip_req\n"
-        "            )\n"
-        "        else:  # embedding or reward model\n"
-        "            self._stream_output_embedding(self.output_streamer, reqs)\n"
-        "\n"
-        "        if envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get() > 0:\n"
+        "            self._stream_output_generation(self.output_streamer, reqs, return_logprob, skip_req)\n",
+        "            SchedulerOutputProcessorMixin._stream_output_generation(self, reqs, return_logprob, skip_req)\n",
+    )
+    text = text.replace(
+        "            self._stream_output_embedding(self.output_streamer, reqs)\n",
+        "            SchedulerOutputProcessorMixin._stream_output_embedding(self, reqs)\n",
+    )
+    text = text.replace(
         "            self._trigger_crash_for_tests(\n"
         "                envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get()\n"
         "            )\n",
-        "        if self.is_generation:\n"
-        "            SchedulerOutputProcessorMixin._stream_output_generation(\n"
-        "                self, reqs, return_logprob, skip_req\n"
-        "            )\n"
-        "        else:  # embedding or reward model\n"
-        "            SchedulerOutputProcessorMixin._stream_output_embedding(self, reqs)\n"
-        "\n"
-        "        if envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get() > 0:\n"
         "            SchedulerOutputProcessorMixin._trigger_crash_for_tests(\n"
         "                self, envs.SGLANG_TEST_CRASH_AFTER_STREAM_OUTPUTS.get()\n"
         "            )\n",
     )
     # Inside ``_stream_output_generation`` and ``_stream_output_embedding``
-    # (same call pattern appears in both):
+    # (same single-line call pattern appears in both; section 4 ran on it):
     text = text.replace(
-        "                cached_tokens_details.append(\n"
-        "                    self.get_cached_tokens_details(self.output_streamer, req)\n"
-        "                )\n",
-        "                cached_tokens_details.append(\n"
-        "                    SchedulerOutputProcessorMixin.get_cached_tokens_details(self, req)\n"
-        "                )\n",
+        "                cached_tokens_details.append(self.get_cached_tokens_details(self.output_streamer, req))\n",
+        "                cached_tokens_details.append(SchedulerOutputProcessorMixin.get_cached_tokens_details(self, req))\n",
     )
     # Inside ``get_cached_tokens_details`` (``_get_storage_backend_type`` is
     # NOT in callsite_methods so no ``self.output_streamer,`` was injected):

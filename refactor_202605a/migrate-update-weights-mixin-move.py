@@ -145,6 +145,16 @@ def transform(wt: Path) -> None:
         block = cut_lines(mixin, s, e)
         block = block.replace("    @staticmethod\n", "", 1)
         block = block.replace('self: "SchedulerWeightUpdaterManager"', "self")
+        # Strip ``SchedulerUpdateWeightsMixin.<sibling>(self, ...)`` qualified
+        # form on internal sibling calls. Prep emitted them while the
+        # methods still lived on the mixin; post-move ``self`` IS the
+        # weight-updater instance.
+        block = re.sub(
+            r"SchedulerUpdateWeightsMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+            r"self.\1(",
+            block,
+            flags=re.DOTALL,
+        )
         method_blocks.append(block)
     method_blocks.reverse()
 
@@ -153,8 +163,6 @@ def transform(wt: Path) -> None:
     target_text = target_text.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
 
     # 4. Splice the supporting module-level prelude into the target file.
-    import re
-
     needed_typing = {"Any", "Callable", "Optional"}
     match = re.search(r"^from typing import [^\n]+\n", target_text, re.MULTILINE)
     if not match:

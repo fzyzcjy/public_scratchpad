@@ -74,6 +74,34 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
         text,
         flags=re.DOTALL,
     )
+    # Strip ``SchedulerOutputProcessorMixin.<sibling>(self, ...)`` qualified
+    # form on internal sibling calls. Prep emitted them while the methods
+    # still lived on the mixin; post-move ``self`` IS the logprob-result
+    # processor instance.
+    text = re.sub(
+        r"SchedulerOutputProcessorMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
+    # After the strip the ``add_input_logprob_return_values`` recursive call
+    # ended up with its args joined onto the open-paren line (the regex
+    # collapsed the original newline+indent before ``self,``). Force-split it
+    # with a trailing comma to match the published one-arg-per-line layout —
+    # otherwise black wraps to a minimal multi-line form without trailing
+    # comma, which differs from the published file.
+    text = text.replace(
+        "            self.add_input_logprob_return_values(i, req, output, pt, num_input_logprobs, last_prefill_chunk=True\n"
+        "            )",
+        "            self.add_input_logprob_return_values(\n"
+        "                i,\n"
+        "                req,\n"
+        "                output,\n"
+        "                pt,\n"
+        "                num_input_logprobs,\n"
+        "                last_prefill_chunk=True,\n"
+        "            )",
+    )
     return text
 
 

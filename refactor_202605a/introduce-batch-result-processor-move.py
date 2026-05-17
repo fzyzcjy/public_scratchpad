@@ -88,6 +88,16 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
         text,
         flags=re.DOTALL,
     )
+    # Strip ``SchedulerOutputProcessorMixin.<sibling>(self, ...)`` qualified
+    # form on internal sibling calls. Prep emitted them while the methods
+    # still lived on the mixin; post-move ``self`` IS the batch-result
+    # processor instance.
+    text = re.sub(
+        r"SchedulerOutputProcessorMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
     return text
 
 

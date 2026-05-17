@@ -12,6 +12,7 @@ rewrite callers ``self.recv_requests(self.request_receiver, ...)`` →
 # dependencies = ["typer"]
 # ///
 
+import re
 import sys
 from pathlib import Path
 
@@ -51,11 +52,20 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
-    """Drop @staticmethod and the ``self: TargetClass`` annotation."""
+    """Drop @staticmethod and the ``self: TargetClass`` annotation. Also
+    strip the ``Scheduler.<sibling>(self, ...)`` qualified form on internal
+    sibling calls (prep emitted them while the methods still lived on
+    ``Scheduler``; post-move ``self`` IS the receiver instance)."""
     text = method_text.replace("    @staticmethod\n", "", 1)
     text = text.replace(
         f"self: \"{target_class}\"",
         "self",
+    )
+    text = re.sub(
+        r"Scheduler\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
     )
     return text
 

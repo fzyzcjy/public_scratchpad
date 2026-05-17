@@ -324,6 +324,15 @@ def transform(wt: Path) -> None:
     text = text.replace(
         "self.enable_metrics", "self.server_args.enable_metrics"
     )
+    # The metrics-reporter-prep transform earlier in this chain rewrote
+    # ``self.enable_metrics`` → ``self.metrics_reporter.enable_metrics`` in
+    # this mixin file. ``SchedulerBatchResultProcessor`` carries ``server_args``
+    # but not ``metrics_reporter``, so collapse the reporter-routed form back
+    # to the args form to match the published transform output.
+    text = text.replace(
+        "self.metrics_reporter.enable_metrics",
+        "self.server_args.enable_metrics",
+    )
 
     # 5. Caller form: ``self.<m>(self.batch_result_processor, <rest>)`` for
     #    the 4 dispatch entry points. These callers live in scheduler.py,
@@ -365,11 +374,23 @@ def transform(wt: Path) -> None:
         raise RuntimeError("output_streamer ctor block not found in scheduler.py")
     text = text[: m.end()] + SCHEDULER_INIT_INSERT + text[m.end():]
 
-    # 7. Nesting note: the standalone ``self.logprob_result_processor =
-    #    SchedulerLogprobResultProcessor(...)`` field on Scheduler is kept
-    #    in place. ``batch_result_processor`` constructs its own inline copy
-    #    (via SCHEDULER_INIT_INSERT above); disagg callers route through
-    #    ``self.batch_result_processor.logprob_result_processor`` (step 8).
+    # 7. Drop the now-dead standalone ``self.logprob_result_processor =
+    #    SchedulerLogprobResultProcessor(...)`` field on Scheduler.
+    #    ``batch_result_processor`` constructs its own inline copy (via
+    #    SCHEDULER_INIT_INSERT above); disagg callers route through
+    #    ``self.batch_result_processor.logprob_result_processor`` (step 8),
+    #    so nothing reads the standalone field anymore.
+    text = replace_call_site(
+        text,
+        old=(
+            "        self.logprob_result_processor = SchedulerLogprobResultProcessor(\n"
+            "            server_args=self.server_args,\n"
+            "            model_config=self.model_config,\n"
+            "        )\n"
+            "\n"
+        ),
+        new="",
+    )
     sched.write_text(text)
 
     # 8. Disagg-prefill mixin caller fix-up: a couple of call sites read

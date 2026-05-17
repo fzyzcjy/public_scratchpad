@@ -704,15 +704,20 @@ def transform(wt: Path) -> None:
         old="        self.init_metrics(tp_rank, pp_rank, dp_rank)\n",
         new=INLINE_CURRENT_METRICS_ENABLED,
     )
-    # Append the reporter ctor immediately after the ``load_inquirer`` block —
-    # right before ``self.is_initializing = False`` — so the reporter sees the
-    # collector + ctx already built (step above) and the inquirer's
-    # ``get_stats`` / spec lambdas (rewritten below) get wired before the
-    # reporter's __post_init__ populates ``self.stats`` / spec counters.
+    # Insert the reporter ctor immediately before ``self.init_schedule_policy()``
+    # so that downstream readers inside ``init_schedule_policy`` (e.g. the
+    # ``enable_prefill_delayer`` branch that reads
+    # ``self.metrics_reporter.enable_metrics``) see a constructed reporter.
+    # By this point ``self.metrics_collector_context`` and
+    # ``self.metrics_collector`` are already built (above), and ``tp_worker`` /
+    # ``draft_worker`` exist (set by ``self.init_model_worker()`` earlier),
+    # so ``__post_init__`` -> ``_init_metrics`` / ``_install_device_timer_on_runners``
+    # are safe. The inquirer / kv-events lambdas that reference
+    # ``self.metrics_reporter.X`` are deferred — ordering does not matter for them.
     text = replace_call_site(
         text,
-        old="        self.is_initializing = False\n",
-        new=SCHEDULER_INIT_INSERT + "        self.is_initializing = False\n",
+        old="        # Init schedule policy and new token estimation\n        self.init_schedule_policy()\n",
+        new=SCHEDULER_INIT_INSERT + "        # Init schedule policy and new token estimation\n        self.init_schedule_policy()\n",
     )
     # Drop owned counter init lines (now reporter-owned).
     text = replace_call_site(text, old="        self.num_retracted_reqs: int = 0\n", new="")

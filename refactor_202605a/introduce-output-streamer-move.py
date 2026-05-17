@@ -77,6 +77,25 @@ def _strip_staticmethod_typeflip(method_text: str, *, target_class: str) -> str:
         text,
         flags=re.DOTALL,
     )
+    # Strip ``SchedulerOutputProcessorMixin.<sibling>(self, ...)`` qualified
+    # form on internal sibling calls. Prep emitted them while the methods
+    # still lived on the mixin; post-move ``self`` IS the streamer instance.
+    text = re.sub(
+        r"SchedulerOutputProcessorMixin\.(\w+)\(\s*self\s*(?:,\s*)?",
+        r"self.\1(",
+        text,
+        flags=re.DOTALL,
+    )
+    text = re.sub(
+        r"SchedulerOutputProcessorMixin\.(\w+)\(",
+        r"self.\1(",
+        text,
+    )
+    # Keep the prep-side Callable invocation form: after the move, ``self`` is
+    # the SchedulerOutputStreamer instance whose ``enable_hicache_storage``
+    # field is a ``Callable[[], bool]`` (set by the streamer ctor in
+    # Scheduler.__init__). The bare attribute is always truthy; the call form
+    # actually evaluates the underlying boolean.
     return text
 
 
