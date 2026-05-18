@@ -77,13 +77,12 @@ def transform(wt: Path) -> None:
     on_idle_text = on_idle_text.replace("self: Scheduler", "self")
 
     # Insert into Scheduler main class just before ``def is_fully_idle``.
-    # Also annotate ``for_health_check`` with its inferred type.
     text = sched.read_text()
     text = replace_call_site(
         text,
         old="    def is_fully_idle(self, for_health_check=False) -> bool:\n",
         new=on_idle_text
-        + "    def is_fully_idle(self, for_health_check: bool = False) -> bool:\n",
+        + "    def is_fully_idle(self, for_health_check=False) -> bool:\n",
     )
     sched.write_text(text)
 

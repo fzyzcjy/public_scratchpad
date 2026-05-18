@@ -76,7 +76,9 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
 # Final imports for the target module. These match the post-move state and
-# replace the minimal skeleton header the prep commit wrote.
+# replace the minimal skeleton header the prep commit wrote. Pure ``from ...
+# import ...`` lines only; the module-level ``_ENABLE_METRICS_DP_ATTENTION``
+# constant is extracted live from the source mixin (see ``transform`` below).
 TARGET_FILE_HEADER = '''\
 from __future__ import annotations
 
@@ -102,10 +104,22 @@ from sglang.srt.utils.common import require_mlp_tp_gather
 
 if TYPE_CHECKING:
     from sglang.srt.distributed.parallel_state import GroupCoordinator
-
-
-_ENABLE_METRICS_DP_ATTENTION = envs.SGLANG_ENABLE_METRICS_DP_ATTENTION.get()
 '''
+
+
+def _cut_module_const(path: Path, *, name: str) -> str:
+    """Cut the line(s) defining module-level ``<name> = ...`` from ``path``.
+
+    Returns the cut text (with trailing newline). Single-line assignment only;
+    raises if not found.
+    """
+    src_lines = path.read_text().splitlines(keepends=True)
+    pattern = re.compile(rf"^{re.escape(name)}\s*=")
+    for i, line in enumerate(src_lines):
+        if pattern.match(line):
+            cut_lines(path, i, i + 1)
+            return line
+    raise ValueError(f"module-level constant {name!r} not found in {path}")
 
 
 def _strip_staticmethod_typeflip(method_text: str) -> str:
@@ -157,6 +171,13 @@ def transform(wt: Path) -> None:
     cls_s, cls_e = find_class_lines(mtext, class_name="MLPSyncBatchInfo")
     mlp_info_block = cut_lines(mixin, cls_s, cls_e)
 
+    # Cut the module-level _ENABLE_METRICS_DP_ATTENTION constant from the
+    # source mixin so it is relocated to the target verbatim (no hardcoded
+    # literal in this script).
+    enable_metrics_line = _cut_module_const(
+        mixin, name="_ENABLE_METRICS_DP_ATTENTION"
+    )
+
     # 2. Cut the 3 @staticmethods (bottom-up).
     method_blocks = []
     for name in ("get_idle_batch", "maybe_prepare_mlp_sync_batch", "prepare_mlp_sync_batch"):
@@ -182,6 +203,8 @@ def transform(wt: Path) -> None:
     new_target = (
         TARGET_FILE_HEADER
         + "\n\n"
+        + enable_metrics_line.rstrip()
+        + "\n\n\n"
         + mlp_info_block.rstrip()
         + "\n\n\n"
         + update_gather_block.rstrip()

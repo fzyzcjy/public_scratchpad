@@ -235,19 +235,6 @@ def transform(wt: Path) -> None:
     rtext = rtext.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
     target.write_text(rtext)
 
-    target_text = target.read_text()
-    # Insert constants before PrefillStats. PrefillStats is the first class def
-    # in the file; insert constants right before its decorator/header.
-    ps_start, _ = find_class_lines(target_text, class_name="PrefillStats")
-    tlines = target_text.splitlines(keepends=True)
-    new_target_text = (
-        "".join(tlines[:ps_start])
-        + "".join(const_lines)
-        + "\n"
-        + "".join(tlines[ps_start:])
-    )
-    target.write_text(new_target_text)
-
     # 5. The target file now has all needed content. Drop the stale
     #    ``from ... import SchedulerMetricsMixin`` (no qualified
     #    references remain) and ensure the imports the moved bodies need

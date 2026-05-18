@@ -74,10 +74,10 @@ METHOD_ORDER = [
 ]
 
 
-# Supporting module-level statements relocated from the mixin file to the
-# new target file. NPU patch block + logger; we drop the
-# ``Path / typing / sglang.srt.environ / ProfileManager`` imports because
-# the target header already has them.
+# Pure import-only prelude to splice into the target file. The NPU patch
+# block (``_is_npu = is_npu()`` + ``if _is_npu: ...``) and ``logger = ...``
+# are NOT hardcoded here; they are extracted live from the source mixin
+# (see ``_cut_module_setup_block`` below).
 TARGET_PRELUDE_NEW_IMPORTS = """\
 import logging
 import os
@@ -94,21 +94,34 @@ from sglang.srt.utils.profile_merger import ProfileMerger
 if TYPE_CHECKING:
     from sglang.srt.managers.schedule_batch import ScheduleBatch
 
-_is_npu = is_npu()
-if _is_npu:
-    import torch_npu
-
-    patches = [
-        ["profiler.profile", torch_npu.profiler.profile],
-        ["profiler.ProfilerActivity.CUDA", torch_npu.profiler.ProfilerActivity.NPU],
-        ["profiler.ProfilerActivity.CPU", torch_npu.profiler.ProfilerActivity.CPU],
-    ]
-    torch_npu._apply_patches(patches)
-
-logger = logging.getLogger(__name__)
-
-
 """
+
+
+def _cut_module_setup_block(path: Path) -> str:
+    """Cut the ``_is_npu = ...`` + NPU patch ``if`` block + ``logger = ...``
+    lines out of ``path`` as one contiguous span and return the text.
+
+    Anchored on the ``_is_npu = `` line; reads forward until the
+    ``logger = `` line (inclusive of trailing blank line).
+    """
+    src_lines = path.read_text().splitlines(keepends=True)
+    start = None
+    for i, line in enumerate(src_lines):
+        if line.startswith("_is_npu = "):
+            start = i
+            break
+    if start is None:
+        raise ValueError(f"_is_npu setup line not found in {path}")
+
+    end = None
+    for j in range(start, len(src_lines)):
+        if src_lines[j].startswith("logger = "):
+            end = j + 1
+            break
+    if end is None:
+        raise ValueError(f"logger assignment not found after _is_npu in {path}")
+
+    return cut_lines(path, start, end)
 
 
 def transform(wt: Path) -> None:
@@ -142,16 +155,21 @@ def transform(wt: Path) -> None:
         method_blocks.append(block)
     method_blocks.reverse()
 
+    # Cut the module-level NPU-patch + logger setup block out of the mixin
+    # so it relocates to the target verbatim (no hardcoded literal here).
+    setup_block = _cut_module_setup_block(mixin)
+
     # 2. Append into the SchedulerProfilerManager class body. The skeleton's
     #    ctor ends at the last ``self.rpd_profiler = None`` line — append
     #    methods after (methods already have 4-space class-body indent).
     target_text = target.read_text()
     target_text = target_text.rstrip() + "\n\n" + "".join(method_blocks).rstrip() + "\n"
 
-    # 3. Splice the supporting module-level prelude (NPU patches, logger,
-    #    extra imports) into the target file, between the existing imports
-    #    block and the class declaration. Use ensure_imports so we don't
-    #    depend on ruff F401 leaving the prep imports intact.
+    # 3. Splice the supporting module-level prelude (extra imports + the
+    #    cut NPU-patch / logger setup block) into the target file, between
+    #    the existing imports block and the class declaration. Use
+    #    ensure_imports so we don't depend on ruff F401 leaving the prep
+    #    imports intact.
     target_text = ensure_imports(
         target_text,
         runtime={"typing": "TYPE_CHECKING"},
@@ -159,7 +177,9 @@ def transform(wt: Path) -> None:
     target_text = target_text.replace(
         "from sglang.srt.environ import envs\n",
         "from sglang.srt.environ import envs\n"
-        + TARGET_PRELUDE_NEW_IMPORTS.lstrip("\n"),
+        + TARGET_PRELUDE_NEW_IMPORTS.lstrip("\n")
+        + setup_block.rstrip()
+        + "\n\n\n",
         1,
     )
     target.write_text(target_text)

@@ -188,62 +188,23 @@ def _move_create_scheduler_watchdog(wt: Path) -> None:
     sched.write_text(sched_text)
 
 
-IDLE_SLEEPER_CLASS = '''\
-@dataclass(kw_only=True, slots=True)
-class IdleSleeper:
-    """
-    In setups which have long inactivity periods it is desirable to reduce
-    system power consumption when sglang does nothing. This would lead not only
-    to power savings, but also to more CPU thermal headroom when a request
-    eventually comes. This is important in cases when multiple GPUs are connected
-    as each GPU would otherwise pin one thread at 100% CPU usage.
-
-    The simplest solution is to use zmq.Poller on all sockets that may receive
-    data that needs handling immediately.
-    """
-
-    sockets: list[zmq.Socket]
-    last_empty_time: float = field(default_factory=real_time)
-    poller: Optional[zmq.Poller] = None
-    empty_cache_interval: int = 0
-
-    def __post_init__(self) -> None:
-        self.poller = zmq.Poller()
-        for s in self.sockets:
-            self.poller.register(s, zmq.POLLIN)
-
-        self.empty_cache_interval = envs.SGLANG_EMPTY_CACHE_INTERVAL.get()
-
-    def maybe_sleep(self):
-        self.poller.poll(1000)
-        if (
-            self.empty_cache_interval > 0
-            and real_time() - self.last_empty_time > self.empty_cache_interval
-        ):
-            self.last_empty_time = real_time()
-            current_platform.empty_cache()
-'''
-
-
 def _move_idle_sleeper(wt: Path) -> None:
     sched = wt / "python/sglang/srt/managers/scheduler.py"
     idle_sleeper = wt / "python/sglang/srt/managers/scheduler_components/idle_sleeper.py"
 
     s, e = find_class_lines(sched.read_text(), class_name="IdleSleeper")
-    cut_lines(sched, s, e)
+    class_block = cut_lines(sched, s, e)
 
     new_file_text = (
-        "from dataclasses import dataclass, field\n"
-        "from typing import Optional\n\n"
         "import zmq\n\n"
         "from sglang.srt.environ import envs\n"
         "from sglang.srt.observability.req_time_stats import real_time\n"
         "from sglang.srt.platforms import current_platform\n\n\n"
-    ) + IDLE_SLEEPER_CLASS
+    ) + class_block
     idle_sleeper.write_text(new_file_text)
 
-    # scheduler.py: add IdleSleeper import alongside invariant_checker and
-    # rewrite the positional call site to the kw_only form.
+    # scheduler.py: add IdleSleeper import alongside invariant_checker.
+    # Call site stays positional (matching the original class signature).
     sched_text = sched.read_text()
     sched_text = replace_call_site(
         sched_text,
@@ -259,25 +220,6 @@ def _move_idle_sleeper(wt: Path) -> None:
             "    SchedulerInvariantChecker,\n"
             "    create_scheduler_watchdog,\n"
             ")\n"
-        ),
-    )
-    sched_text = replace_call_site(
-        sched_text,
-        old=(
-            "                self.idle_sleeper = IdleSleeper(\n"
-            "                    [\n"
-            "                        self.recv_from_tokenizer,\n"
-            "                        self.recv_from_rpc,\n"
-            "                    ]\n"
-            "                )\n"
-        ),
-        new=(
-            "                self.idle_sleeper = IdleSleeper(\n"
-            "                    sockets=[\n"
-            "                        self.recv_from_tokenizer,\n"
-            "                        self.recv_from_rpc,\n"
-            "                    ],\n"
-            "                )\n"
         ),
     )
     sched.write_text(sched_text)
