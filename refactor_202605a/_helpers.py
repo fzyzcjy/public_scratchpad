@@ -151,37 +151,40 @@ def replace_call_site(text: str, *, old: str, new: str) -> str:
 # ``self.<attr> = <Component>(...)`` into ``__init__``.
 # ---------------------------------------------------------------------------
 
-INIT_METHOD_ANCHOR = "    def init_model_config(self):\n"
-
-
-def component_init_anchor(title: str, attr: str) -> str:
-    """``__init__`` text of an already-wired component's init call — use as the
-    ``before`` anchor when inserting a new component's call ahead of it."""
-    return f"        # {title}\n        self.init_{attr}()"
+TAIL_CALL_ANCHOR = "        # Init request dispatcher\n        self.init_request_dispatcher()"
+TAIL_METHOD_ANCHOR = "    def init_request_dispatcher(self):\n"
 
 
 def wire_component_init(
     text: str,
     *,
     attr: str,
-    title: str,
     construction: str,
-    before: str,
+    before_attr: str | None = None,
 ) -> str:
-    """Insert ``self.init_<attr>()`` into ``__init__`` (with a ``# <title>``
-    comment, immediately before ``before``) and define the ``init_<attr>``
-    helper holding ``construction`` just above ``init_model_config``.
+    """Wire a component through an ``init_<attr>`` helper (large-class-init-style).
+
+    Inserts ``self.init_<attr>()`` into ``__init__`` immediately before the
+    ``before`` component's init call, and defines ``init_<attr>`` (holding
+    ``construction``) immediately before the ``before`` component's init method.
+    Anchoring BOTH on the same ``before`` keeps method-definition order mirroring
+    the ``__init__`` call order. No comment is added (per the no-added-comments
+    rule); upstream comments inside ``construction`` are preserved verbatim.
 
     ``construction``: the helper body — the ``self.<attr> = <Component>(...)``
-    statement(s), 8-space indented exactly as they would appear in a method body.
-    ``before``: existing ``__init__`` text to insert the call before — for an
-    already-wired component use ``component_init_anchor(...)``; for the tail use
-    the ``# Init request dispatcher\\n        self.init_request_dispatcher()`` block.
+    statement(s), 8-space indented as in a method body.
+    ``before_attr``: the already-wired component to insert ahead of; pass None to
+    anchor on the trailing ``init_request_dispatcher``.
     """
-    call = f"        # {title}\n        self.init_{attr}()\n\n"
-    text = replace_call_site(text, old=before, new=call + before)
+    if before_attr is None:
+        call_before = TAIL_CALL_ANCHOR
+        method_before = TAIL_METHOD_ANCHOR
+    else:
+        call_before = f"        self.init_{before_attr}()"
+        method_before = f"    def init_{before_attr}(self):\n"
+    text = replace_call_site(text, old=call_before, new=f"        self.init_{attr}()\n\n" + call_before)
     method = f"    def init_{attr}(self):\n{construction.rstrip()}\n\n"
-    text = replace_call_site(text, old=INIT_METHOD_ANCHOR, new=method + INIT_METHOD_ANCHOR)
+    text = replace_call_site(text, old=method_before, new=method + method_before)
     return text
 
 
