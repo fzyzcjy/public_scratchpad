@@ -126,7 +126,7 @@ PR_GROUPS: dict[str, tuple[str, str]] = {
     "introduce-output-processor-move": ("introduce-output-processor", "move"),
     "introduce-response-emitter-prep": ("introduce-response-emitter", "prep"),
     "introduce-response-emitter-move": ("introduce-response-emitter", "move"),
-    # extract-handle-batch-request-wait-yield stays a singleton PR.
+    "extract-handle-batch-request-wait-yield": ("introduce-response-emitter", "wait-yield"),
     "introduce-batch-request-dispatcher-prep": ("introduce-batch-request-dispatcher", "prep"),
     "introduce-batch-request-dispatcher-move": ("introduce-batch-request-dispatcher", "move"),
 }
