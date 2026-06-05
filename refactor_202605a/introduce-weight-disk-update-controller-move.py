@@ -144,17 +144,21 @@ def transform(wt: Path) -> None:
     # self.weight_disk_update_controller.<method>(...).
     # The only remaining TM-internal call site is in update_weights_from_disk (now
     # cut), so TM has no residual class-qualified calls; mixin holds the 3 sibling
-    # callers of _update_weight_version_if_provided.
+    # callers of _update_weight_version_if_provided. Use regex to absorb both the
+    # single-line and the black-wrapped multi-line call forms (the prep-stage
+    # text exceeds 88 cols and black reflows it across lines).
+    import re as _re
+
     text = control_mixin.read_text()
-    text = text.replace(
-        "TokenizerControlMixin._update_weight_version_if_provided(self.weight_disk_update_controller, ",
+    text = _re.sub(
+        r"TokenizerControlMixin\._update_weight_version_if_provided\(\s*self\.weight_disk_update_controller,\s*",
         "self.weight_disk_update_controller._update_weight_version_if_provided(",
+        text,
     )
     control_mixin.write_text(text)
 
     # ---- Caller prefix replacement in entrypoints. Use regex to absorb both
     # single-line and black-wrapped multi-line forms.
-    import re as _re
 
     engine = wt / "python/sglang/srt/entrypoints/engine.py"
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
