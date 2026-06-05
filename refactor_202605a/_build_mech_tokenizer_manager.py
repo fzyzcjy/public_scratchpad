@@ -16,7 +16,7 @@ from pathlib import Path
 HERE = Path(__file__).parent
 REPO = Path("/Users/tom/main/workspaces/ws-main/worktrees/sglang-dev-a")
 WT = Path("/tmp/refactor-wt-mech-tokenizer-manager")
-BASE = "tom_refactor_202605a/primary/mech_preflight"
+BASE = "main"
 CHAIN_BRANCH = "tom_refactor_202605a/primary/mech_tokenizer_manager"
 SKILL_PATH = REPO / ".claude/skills/mechanical-refactor-verify"
 
