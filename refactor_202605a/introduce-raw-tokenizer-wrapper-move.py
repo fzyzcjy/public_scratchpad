@@ -19,7 +19,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import cut_lines, find_function_lines, find_method_lines
+from _helpers import cut_lines, find_function_lines, find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-raw-tokenizer-wrapper-move"
@@ -142,6 +142,25 @@ def transform(wt: Path) -> None:
         "        )",
     )
     tm.write_text(text)
+
+    # ---- 5. mm_utils.py lazily imports the relocated _determine_tensor_transport_mode
+    # from tokenizer_manager; repoint it at its new home (raw_tokenizer_wrapper).
+    mm_utils = wt / "python/sglang/srt/managers/mm_utils.py"
+    mm_text = mm_utils.read_text()
+    mm_text = replace_call_site(
+        mm_text,
+        old=(
+            "        from sglang.srt.managers.tokenizer_manager import (\n"
+            "            _determine_tensor_transport_mode,\n"
+            "        )\n"
+        ),
+        new=(
+            "        from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import (\n"
+            "            _determine_tensor_transport_mode,\n"
+            "        )\n"
+        ),
+    )
+    mm_utils.write_text(mm_text)
 
 
 if __name__ == "__main__":
