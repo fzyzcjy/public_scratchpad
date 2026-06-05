@@ -94,16 +94,6 @@ def transform(wt: Path) -> None:
         )
     rtw.write_text(rtw_text)
 
-    # ---- 0b. Cut the InputFormat enum from TM and append to RTW. The 4 helper
-    # bodies reference ``InputFormat.SINGLE_STRING`` etc., so it must be in RTW
-    # scope before the helpers arrive.
-    tm_text = tm.read_text()
-    if "class InputFormat(Enum):\n" in tm_text:
-        s, e = find_class_lines(tm_text, class_name="InputFormat")
-        input_format_text = cut_lines(tm, s, e)
-        rtw_text = rtw.read_text().rstrip() + "\n\n\n" + input_format_text.rstrip() + "\n"
-        rtw.write_text(rtw_text)
-
     # ---- 1. Cut bottom-up so earlier line ranges stay valid.
     name_to_start = {}
     for name in HELPER_NAMES:
@@ -126,13 +116,33 @@ def transform(wt: Path) -> None:
         )
         return body
 
-    # ---- 2. Paste into RawTokenizerWrapper in original file order.
-    rtw_text = rtw.read_text().rstrip() + "\n"
-    for name in HELPER_NAMES:
-        rtw_text += "\n" + strip(cut_blocks[name])
-    if not rtw_text.endswith("\n"):
-        rtw_text += "\n"
-    rtw.write_text(rtw_text)
+    # ---- 2. Insert the 4 helpers INTO the RawTokenizerWrapper class body.
+    # The module does NOT end with that class — module-level helper functions
+    # (``_get_processor_wrapper`` / ``_determine_tensor_transport_mode``) and,
+    # later, the InputFormat enum follow it. Appending the 4-space-indented
+    # methods at file scope would mis-attach them to whatever top-level construct
+    # is last (the enum, or a trailing module-level def). Locate the class via
+    # AST and splice the methods in just before the next top-level construct.
+    rtw_src = rtw.read_text()
+    _cls_s, cls_e = find_class_lines(rtw_src, class_name="RawTokenizerWrapper")
+    lines = rtw_src.splitlines(keepends=True)
+    methods_block = "".join("\n" + strip(cut_blocks[name]) for name in HELPER_NAMES)
+    if not methods_block.endswith("\n"):
+        methods_block += "\n"
+    rtw_src = "".join(lines[:cls_e]) + methods_block + "".join(lines[cls_e:])
+    rtw.write_text(rtw_src)
+
+    # ---- 2b. Cut the InputFormat enum from TM and append it as a trailing
+    # top-level class in RTW — AFTER the helpers, so it does not capture them as
+    # its own members. The helper bodies reference ``InputFormat.SINGLE_STRING``
+    # etc. only at call time, by which point the whole module is loaded, so the
+    # forward placement is fine.
+    tm_text = tm.read_text()
+    if "class InputFormat(Enum):\n" in tm_text:
+        s, e = find_class_lines(tm_text, class_name="InputFormat")
+        input_format_text = cut_lines(tm, s, e)
+        rtw_text = rtw.read_text().rstrip() + "\n\n\n" + input_format_text.rstrip() + "\n"
+        rtw.write_text(rtw_text)
 
     # ---- 3. External caller prefix replacement in TM. Use regex to absorb
     # both single-line and black-wrapped multi-line forms (the prep-stage
