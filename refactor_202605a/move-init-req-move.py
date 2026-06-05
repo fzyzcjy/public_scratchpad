@@ -120,6 +120,24 @@ def transform(wt: Path) -> None:
     )
     tm.write_text(text)
 
+    # Update the unit test that exercised TM._init_req_state directly — it now
+    # calls the relocated free function init_req(rid_to_state, *, obj, ...).
+    test_file = wt / "test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager import ReqState, TokenizerManager\n",
+            "from sglang.srt.managers.tokenizer_manager import ReqState, TokenizerManager\n"
+            "from sglang.srt.managers.tokenizer_manager_components.request_state import (\n"
+            "    init_req,\n"
+            ")\n",
+        )
+        t = t.replace(
+            "tm._init_req_state(obj)",
+            "init_req(tm.rid_to_state, obj=obj, enable_trace=tm.server_args.enable_trace, disagg_mode=tm.disaggregation_mode)",
+        )
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

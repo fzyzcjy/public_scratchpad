@@ -85,6 +85,53 @@ def transform(wt: Path) -> None:
     )
     tm.write_text(text)
 
+    # Adapt the unit test that drove ``tm._handle_batch_output`` directly: the
+    # logic now lives on OutputProcessor.handle_batch_output, so build an
+    # OutputProcessor in the test's mock factory (sharing rid_to_state, all the
+    # metrics/lora/dump paths gated off so only the rid lifecycle runs) and route
+    # the calls through it.
+    test_file = wt / "test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager import ReqState, TokenizerManager\n",
+            "from sglang.srt.managers.tokenizer_manager import ReqState, TokenizerManager\n"
+            "from sglang.srt.managers.tokenizer_manager_components.output_processor import (\n"
+            "    OutputProcessor,\n"
+            "    OutputProcessorConfig,\n"
+            ")\n",
+        )
+        t = t.replace(
+            "    tm.send_to_scheduler = MagicMock()\n    return tm\n",
+            "    tm.send_to_scheduler = MagicMock()\n"
+            "    request_log_manager = MagicMock()\n"
+            "    request_log_manager.dump_requests_folder = \"\"\n"
+            "    request_log_manager.crash_dump_folder = \"\"\n"
+            "    tm.output_processor = OutputProcessor(\n"
+            "        rid_to_state=tm.rid_to_state,\n"
+            "        tokenizer=MagicMock(),\n"
+            "        request_metrics_recorder=MagicMock(),\n"
+            "        request_log_manager=request_log_manager,\n"
+            "        lora_controller=MagicMock(),\n"
+            "        send_to_scheduler=tm.send_to_scheduler,\n"
+            "        config=OutputProcessorConfig(\n"
+            "            weight_version=\"1\",\n"
+            "            batch_notify_size=1,\n"
+            "            incremental_streaming_output=False,\n"
+            "            enable_metrics=False,\n"
+            "            skip_tokenizer_init=False,\n"
+            "            speculative_algorithm=\"\",\n"
+            "            speculative_num_draft_tokens=0,\n"
+            "            dp_size=1,\n"
+            "            enable_lora=False,\n"
+            "            served_model_name=\"\",\n"
+            "        ),\n"
+            "    )\n"
+            "    return tm\n",
+        )
+        t = t.replace("tm._handle_batch_output(", "tm.output_processor.handle_batch_output(")
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(
