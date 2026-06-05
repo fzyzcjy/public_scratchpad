@@ -74,12 +74,8 @@ def load_script(id: str):
 
 
 def commit_message(*, id: str, subject: str, body: str) -> str:
-    body_clean = (body or "").rstrip()
-    parts = [f"{id}: {subject}"]
-    if body_clean:
-        parts.extend(["", body_clean])
-    parts.extend(["", f"Refactor chain ID: {id}"])
-    return "\n".join(parts) + "\n"
+    """Delegate to the canonical builder so PR grouping stays in one place."""
+    return _canonical.commit_message(id=id, subject=subject, body=body)
 
 
 def run_pre_commit(wt: Path) -> None:

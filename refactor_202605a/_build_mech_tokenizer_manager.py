@@ -78,6 +78,92 @@ ORDER: list[str] = [
 ]
 
 
+# PR grouping for the sglang-single-commit-pr-chain tool: script id ->
+# (pr_id, sub_id). Grouped commits get subjects ``<pr_id>(<sub_id>): <subject>``
+# and the LAST member of each group (in ORDER) carries a ``PR-Title:`` trailer
+# with the umbrella title from PR_TITLES, so each group lands as ONE PR.
+# Ids not listed stay singleton PRs (``<id>: <subject>``). Group members must be
+# contiguous in ORDER.
+PR_GROUPS: dict[str, tuple[str, str]] = {
+    # Stage 0 — all free-helper moves land as one PR.
+    "move-req-state": ("move-tm-free-helpers", "req-state"),
+    "move-init-req-prep": ("move-tm-free-helpers", "init-req-prep"),
+    "move-init-req-move": ("move-tm-free-helpers", "init-req-move"),
+    "move-logprob-ops-prep": ("move-tm-free-helpers", "logprob-ops-prep"),
+    "move-logprob-ops-move": ("move-tm-free-helpers", "logprob-ops-move"),
+    "move-request-tracing-prep": ("move-tm-free-helpers", "request-tracing-prep"),
+    "move-request-tracing-move": ("move-tm-free-helpers", "request-tracing-move"),
+    "move-spec-decoding-meta-prep": ("move-tm-free-helpers", "spec-decoding-meta-prep"),
+    "move-spec-decoding-meta-move": ("move-tm-free-helpers", "spec-decoding-meta-move"),
+    # Component extractions — each prep+move pair lands as one PR.
+    "introduce-score-request-handler-prep": ("introduce-score-request-handler", "prep"),
+    "introduce-score-request-handler-move": ("introduce-score-request-handler", "move"),
+    "introduce-raw-tokenizer-wrapper-prep": ("introduce-raw-tokenizer-wrapper", "prep"),
+    "introduce-raw-tokenizer-wrapper-move": ("introduce-raw-tokenizer-wrapper", "move"),
+    "rtw-prep-tokenize-helpers": ("rtw-tokenize-helpers", "prep"),
+    "rtw-move-tokenize-helpers": ("rtw-tokenize-helpers", "move"),
+    "introduce-request-validator-prep": ("introduce-request-validator", "prep"),
+    "introduce-request-validator-move": ("introduce-request-validator", "move"),
+    "introduce-tokenized-request-builder-prep": ("introduce-tokenized-request-builder", "prep"),
+    "introduce-tokenized-request-builder-move": ("introduce-tokenized-request-builder", "move"),
+    "introduce-multimodal-processor-prep": ("introduce-multimodal-processor", "prep"),
+    "introduce-multimodal-processor-move": ("introduce-multimodal-processor", "move"),
+    "introduce-request-preparer-prep": ("introduce-request-preparer", "prep"),
+    "introduce-request-preparer-move": ("introduce-request-preparer", "move"),
+    "introduce-request-log-manager-prep": ("introduce-request-log-manager", "prep"),
+    "introduce-request-log-manager-move": ("introduce-request-log-manager", "move"),
+    "introduce-request-metrics-recorder-prep": ("introduce-request-metrics-recorder", "prep"),
+    "introduce-request-metrics-recorder-move": ("introduce-request-metrics-recorder", "move"),
+    "introduce-session-controller-prep": ("introduce-session-controller", "prep"),
+    "introduce-session-controller-move": ("introduce-session-controller", "move"),
+    "introduce-weight-disk-update-controller-prep": ("introduce-weight-disk-update-controller", "prep"),
+    "introduce-weight-disk-update-controller-move": ("introduce-weight-disk-update-controller", "move"),
+    "introduce-lora-controller-prep": ("introduce-lora-controller", "prep"),
+    "introduce-lora-controller-move": ("introduce-lora-controller", "move"),
+    "introduce-corpus-controller-prep": ("introduce-corpus-controller", "prep"),
+    "introduce-corpus-controller-move": ("introduce-corpus-controller", "move"),
+    "introduce-output-processor-prep": ("introduce-output-processor", "prep"),
+    "introduce-output-processor-move": ("introduce-output-processor", "move"),
+    "introduce-response-emitter-prep": ("introduce-response-emitter", "prep"),
+    "introduce-response-emitter-move": ("introduce-response-emitter", "move"),
+    # extract-handle-batch-request-wait-yield stays a singleton PR.
+    "introduce-batch-request-dispatcher-prep": ("introduce-batch-request-dispatcher", "prep"),
+    "introduce-batch-request-dispatcher-move": ("introduce-batch-request-dispatcher", "move"),
+}
+
+PR_TITLES: dict[str, str] = {
+    "move-tm-free-helpers": "Move TokenizerManager free helpers into tokenizer_manager_components",
+    "introduce-score-request-handler": "Extract ScoreRequestHandler from TokenizerManager",
+    "introduce-raw-tokenizer-wrapper": "Extract RawTokenizerWrapper from TokenizerManager",
+    "rtw-tokenize-helpers": "Move tokenize-pipeline helpers into RawTokenizerWrapper",
+    "introduce-request-validator": "Extract RequestValidator from TokenizerManager",
+    "introduce-tokenized-request-builder": "Extract TokenizedRequestBuilder from TokenizerManager",
+    "introduce-multimodal-processor": "Extract MultimodalProcessor from TokenizerManager",
+    "introduce-request-preparer": "Extract RequestPreparer from TokenizerManager",
+    "introduce-request-log-manager": "Extract RequestLogManager from TokenizerManager",
+    "introduce-request-metrics-recorder": "Extract RequestMetricsRecorder from TokenizerManager",
+    "introduce-session-controller": "Extract SessionController from TokenizerManager",
+    "introduce-weight-disk-update-controller": "Extract WeightDiskUpdateController from TokenizerManager",
+    "introduce-lora-controller": "Extract LoraController from TokenizerManager",
+    "introduce-corpus-controller": "Extract CorpusController from TokenizerManager",
+    "introduce-output-processor": "Extract OutputProcessor from TokenizerManager",
+    "introduce-response-emitter": "Extract ResponseEmitter from TokenizerManager",
+    "introduce-batch-request-dispatcher": "Extract BatchRequestDispatcher from TokenizerManager",
+}
+
+
+def _group_last_ids() -> set[str]:
+    """The ORDER-wise last member of each PR group (carries the PR-Title trailer)."""
+    last: dict[str, str] = {}
+    for chain_id in ORDER:
+        if chain_id in PR_GROUPS:
+            last[PR_GROUPS[chain_id][0]] = chain_id
+    return set(last.values())
+
+
+GROUP_LAST_IDS: set[str] = _group_last_ids()
+
+
 def run(cmd: list[str], *, cwd: Path, check: bool = True) -> str:
     print(f"$ {' '.join(cmd)}", flush=True)
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=check)
@@ -109,10 +195,16 @@ def load_script(id: str):
 
 def commit_message(*, id: str, subject: str, body: str) -> str:
     body_clean = (body or "").rstrip()
-    parts = [f"{id}: {subject}"]
+    if id in PR_GROUPS:
+        pr_id, sub_id = PR_GROUPS[id]
+        parts = [f"{pr_id}({sub_id}): {subject}"]
+    else:
+        parts = [f"{id}: {subject}"]
     if body_clean:
         parts.extend(["", body_clean])
     parts.extend(["", f"Refactor chain ID: {id}"])
+    if id in GROUP_LAST_IDS:
+        parts.append(f"PR-Title: {PR_TITLES[PR_GROUPS[id][0]]}")
     return "\n".join(parts) + "\n"
 
 
