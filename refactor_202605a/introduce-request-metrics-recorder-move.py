@@ -47,11 +47,18 @@ def transform(wt: Path) -> None:
     s, e = find_method_lines(tm.read_text(), class_name="TokenizerManager", method_name="_request_has_grammar")
     has_grammar_text = cut_lines(tm, s, e)
 
-    # Strip @staticmethod + restore plain self.
+    # Strip @staticmethod + restore plain self. Both forms must be handled:
+    # ``self: "RequestMetricsRecorder", `` (single-line signature) and
+    # ``self: "RequestMetricsRecorder",\n`` (black wraps each param on its own
+    # line when the signature exceeds 88 cols, as for collect_metrics). Replace
+    # with ``self`` (NOT empty) — the bodies reference ``self.*`` and the callers
+    # invoke them as bound methods, so self must remain the first parameter.
     collect_text = collect_text.replace("    @staticmethod\n", "", 1)
-    collect_text = collect_text.replace('self: "RequestMetricsRecorder", ', "")
+    collect_text = collect_text.replace('self: "RequestMetricsRecorder", ', "self, ")
+    collect_text = collect_text.replace('self: "RequestMetricsRecorder",\n', "self,\n")
     has_grammar_text = has_grammar_text.replace("    @staticmethod\n", "", 1)
-    has_grammar_text = has_grammar_text.replace('self: "RequestMetricsRecorder", ', "")
+    has_grammar_text = has_grammar_text.replace('self: "RequestMetricsRecorder", ', "self, ")
+    has_grammar_text = has_grammar_text.replace('self: "RequestMetricsRecorder",\n', "self,\n")
 
     rmr_text = rmr.read_text()
     rmr_text = rmr_text.replace(
