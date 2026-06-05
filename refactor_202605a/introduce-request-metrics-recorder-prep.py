@@ -43,7 +43,11 @@ from typing import Optional
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.observability.cpu_monitor import start_cpu_monitor_thread
-from sglang.srt.observability.metrics_collector import TokenizerMetricsCollector
+from sglang.srt.observability.metrics_collector import (
+    STAT_LOGGER_ROLE_TOKENIZER,
+    TokenizerMetricsCollector,
+    resolve_collector_class,
+)
 from sglang.srt.server_args import ServerArgs
 
 
@@ -74,7 +78,12 @@ class RequestMetricsRecorder:
                 labels[label] = ""
         if self.server_args.extra_metric_labels:
             labels.update(self.server_args.extra_metric_labels)
-        self.metrics_collector = TokenizerMetricsCollector(
+        tokenizer_collector_cls = resolve_collector_class(
+            self.server_args,
+            STAT_LOGGER_ROLE_TOKENIZER,
+            TokenizerMetricsCollector,
+        )
+        self.metrics_collector = tokenizer_collector_cls(
             server_args=self.server_args,
             labels=labels,
             bucket_time_to_first_token=self.server_args.bucket_time_to_first_token,
@@ -182,7 +191,12 @@ def transform(wt: Path) -> None:
             "                    labels[label] = \"\"\n"
             "            if self.server_args.extra_metric_labels:\n"
             "                labels.update(self.server_args.extra_metric_labels)\n"
-            "            self.metrics_collector = TokenizerMetricsCollector(\n"
+            "            tokenizer_collector_cls = resolve_collector_class(\n"
+            "                self.server_args,\n"
+            "                STAT_LOGGER_ROLE_TOKENIZER,\n"
+            "                TokenizerMetricsCollector,\n"
+            "            )\n"
+            "            self.metrics_collector = tokenizer_collector_cls(\n"
             "                server_args=self.server_args,\n"
             "                labels=labels,\n"
             "                bucket_time_to_first_token=self.server_args.bucket_time_to_first_token,\n"

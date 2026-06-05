@@ -37,13 +37,20 @@ import os
 import pickle
 import socket
 import sys
+import time
 from datetime import datetime
 from typing import Dict
 
+from sglang.srt.environ import envs
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.observability.req_time_stats import (
     convert_time_to_realtime,
     real_time,
+)
+from sglang.srt.utils.cudacore_pyspy_dump_utils import (
+    collect_scheduler_processes,
+    pyspy_dump_schedulers,
+    trigger_cuda_user_coredump,
 )
 
 logger = logging.getLogger(__name__)

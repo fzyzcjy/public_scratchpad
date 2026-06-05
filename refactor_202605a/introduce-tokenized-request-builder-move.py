@@ -30,7 +30,8 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-EXTRA_IMPORTS = '''from typing import List, Union
+EXTRA_IMPORTS = '''from array import array
+from typing import List, Union
 
 import torch
 

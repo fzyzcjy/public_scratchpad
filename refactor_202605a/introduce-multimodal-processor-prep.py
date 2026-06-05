@@ -74,6 +74,7 @@ class MultimodalProcessor:
             mm_receiver = create_mm_receiver(
                 server_args,
                 dtype=model_config.dtype,
+                hf_config=model_config.hf_config,
             )
         else:
             mm_receiver = None
@@ -162,6 +163,7 @@ def transform(wt: Path) -> None:
             "            self.mm_receiver = create_mm_receiver(\n"
             "                self.server_args,\n"
             "                dtype=self.model_config.dtype,\n"
+            "                hf_config=self.model_config.hf_config,\n"
             "            )\n"
         ),
         new="",

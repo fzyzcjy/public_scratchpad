@@ -136,6 +136,9 @@ def transform(wt: Path) -> None:
                 # Set up generators for each request in the batch
                 for i in range(batch_size):
                     tmp_obj = obj[i]
+                    state = self.rid_to_state[tmp_obj.rid]
+                    if tmp_obj.return_prompt_token_ids:
+                        state.prompt_token_ids = list(tokenized_objs[i].input_ids)
                     generators.append(
                         self.response_emitter._wait_one_response(tmp_obj, request)
                     )
@@ -152,6 +155,9 @@ def transform(wt: Path) -> None:
                         tokenized_obj = (
                             await self.request_preparer._tokenize_one_request(tmp_obj)
                         )
+                        state = self.rid_to_state[tmp_obj.rid]
+                        if tmp_obj.return_prompt_token_ids:
+                            state.prompt_token_ids = list(tokenized_obj.input_ids)
                         self._send_one_request(tokenized_obj)
                         generators.append(
                             self.response_emitter._wait_one_response(tmp_obj, request)
@@ -176,6 +182,12 @@ def transform(wt: Path) -> None:
             for i in range(batch_size):
                 tmp_obj = copy.copy(objs[i])
                 tokenized_obj = copy.copy(tokenized_objs[i])
+                # Ensure independent mm_items so wrap_shm_features won't mutate the original
+                if hasattr(tokenized_obj, "mm_inputs") and tokenized_obj.mm_inputs:
+                    tokenized_obj.mm_inputs = copy.copy(tokenized_obj.mm_inputs)
+                    tokenized_obj.mm_inputs.mm_items = [
+                        copy.copy(item) for item in tokenized_obj.mm_inputs.mm_items
+                    ]
                 tokenized_obj.rid = tmp_obj.regenerate_rid()
                 tokenized_obj.sampling_params = copy.copy(tokenized_obj.sampling_params)
                 tokenized_obj.sampling_params.max_new_tokens = 0
@@ -196,6 +208,12 @@ def transform(wt: Path) -> None:
                 for _ in range(obj.parallel_sample_num):
                     tmp_obj = copy.copy(objs[i])
                     tokenized_obj = copy.copy(tokenized_objs[i])
+                    # Ensure independent mm_items so wrap_shm_features won't mutate the original
+                    if hasattr(tokenized_obj, "mm_inputs") and tokenized_obj.mm_inputs:
+                        tokenized_obj.mm_inputs = copy.copy(tokenized_obj.mm_inputs)
+                        tokenized_obj.mm_inputs.mm_items = [
+                            copy.copy(item) for item in tokenized_obj.mm_inputs.mm_items
+                        ]
                     tokenized_obj.rid = tmp_obj.regenerate_rid()
                     init_req(
                         self.rid_to_state,
@@ -203,7 +221,10 @@ def transform(wt: Path) -> None:
                         enable_trace=self.server_args.enable_trace,
                         disagg_mode=self.disaggregation_mode,
                     )
-                    tokenized_obj.time_stats = self.rid_to_state[tmp_obj.rid].time_stats
+                    state = self.rid_to_state[tmp_obj.rid]
+                    tokenized_obj.time_stats = state.time_stats
+                    if tmp_obj.return_prompt_token_ids:
+                        state.prompt_token_ids = list(tokenized_objs[i].input_ids)
                     self._send_one_request(tokenized_obj)
                     generators.append(
                         self.response_emitter._wait_one_response(tmp_obj, request)

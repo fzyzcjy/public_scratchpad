@@ -103,16 +103,22 @@ def transform(wt: Path) -> None:
     old_mixin.unlink()
 
     # ---- 4. TM: drop mixin import + drop mixin from bases.
+    # The mixin import is pre-existing upstream code; black formats it as a
+    # single line when it fits in 88 cols (current main) or as a wrapped
+    # ``(\n    Name,\n)`` block otherwise (older main). Tolerate both.
+    import re as _re4
+
     text = tm.read_text()
-    text = replace_call_site(
+    text, n_removed = _re4.subn(
+        r"from sglang\.srt\.managers\.tokenizer_manager_score_mixin import "
+        r"(?:\(\s*TokenizerManagerScoreMixin,?\s*\)|TokenizerManagerScoreMixin)\n",
+        "",
         text,
-        old=(
-            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
-            "    TokenizerManagerScoreMixin,\n"
-            ")\n"
-        ),
-        new="",
     )
+    if n_removed != 1:
+        raise ValueError(
+            f"expected exactly one TokenizerManagerScoreMixin import in TM, removed {n_removed}"
+        )
     text = replace_call_site(
         text,
         old="class TokenizerManager(TokenizerControlMixin, TokenizerManagerScoreMixin):",
