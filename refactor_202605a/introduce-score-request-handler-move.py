@@ -210,8 +210,15 @@ def transform(wt: Path) -> None:
             "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreRequestHandler",
         )
         t = t.replace(
-            "class _FakeMixin(TokenizerManagerScoreMixin):",
-            "class _FakeMixin:",
+            'class _FakeMixin(TokenizerManagerScoreMixin):\n'
+            '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n',
+            'class _FakeMixin:\n'
+            '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n'
+            "\n"
+            "    _resolve_overrides_for_sequence = ScoreRequestHandler._resolve_overrides_for_sequence\n"
+            "    _build_multi_item_token_sequence = (\n"
+            "        ScoreRequestHandler._build_multi_item_token_sequence\n"
+            "    )\n",
         )
         # Rewrite ``self.mixin.<method>(...)`` → ``ScoreRequestHandler.<method>(self.mixin, ...)``
         # for the methods that ScoreRequestHandler owns (now post-move).
