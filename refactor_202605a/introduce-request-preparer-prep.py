@@ -42,7 +42,7 @@ SKELETON = '''from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from sglang.srt.managers.tokenizer_manager_components.multimodal_processor_owner import MultimodalProcessor
+from sglang.srt.managers.tokenizer_manager_components.multimodal_processor import MultimodalProcessor
 from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import RawTokenizerWrapper
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.managers.tokenizer_manager_components.request_validator import RequestValidator

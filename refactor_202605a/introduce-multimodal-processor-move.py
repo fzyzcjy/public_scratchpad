@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    mp = wt / "python/sglang/srt/managers/tokenizer_manager_components/multimodal_processor_owner.py"
+    mp = wt / "python/sglang/srt/managers/tokenizer_manager_components/multimodal_processor.py"
 
     # Cut bottom-up.
     s, e = find_method_lines(

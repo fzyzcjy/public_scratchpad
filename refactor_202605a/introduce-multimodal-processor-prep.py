@@ -146,7 +146,7 @@ def _rewrite_method(
 
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
-    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/multimodal_processor_owner.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/multimodal_processor.py"
     new.write_text(SKELETON)
 
     text = tm.read_text()
@@ -170,7 +170,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
-        addition="from sglang.srt.managers.tokenizer_manager_components.multimodal_processor_owner import MultimodalProcessor\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components.multimodal_processor import MultimodalProcessor\n",
     )
 
     # Composition wiring.
