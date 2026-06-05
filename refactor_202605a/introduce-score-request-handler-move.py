@@ -201,11 +201,6 @@ def transform(wt: Path) -> None:
             "- Score mixin override resolution (tokenizer_manager_score_mixin.py)",
             "- ScoreRequestHandler override resolution (score_request_handler.py)",
         )
-        # Replace import + class inheritance. The mixin pattern doesn't work
-        # against a frozen+slots dataclass; turn ``_FakeMixin`` into a plain
-        # stub class and call ScoreRequestHandler's methods as unbound. Tests
-        # that mutate ``self.mixin.is_generation`` etc. still work because
-        # ``_FakeMixin`` has no slots restriction.
         t = t.replace(
             "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
             "    TokenizerManagerScoreMixin,\n"
@@ -215,44 +210,62 @@ def transform(wt: Path) -> None:
             "    ScoreRequestHandlerConfig,\n"
             ")",
         )
+        # The mixin-inheritance stub doesn't fit the frozen+slots dataclass; the
+        # tests now drive a real ScoreRequestHandler, constructing one per
+        # scenario instead of mutating attributes.
         t = t.replace(
-            'class _FakeMixin(TokenizerManagerScoreMixin):\n'
-            '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n',
-            'class _FakeMixin:\n'
+            "class _FakeServerArgs:\n"
+            '    """Minimal stub for server_args."""\n'
+            "\n"
+            "    def __init__(self, enable_mis=False):\n"
+            "        self.enable_mis = enable_mis\n"
+            "\n"
+            "\n"
+            "class _FakeMixin(TokenizerManagerScoreMixin):\n"
             '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n'
             "\n"
-            + "".join(f"    {m} = ScoreRequestHandler.{m}\n" for m in _SCORE_METHODS),
-        )
-        # score_request reads the config-backed fields, so the fake needs a real
-        # ScoreRequestHandlerConfig mirroring its direct attributes.
-        t = t.replace(
             "    def __init__(self, enable_mis=False):\n"
             "        self.server_args = _FakeServerArgs(enable_mis)\n"
             "        self.tokenizer = None\n"
             "        self.is_generation = True\n",
-            "    def __init__(self, enable_mis=False):\n"
-            "        self.server_args = _FakeServerArgs(enable_mis)\n"
-            "        self.tokenizer = None\n"
-            "        self.is_generation = True\n"
-            "        self.config = ScoreRequestHandlerConfig(\n"
-            "            is_generation=True,\n"
+            "def _make_handler(\n"
+            "    *, is_generation=True, enable_mis=False, generate_request=None\n"
+            ") -> ScoreRequestHandler:\n"
+            "    return ScoreRequestHandler(\n"
+            "        tokenizer=None,\n"
+            "        rid_to_state={},\n"
+            "        generate_request=generate_request,\n"
+            "        config=ScoreRequestHandlerConfig(\n"
+            "            is_generation=is_generation,\n"
             "            enable_mis=enable_mis,\n"
             "            model_config=None,\n"
+            "        ),\n"
+            "    )\n",
+        )
+        t = t.replace(
+            "        self.mixin = _FakeMixin(enable_mis=True)\n",
+            "        self.handler = _make_handler(enable_mis=True)\n",
+        )
+        t = t.replace(
+            "        self.mixin = _FakeMixin()\n",
+            "        self.handler = _make_handler()\n",
+        )
+        t = t.replace(
+            "        self.mixin.is_generation = True\n",
+            "        self.handler = _make_handler(is_generation=True)\n",
+        )
+        t = t.replace(
+            "        self.mixin.is_generation = False\n",
+            "",
+        )
+        t = t.replace(
+            "        self.mixin.generate_request = MagicMock(return_value=mock_result)\n",
+            "        self.handler = _make_handler(\n"
+            "            is_generation=False,\n"
+            "            generate_request=MagicMock(return_value=mock_result),\n"
             "        )\n",
         )
-        # Rewrite ``self.mixin.<method>(...)`` → ``ScoreRequestHandler.<method>(self.mixin, ...)``
-        # for the methods that ScoreRequestHandler owns (now post-move).
-        for method in (
-            "_resolve_overrides_for_sequence",
-            "_resolve_embed_overrides_for_request",
-            "_build_token_id_inputs",
-            "score_request",
-        ):
-            t = _re.sub(
-                rf"\bself\.mixin\.{_re.escape(method)}\(",
-                f"ScoreRequestHandler.{method}(self.mixin, ",
-                t,
-            )
+        t = t.replace("self.mixin.", "self.handler.")
         test_embed_overrides.write_text(t)
 
 
