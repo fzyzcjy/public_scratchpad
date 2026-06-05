@@ -125,10 +125,15 @@ def _apply_body_rewrites(text: str) -> str:
         "model_config = self.config.model_config",
     )
     text = text.replace("self.server_args.enable_mis", "self.config.enable_mis")
-    # No other bare ``self.is_generation`` / ``self.model_config`` references
-    # exist in this mixin (verified by grep); the two getattr sites cover
-    # them. self.tokenizer / self.rid_to_state / self.generate_request remain
-    # untouched — they're direct fields on ScoreRequestHandler per skeleton.
+    # Direct attribute forms. Current upstream reads ``self.is_generation`` /
+    # ``self.model_config`` directly (the older ``getattr(self, ...)`` forms
+    # above are gone), so rewrite the bare reads to the config-backed fields.
+    # Done after the getattr forms so we never double-touch: the produced
+    # ``self.config.is_generation`` does not contain ``self.is_generation`` as a
+    # substring (``self.c`` vs ``self.i``). self.tokenizer / self.rid_to_state /
+    # self.generate_request remain untouched — direct fields on the skeleton.
+    text = text.replace("self.is_generation", "self.config.is_generation")
+    text = text.replace("self.model_config", "self.config.model_config")
     return text
 
 
