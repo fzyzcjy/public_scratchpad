@@ -141,6 +141,50 @@ def replace_call_site(text: str, *, old: str, new: str) -> str:
     return text.replace(old, new)
 
 
+# ---------------------------------------------------------------------------
+# large-class-init-style helpers.
+#
+# The ``large-class-init-style`` skill requires ``TokenizerManager.__init__`` to
+# be an orchestrator: a sequence of ``self.init_*()`` calls, one helper per
+# overridable unit, with no structured construction inlined. Each component
+# prep wires its component through ``wire_component_init`` instead of inlining
+# ``self.<attr> = <Component>(...)`` into ``__init__``.
+# ---------------------------------------------------------------------------
+
+INIT_METHOD_ANCHOR = "    def init_model_config(self):\n"
+
+
+def component_init_anchor(title: str, attr: str) -> str:
+    """``__init__`` text of an already-wired component's init call — use as the
+    ``before`` anchor when inserting a new component's call ahead of it."""
+    return f"        # {title}\n        self.init_{attr}()"
+
+
+def wire_component_init(
+    text: str,
+    *,
+    attr: str,
+    title: str,
+    construction: str,
+    before: str,
+) -> str:
+    """Insert ``self.init_<attr>()`` into ``__init__`` (with a ``# <title>``
+    comment, immediately before ``before``) and define the ``init_<attr>``
+    helper holding ``construction`` just above ``init_model_config``.
+
+    ``construction``: the helper body — the ``self.<attr> = <Component>(...)``
+    statement(s), 8-space indented exactly as they would appear in a method body.
+    ``before``: existing ``__init__`` text to insert the call before — for an
+    already-wired component use ``component_init_anchor(...)``; for the tail use
+    the ``# Init request dispatcher\\n        self.init_request_dispatcher()`` block.
+    """
+    call = f"        # {title}\n        self.init_{attr}()\n\n"
+    text = replace_call_site(text, old=before, new=call + before)
+    method = f"    def init_{attr}(self):\n{construction.rstrip()}\n\n"
+    text = replace_call_site(text, old=INIT_METHOD_ANCHOR, new=method + INIT_METHOD_ANCHOR)
+    return text
+
+
 def append_to_file(path: Path, snippet: str, *, separator: str = "\n\n") -> None:
     """Append ``snippet`` to ``path`` with a separator before it. Creates if missing."""
     if path.exists():

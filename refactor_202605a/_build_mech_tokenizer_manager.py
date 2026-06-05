@@ -74,9 +74,6 @@ ORDER: list[str] = [
     # Stage 8 — BatchRequestDispatcher 抽出
     "introduce-batch-request-dispatcher-prep",
     "introduce-batch-request-dispatcher-move",
-    # Stage 9 — apply large-class-init-style skill: orchestrate component
-    # construction through init_* helpers instead of inline __init__ blocks.
-    "apply-large-class-init-style",
     # Stage 7 — MM 分支抽出 (deferred — script TBD; non-canonical complexity per plan §V2.6)
     # "mmp-extract-tokenize-branch",
 ]
