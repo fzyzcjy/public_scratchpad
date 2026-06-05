@@ -205,7 +205,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
-        addition="from sglang.srt.managers import logprob_ops\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components import logprob_ops\n",
     )
 
     # Intra-module-level callers for the cut constant + free fn.

@@ -86,7 +86,7 @@ def transform(wt: Path) -> None:
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchTokenizer\n",
-        addition="from sglang.srt.managers import request_tracing\n",
+        addition="from sglang.srt.managers.tokenizer_manager_components import request_tracing\n",
     )
     text = replace_call_site(
         text,

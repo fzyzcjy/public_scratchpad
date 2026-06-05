@@ -38,7 +38,11 @@ import pybase64
 import torch
 
 from sglang.srt.constants import HEALTH_CHECK_RID_PREFIX
-from sglang.srt.managers import logprob_ops, request_tracing, spec_decoding_meta
+from sglang.srt.managers.tokenizer_manager_components import (
+    logprob_ops,
+    request_tracing,
+    spec_decoding_meta,
+)
 from sglang.srt.managers.io_struct import (
     BatchEmbeddingOutput,
     BatchStrOutput,
