@@ -33,7 +33,6 @@ ORDER: list[str] = [
     "move-request-tracing-move",
     "move-spec-decoding-meta-prep",
     "move-spec-decoding-meta-move",
-    "define-scheduler-sender",
     # Stage 1 — score handler early
     "introduce-score-request-handler-prep",
     "introduce-score-request-handler-move",
