@@ -108,6 +108,19 @@ def transform(wt: Path) -> None:
     )
     http_server.write_text(text)
 
+    # The HTTP handlers now call ``tokenizer_manager.corpus_controller.<method>``;
+    # the mock test must wire its AsyncMocks onto the corpus_controller, not the
+    # tokenizer_manager facade.
+    test_file = wt / "test/registered/unit/spec/test_ngram_corpus.py"
+    if test_file.exists():
+        t = test_file.read_text()
+        for m in ("add_external_corpus", "remove_external_corpus", "list_external_corpora"):
+            t = t.replace(
+                f"        tm.{m} = AsyncMock(\n",
+                f"        tm.corpus_controller.{m} = AsyncMock(\n",
+            )
+        test_file.write_text(t)
+
 
 if __name__ == "__main__":
     run_pr(

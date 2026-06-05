@@ -47,14 +47,14 @@ class CorpusControllerConfig:
     max_external_corpus_tokens: int
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class CorpusController:
-    add_external_corpus_communicator: Any
-    remove_external_corpus_communicator: Any
-    list_external_corpora_communicator: Any
     tokenizer: Optional[Any]
     config: CorpusControllerConfig
     auto_create_handle_loop: Callable[[], None]
+    add_external_corpus_communicator: Any = None  # set after facade.init_communicators
+    remove_external_corpus_communicator: Any = None
+    list_external_corpora_communicator: Any = None
 '''
 
 
@@ -149,15 +149,33 @@ def transform(wt: Path) -> None:
         before_attr="session_controller",
         construction=(
             "        self.corpus_controller = CorpusController(\n"
-            "            add_external_corpus_communicator=self.add_external_corpus_communicator,\n"
-            "            remove_external_corpus_communicator=self.remove_external_corpus_communicator,\n"
-            "            list_external_corpora_communicator=self.list_external_corpora_communicator,\n"
             "            tokenizer=self.tokenizer,\n"
             "            config=CorpusControllerConfig(\n"
             "                speculative_algorithm=self.server_args.speculative_algorithm or '',\n"
             "                max_external_corpus_tokens=self.server_args.speculative_ngram_external_corpus_max_tokens,\n"
             "            ),\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+            "        )\n"
+        ),
+    )
+
+    # The external-corpus communicators are created by init_communicators() (run
+    # inside init_request_dispatcher, after the owner classes are constructed), so
+    # plug them into the controller afterwards — same pattern as LoraController's
+    # update_lora_adapter_communicator.
+    text = replace_call_site(
+        text,
+        old="        self.init_communicators(self.server_args)\n",
+        new=(
+            "        self.init_communicators(self.server_args)\n"
+            "        self.corpus_controller.add_external_corpus_communicator = (\n"
+            "            self.add_external_corpus_communicator\n"
+            "        )\n"
+            "        self.corpus_controller.remove_external_corpus_communicator = (\n"
+            "            self.remove_external_corpus_communicator\n"
+            "        )\n"
+            "        self.corpus_controller.list_external_corpora_communicator = (\n"
+            "            self.list_external_corpora_communicator\n"
             "        )\n"
         ),
     )
