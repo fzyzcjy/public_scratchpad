@@ -47,6 +47,21 @@ logger = logging.getLogger(__name__)
 '''
 
 
+_SCORE_METHODS = (
+    "score_request",
+    "score_prompts",
+    "_build_multi_item_token_sequence",
+    "_batch_tokenize_query_and_items",
+    "_process_multi_item_scoring_results",
+    "_process_single_item_scoring_results",
+    "_resolve_overrides_for_sequence",
+    "_resolve_embed_overrides_for_request",
+    "_build_token_id_inputs",
+    "_convert_logprobs_to_scores",
+    "_extract_logprobs_for_tokens",
+)
+
+
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     old_mixin = wt / "python/sglang/srt/managers/tokenizer_manager_score_mixin.py"
@@ -75,19 +90,7 @@ def transform(wt: Path) -> None:
         class_body,
         source_classes=["TokenizerManagerScoreMixin"],
         target_class="ScoreRequestHandler",
-        methods=[
-            "score_request",
-            "score_prompts",
-            "_build_multi_item_token_sequence",
-            "_batch_tokenize_query_and_items",
-            "_process_multi_item_scoring_results",
-            "_process_single_item_scoring_results",
-            "_resolve_overrides_for_sequence",
-            "_resolve_embed_overrides_for_request",
-            "_build_token_id_inputs",
-            "_convert_logprobs_to_scores",
-            "_extract_logprobs_for_tokens",
-        ],
+        methods=list(_SCORE_METHODS),
     )
 
     # ---- 2. Append into the handler module + add the extra imports the
@@ -207,7 +210,10 @@ def transform(wt: Path) -> None:
             "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
             "    TokenizerManagerScoreMixin,\n"
             ")",
-            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreRequestHandler",
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import (\n"
+            "    ScoreRequestHandler,\n"
+            "    ScoreRequestHandlerConfig,\n"
+            ")",
         )
         t = t.replace(
             'class _FakeMixin(TokenizerManagerScoreMixin):\n'
@@ -215,10 +221,24 @@ def transform(wt: Path) -> None:
             'class _FakeMixin:\n'
             '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n'
             "\n"
-            "    _resolve_overrides_for_sequence = ScoreRequestHandler._resolve_overrides_for_sequence\n"
-            "    _build_multi_item_token_sequence = (\n"
-            "        ScoreRequestHandler._build_multi_item_token_sequence\n"
-            "    )\n",
+            + "".join(f"    {m} = ScoreRequestHandler.{m}\n" for m in _SCORE_METHODS),
+        )
+        # score_request reads the config-backed fields, so the fake needs a real
+        # ScoreRequestHandlerConfig mirroring its direct attributes.
+        t = t.replace(
+            "    def __init__(self, enable_mis=False):\n"
+            "        self.server_args = _FakeServerArgs(enable_mis)\n"
+            "        self.tokenizer = None\n"
+            "        self.is_generation = True\n",
+            "    def __init__(self, enable_mis=False):\n"
+            "        self.server_args = _FakeServerArgs(enable_mis)\n"
+            "        self.tokenizer = None\n"
+            "        self.is_generation = True\n"
+            "        self.config = ScoreRequestHandlerConfig(\n"
+            "            is_generation=True,\n"
+            "            enable_mis=enable_mis,\n"
+            "            model_config=None,\n"
+            "        )\n",
         )
         # Rewrite ``self.mixin.<method>(...)`` → ``ScoreRequestHandler.<method>(self.mixin, ...)``
         # for the methods that ScoreRequestHandler owns (now post-move).
