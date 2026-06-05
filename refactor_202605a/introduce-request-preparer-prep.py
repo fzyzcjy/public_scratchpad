@@ -149,6 +149,14 @@ def _rewrite_body(body: str) -> str:
         "self.config.architectures",
     )
 
+    # tokenizer / mm_processor live on raw_tokenizer_wrapper. While the methods
+    # are still on TM these resolve via TM's facade @property, but after the
+    # move ``self`` is the RequestPreparer (no such facade), so reach through
+    # the wrapper field. Replace mm_processor first; neither is a substring of
+    # the other or of self.multimodal_processor / self.tokenized_request_builder.
+    body = body.replace("self.mm_processor", "self.raw_tokenizer_wrapper.mm_processor")
+    body = body.replace("self.tokenizer", "self.raw_tokenizer_wrapper.tokenizer")
+
     # Cluster cross-calls: methods that remain on TM as @staticmethod with
     # self: RequestPreparer. Must qualify with class name to reflect "脱 self"
     # semantics per MECH_COMMIT_SPLIT.
