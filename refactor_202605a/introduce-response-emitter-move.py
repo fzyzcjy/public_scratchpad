@@ -36,7 +36,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 EXTRA_IMPORTS = '''import asyncio
 import logging
 from http import HTTPStatus
-from typing import Optional, Union
+from typing import Iterable, Optional, Union
 
 import fastapi
 from fastapi import BackgroundTasks
@@ -85,9 +85,16 @@ def transform(wt: Path) -> None:
         # Strip TokenizerManager.<sibling>(self, ...) form back to self.<sibling>(...).
         body = body.replace(
             "TokenizerManager._coalesce_streaming_chunks(\n"
-            "                    self, out_list, obj.rid\n"
+            "                    self,\n"
+            "                    out_list,\n"
+            "                    obj.rid,\n"
+            "                    state.customized_info_accumulated.keys(),\n"
             "                )",
-            "self._coalesce_streaming_chunks(out_list, obj.rid)",
+            "self._coalesce_streaming_chunks(\n"
+            "                    out_list,\n"
+            "                    obj.rid,\n"
+            "                    state.customized_info_accumulated.keys(),\n"
+            "                )",
         )
         body = body.replace(
             "TokenizerManager._handle_abort_finish_reason(\n"

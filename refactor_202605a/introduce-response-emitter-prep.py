@@ -88,6 +88,7 @@ NEW_COALESCE_HEADER = '''    @staticmethod
         self: "ResponseEmitter",
         out_list: list,
         rid: str,
+        customized_info_keys: Optional[Iterable[str]] = None,
     ) -> dict:
 '''
 
@@ -167,10 +168,21 @@ def transform(wt: Path) -> None:
     # @staticmethod): explicit TokenizerManager.<method>(self, ...) form.
     text = replace_call_site(
         text,
-        old="                out = self._coalesce_streaming_chunks(out_list, obj.rid)\n",
-        new="                out = TokenizerManager._coalesce_streaming_chunks(\n"
-            "                    self, out_list, obj.rid\n"
-            "                )\n",
+        old=(
+            "                out = self._coalesce_streaming_chunks(\n"
+            "                    out_list,\n"
+            "                    obj.rid,\n"
+            "                    state.customized_info_accumulated.keys(),\n"
+            "                )\n"
+        ),
+        new=(
+            "                out = TokenizerManager._coalesce_streaming_chunks(\n"
+            "                    self,\n"
+            "                    out_list,\n"
+            "                    obj.rid,\n"
+            "                    state.customized_info_accumulated.keys(),\n"
+            "                )\n"
+        ),
     )
     text = replace_call_site(
         text,

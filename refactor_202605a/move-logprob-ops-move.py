@@ -67,7 +67,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 HEADER = '''from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sglang.srt.managers.io_struct import BatchStrOutput
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
@@ -82,9 +82,13 @@ INCREMENTAL_STREAMING_META_INFO_KEYS = (
 def slice_streaming_output_meta_info(
     meta_info: Dict[Any, Any],
     last_output_offset: int,
+    customized_info_keys: Optional[Iterable[str]] = None,
 ) -> None:
     """Align output-side metadata with the current incremental streaming chunk."""
-    for key in meta_info.keys() & set(INCREMENTAL_STREAMING_META_INFO_KEYS):
+    streaming_meta_info_keys = set(INCREMENTAL_STREAMING_META_INFO_KEYS)
+    if customized_info_keys is not None:
+        streaming_meta_info_keys.update(customized_info_keys)
+    for key in meta_info.keys() & streaming_meta_info_keys:
         meta_info[key] = meta_info[key][last_output_offset:]
 
 
@@ -211,8 +215,8 @@ def transform(wt: Path) -> None:
     # Intra-module-level callers for the cut constant + free fn.
     text = replace_call_site(
         text,
-        old="for key in _INCREMENTAL_STREAMING_META_INFO_KEYS:",
-        new="for key in logprob_ops.INCREMENTAL_STREAMING_META_INFO_KEYS:",
+        old="set(_INCREMENTAL_STREAMING_META_INFO_KEYS)",
+        new="set(logprob_ops.INCREMENTAL_STREAMING_META_INFO_KEYS)",
     )
     text = replace_call_site(
         text,
