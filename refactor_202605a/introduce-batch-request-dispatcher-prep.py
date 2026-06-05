@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-batch-request-dispatcher-prep"
@@ -292,14 +292,10 @@ def transform(wt: Path) -> None:
     # ---- 3. Composition wiring: append at the end of the owner-class block,
     # just before ``self.init_request_dispatcher()``. ScoreRequestHandler is the
     # last owner-class wired before init_request_dispatcher, so anchor on it.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
-        ),
-        new=(
-            "        # Batch request dispatcher\n"
+        attr="batch_request_dispatcher",
+        construction=(
             "        self.batch_request_dispatcher = BatchRequestDispatcher(\n"
             "            request_preparer=self.request_preparer,\n"
             "            response_emitter=self.response_emitter,\n"
@@ -312,9 +308,6 @@ def transform(wt: Path) -> None:
             "                disaggregation_mode=self.disaggregation_mode,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
         ),
     )
 

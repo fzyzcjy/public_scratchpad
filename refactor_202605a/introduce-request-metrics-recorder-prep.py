@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-request-metrics-recorder-prep"
@@ -53,8 +53,6 @@ from sglang.srt.server_args import ServerArgs
 
 @dataclass(slots=True, kw_only=True)
 class RequestMetricsRecorder:
-    """Per-request Prometheus metrics emission."""
-
     server_args: ServerArgs
     enable_metrics: bool
     enable_priority_scheduling: bool
@@ -148,23 +146,17 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring. disaggregation_mode field stays on TM (not removed).
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Request log manager\n"
-            "        self.request_log_manager = RequestLogManager.from_server_args(\n"
-        ),
-        new=(
-            "        # Request metrics recorder\n"
+        attr="request_metrics_recorder",
+        before_attr="request_validator",
+        construction=(
             "        self.request_metrics_recorder = RequestMetricsRecorder(\n"
             "            server_args=self.server_args,\n"
             "            enable_metrics=self.enable_metrics,\n"
             "            enable_priority_scheduling=self.enable_priority_scheduling,\n"
             "            disaggregation_mode=self.disaggregation_mode,\n"
             "        )\n"
-            "\n"
-            "        # Request log manager\n"
-            "        self.request_log_manager = RequestLogManager.from_server_args(\n"
         ),
     )
 

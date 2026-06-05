@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-corpus-controller-prep"
@@ -49,8 +49,6 @@ class CorpusControllerConfig:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CorpusController:
-    """add / remove / list external corpus endpoints (n-gram speculative decoding)."""
-
     add_external_corpus_communicator: Any
     remove_external_corpus_communicator: Any
     list_external_corpora_communicator: Any
@@ -145,14 +143,11 @@ def transform(wt: Path) -> None:
             ")\n"
         ),
     )
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
-        ),
-        new=(
-            "        # Corpus controller\n"
+        attr="corpus_controller",
+        before_attr="session_controller",
+        construction=(
             "        self.corpus_controller = CorpusController(\n"
             "            add_external_corpus_communicator=self.add_external_corpus_communicator,\n"
             "            remove_external_corpus_communicator=self.remove_external_corpus_communicator,\n"
@@ -164,9 +159,6 @@ def transform(wt: Path) -> None:
             "            ),\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "        )\n"
-            "\n"
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
         ),
     )
     tm.write_text(text)

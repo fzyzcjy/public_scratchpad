@@ -48,8 +48,6 @@ from sglang.srt.server_args import ServerArgs
 
 @dataclass(slots=True, kw_only=True)
 class LoraController:
-    """LoRA load/unload/LRU + per-request acquire/release."""
-
     server_args: ServerArgs
     auto_create_handle_loop: Callable[[], None]
     update_lora_adapter_communicator: Any = None  # set after facade.init_communicators
@@ -186,8 +184,9 @@ def transform(wt: Path) -> None:
         addition="from sglang.srt.managers.tokenizer_manager_components.lora_controller import LoraController\n",
     )
 
-    # Composition wiring: replace init_lora() call with LoraController(...) construction
-    # in the same slot (init_weight_update → here → init_disaggregation).
+    # Composition wiring: route the init_lora() call through an
+    # ``init_lora_controller`` helper (large-class-init-style) in the same slot
+    # (init_weight_update → here → init_disaggregation).
     text = replace_call_site(
         text,
         old=(
@@ -195,11 +194,8 @@ def transform(wt: Path) -> None:
             "        self.init_lora()\n"
         ),
         new=(
-            "        # Init LoRA controller\n"
-            "        self.lora_controller = LoraController(\n"
-            "            server_args=self.server_args,\n"
-            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-            "        )\n"
+            "        # Init LoRA status\n"
+            "        self.init_lora_controller()\n"
         ),
     )
 
@@ -217,10 +213,19 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Remove the now-dead init_lora method body from TM (LoraController.__post_init__ owns this).
+    # Replace the now-dead init_lora method with init_lora_controller (the
+    # LoraController construction; LoraController.__post_init__ owns the registry).
     s, _, e = _method_ranges(text, "TokenizerManager", "init_lora")
     lines = text.splitlines(keepends=True)
-    text = "".join(lines[:s]) + "".join(lines[e:])
+    NEW_INIT_LORA_CONTROLLER = (
+        "    def init_lora_controller(self):\n"
+        "        self.lora_controller = LoraController(\n"
+        "            server_args=self.server_args,\n"
+        "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+        "        )\n"
+        "\n"
+    )
+    text = "".join(lines[:s]) + NEW_INIT_LORA_CONTROLLER + "".join(lines[e:])
 
     # Convert TM's 2 lora methods to @staticmethod with self: "LoraController" typing.
     text = _retype_method(text, "TokenizerManager", "_resolve_lora_path")

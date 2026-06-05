@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-output-processor-prep"
@@ -63,8 +63,6 @@ class OutputProcessorConfig:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OutputProcessor:
-    """Consumes BatchStrOutput / BatchTokenIDOutput / BatchEmbeddingOutput from scheduler."""
-
     rid_to_state: Dict[str, ReqState]
     tokenizer: Optional[Any]
     request_metrics_recorder: RequestMetricsRecorder
@@ -128,14 +126,11 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
-        ),
-        new=(
-            "        # Output processor\n"
+        attr="output_processor",
+        before_attr="session_controller",
+        construction=(
             "        self.output_processor = OutputProcessor(\n"
             "            rid_to_state=self.rid_to_state,\n"
             "            tokenizer=self.tokenizer,\n"
@@ -156,9 +151,6 @@ def transform(wt: Path) -> None:
             "                served_model_name=self.server_args.served_model_name,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
         ),
     )
 

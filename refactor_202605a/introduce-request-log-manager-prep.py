@@ -52,8 +52,6 @@ from sglang.srt.utils.request_logger import RequestLogger
 
 @dataclass(slots=True, kw_only=True)
 class RequestLogManager:
-    """Per-request logging + periodic dump + 5-min rolling crash dump."""
-
     server_args: ServerArgs
     request_logger: RequestLogger
     request_metrics_exporter_manager: RequestMetricsExporterManager
@@ -162,29 +160,24 @@ def transform(wt: Path) -> None:
         addition="from sglang.srt.managers.tokenizer_manager_components.request_log_manager import RequestLogManager\n",
     )
 
-    # Composition wiring.
+    # Composition wiring (large-class-init-style): route the early
+    # init_request_logging_and_dumping() slot through init_request_log_manager().
     text = replace_call_site(
         text,
-        old=(
-            "        # Request validator\n"
-            "        self.request_validator = RequestValidator(\n"
-        ),
+        old="        # Init logging and dumping\n        self.init_request_logging_and_dumping()\n",
+        new="        # Init logging and dumping\n        self.init_request_log_manager()\n",
+    )
+    text = replace_call_site(
+        text,
+        old="    def init_weight_update(self):\n",
         new=(
-            "        # Request log manager\n"
+            "    def init_request_log_manager(self):\n"
             "        self.request_log_manager = RequestLogManager.from_server_args(\n"
             "            server_args=self.server_args,\n"
             "        )\n"
             "\n"
-            "        # Request validator\n"
-            "        self.request_validator = RequestValidator(\n"
+            "    def init_weight_update(self):\n"
         ),
-    )
-
-    # Drop the init_request_logging_and_dumping() call — factory does the work.
-    text = replace_call_site(
-        text,
-        old="        # Init logging and dumping\n        self.init_request_logging_and_dumping()\n",
-        new="",
     )
 
     # Convert 4 methods to @staticmethod with self: "RequestLogManager" typing. Bodies unchanged

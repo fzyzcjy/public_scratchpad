@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-prep"
@@ -60,8 +60,6 @@ from sglang.srt.utils.aio_rwlock import RWLock
 
 @dataclass(slots=True, kw_only=True)
 class WeightDiskUpdateController:
-    """update_weights_from_disk endpoint + UpdateWeightFromDiskReqOutput dispatcher handler."""
-
     send_to_scheduler: Any
     abort_request: Callable[..., None]
     is_pause_getter: Callable[[], bool]
@@ -230,14 +228,11 @@ def transform(wt: Path) -> None:
 
     # Composition wiring. The controller's __post_init__ registers the dispatcher
     # forwarder, so no separate dispatcher-mutation line is needed here.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
-        ),
-        new=(
-            "        # Weight disk update controller\n"
+        attr="weight_disk_update_controller",
+        before_attr="session_controller",
+        construction=(
             "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
             "            abort_request=self.abort_request,\n"
@@ -247,9 +242,6 @@ def transform(wt: Path) -> None:
             "            server_args=self.server_args,\n"
             "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
             "        )\n"
-            "\n"
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
         ),
     )
 

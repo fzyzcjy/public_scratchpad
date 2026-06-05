@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-score-request-handler-prep"
@@ -186,14 +186,10 @@ def transform(wt: Path) -> None:
     # chain via their own ``# <previous owner>`` markers, all staying above
     # init_request_dispatcher — required because its entry list references
     # ``self.<owner>.handle_X`` and those must exist at call time.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
-        ),
-        new=(
-            "        # Score request handler\n"
+        attr="score_request_handler",
+        construction=(
             "        self.score_request_handler = ScoreRequestHandler(\n"
             "            tokenizer=self.tokenizer,\n"
             "            rid_to_state=self.rid_to_state,\n"
@@ -204,9 +200,6 @@ def transform(wt: Path) -> None:
             "                model_config=self.model_config,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Init request dispatcher\n"
-            "        self.init_request_dispatcher()"
         ),
     )
     tm.write_text(text)

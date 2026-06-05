@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-tokenized-request-builder-prep"
@@ -50,10 +50,6 @@ class TokenizedRequestBuilderConfig:
 
 @dataclass(slots=True, kw_only=True)
 class TokenizedRequestBuilder:
-    """Build TokenizedGenerateReqInput / TokenizedEmbeddingReqInput from
-    (obj, input_ids, mm_inputs, ...). fake_bootstrap_room_counter mutates per build.
-    """
-
     tokenizer: Optional[Any]
     config: TokenizedRequestBuilderConfig
     fake_bootstrap_room_counter: int = 0
@@ -114,14 +110,11 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Request validator\n"
-            "        self.request_validator = RequestValidator(\n"
-        ),
-        new=(
-            "        # Tokenized request builder\n"
+        attr="tokenized_request_builder",
+        before_attr="request_validator",
+        construction=(
             "        self.tokenized_request_builder = TokenizedRequestBuilder(\n"
             "            tokenizer=self.tokenizer,\n"
             "            config=TokenizedRequestBuilderConfig(\n"
@@ -131,9 +124,6 @@ def transform(wt: Path) -> None:
             "                disaggregation_transfer_backend=self.server_args.disaggregation_transfer_backend,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Request validator\n"
-            "        self.request_validator = RequestValidator(\n"
         ),
     )
 

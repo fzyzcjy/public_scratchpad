@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-response-emitter-prep"
@@ -52,8 +52,6 @@ from sglang.srt.server_args import ServerArgs
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ResponseEmitter:
-    """Drains rid_to_state[rid].out_list and yields per-request dicts to HTTP clients."""
-
     rid_to_state: Dict[str, ReqState]
     lora_controller: LoraController
     request_log_manager: RequestLogManager
@@ -140,14 +138,11 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
-        ),
-        new=(
-            "        # Response emitter\n"
+        attr="response_emitter",
+        before_attr="session_controller",
+        construction=(
             "        self.response_emitter = ResponseEmitter(\n"
             "            rid_to_state=self.rid_to_state,\n"
             "            lora_controller=self.lora_controller,\n"
@@ -155,9 +150,6 @@ def transform(wt: Path) -> None:
             "            abort_request=self.abort_request,\n"
             "            server_args=self.server_args,\n"
             "        )\n"
-            "\n"
-            "        # Session controller\n"
-            "        self.session_controller = SessionController(\n"
         ),
     )
 

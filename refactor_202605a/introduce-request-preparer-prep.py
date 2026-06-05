@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-request-preparer-prep"
@@ -189,14 +189,11 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring in __init__.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Score request handler\n"
-            "        self.score_request_handler = ScoreRequestHandler(\n"
-        ),
-        new=(
-            "        # Request preparer\n"
+        attr="request_preparer",
+        before_attr="score_request_handler",
+        construction=(
             "        self.request_preparer = RequestPreparer(\n"
             "            raw_tokenizer_wrapper=self.raw_tokenizer_wrapper,\n"
             "            multimodal_processor=self.multimodal_processor,\n"
@@ -216,9 +213,6 @@ def transform(wt: Path) -> None:
             "                encoder_transfer_backend=self.server_args.encoder_transfer_backend,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Score request handler\n"
-            "        self.score_request_handler = ScoreRequestHandler(\n"
         ),
     )
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-session-controller-prep"
@@ -62,8 +62,6 @@ from sglang.srt.server_args import ServerArgs
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SessionController:
-    """open_session / close_session endpoints + OpenSessionReqOutput dispatcher handler."""
-
     send_to_scheduler: Any
     auto_create_handle_loop: Callable[[], None]
     server_args: ServerArgs
@@ -175,33 +173,24 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Composition wiring. Anchor on the RequestMetricsRecorder block (closed by
-    # ``)\n\n``) and insert AFTER it. Going *after* keeps request_metrics_recorder
-    # above the Stage-4 controllers — subsequent preps (pause/wdu/lora/corpus)
-    # anchor on ``# Session controller`` and insert BEFORE it, so they end up
-    # between RequestMetricsRecorder and SessionController in textual order.
-    # That's required because PauseController's ctor takes
+    # Composition wiring. Insert the session_controller init ahead of
+    # request_validator so subsequent owner-class preps (pause/wdu/lora/corpus)
+    # that anchor BEFORE ``# Session controller`` still land between
+    # RequestMetricsRecorder and SessionController in textual order. That's
+    # required because PauseController's ctor takes
     # ``metrics_collector=self.request_metrics_recorder.metrics_collector``.
-    import re as _re
-
-    _anchor_pat = _re.compile(
-        r"        # Request metrics recorder\n"
-        r"        self\.request_metrics_recorder = RequestMetricsRecorder\([^)]*?\)\n",
-        _re.DOTALL,
+    text = wire_component_init(
+        text,
+        attr="session_controller",
+        before_attr="request_validator",
+        construction=(
+            "        self.session_controller = SessionController(\n"
+            "            send_to_scheduler=self.send_to_scheduler,\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+            "            server_args=self.server_args,\n"
+            "        )\n"
+        ),
     )
-    _m = _anchor_pat.search(text)
-    if _m is None:
-        raise RuntimeError("RequestMetricsRecorder anchor not found")
-    addition = (
-        "\n"
-        "        # Session controller\n"
-        "        self.session_controller = SessionController(\n"
-        "            send_to_scheduler=self.send_to_scheduler,\n"
-        "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-        "            server_args=self.server_args,\n"
-        "        )\n"
-    )
-    text = text[: _m.end()] + addition + text[_m.end() :]
 
     # Convert _handle_open_session_req_output to @staticmethod with
     # self: "SessionController" typing; body stays in TM.

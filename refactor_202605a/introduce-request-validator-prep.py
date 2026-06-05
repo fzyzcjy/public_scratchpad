@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-request-validator-prep"
@@ -58,8 +58,6 @@ class RequestValidatorConfig:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RequestValidator:
-    """Request consistency / length / vocab / quota validation."""
-
     config: RequestValidatorConfig
 '''
 
@@ -193,14 +191,11 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Score request handler\n"
-            "        self.score_request_handler = ScoreRequestHandler(\n"
-        ),
-        new=(
-            "        # Request validator\n"
+        attr="request_validator",
+        before_attr="score_request_handler",
+        construction=(
             "        self.request_validator = RequestValidator(\n"
             "            config=RequestValidatorConfig(\n"
             "                context_len=self.context_len,\n"
@@ -217,9 +212,6 @@ def transform(wt: Path) -> None:
             "                model_path=self.model_config.model_path,\n"
             "            ),\n"
             "        )\n"
-            "\n"
-            "        # Score request handler\n"
-            "        self.score_request_handler = ScoreRequestHandler(\n"
         ),
     )
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site
+from _helpers import insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-multimodal-processor-prep"
@@ -56,8 +56,6 @@ class MultimodalProcessorConfig:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MultimodalProcessor:
-    """Owns mm_processor / mm_receiver and EPD dispatch routing."""
-
     mm_processor: Optional[Any]
     mm_receiver: Optional[Any]
     config: MultimodalProcessorConfig
@@ -176,22 +174,16 @@ def transform(wt: Path) -> None:
     )
 
     # Composition wiring.
-    text = replace_call_site(
+    text = wire_component_init(
         text,
-        old=(
-            "        # Tokenized request builder\n"
-            "        self.tokenized_request_builder = TokenizedRequestBuilder(\n"
-        ),
-        new=(
-            "        # Multimodal processor\n"
+        attr="multimodal_processor",
+        before_attr="tokenized_request_builder",
+        construction=(
             "        self.multimodal_processor = MultimodalProcessor.from_server_args(\n"
             "            server_args=self.server_args,\n"
             "            model_config=self.model_config,\n"
             "            mm_processor=self.mm_processor,\n"
             "        )\n"
-            "\n"
-            "        # Tokenized request builder\n"
-            "        self.tokenized_request_builder = TokenizedRequestBuilder(\n"
         ),
     )
 

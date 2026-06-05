@@ -59,8 +59,6 @@ from sglang.srt.managers.async_dynamic_batch_tokenizer import AsyncDynamicbatchT
 
 @dataclass(slots=True, kw_only=True)
 class RawTokenizerWrapper:
-    """Owns tokenizer / processor / mm_processor / async_dynamic_batch_tokenizer."""
-
     tokenizer: Optional[Any] = None
     processor: Optional[Any] = None
     mm_processor: Optional[Any] = None
@@ -78,15 +76,6 @@ NEW_INIT_TOKENIZER_HEADER = '''    @staticmethod
 
 
 PROPERTY_FACADE = '''
-    # ---- raw_tokenizer_wrapper facade -----------------------------------
-    # ``tokenizer`` / ``processor`` / ``mm_processor`` are the TokenizerManager
-    # public read-API; storage is delegated to ``self.raw_tokenizer_wrapper``.
-    # Read-only by design — writes go through ``self.raw_tokenizer_wrapper``
-    # directly (the only writes happen inside
-    # ``RawTokenizerWrapper.init_tokenizer_and_processor``).
-    # ``async_dynamic_batch_tokenizer`` stays internal — access via
-    # ``self.raw_tokenizer_wrapper.async_dynamic_batch_tokenizer`` directly.
-
     @property
     def tokenizer(self):
         return self.raw_tokenizer_wrapper.tokenizer
@@ -131,8 +120,8 @@ def transform(wt: Path) -> None:
 
     text = tm.read_text()
 
-    # ---- 1. Composition wiring: replace init_tokenizer_and_processor() call
-    # with RawTokenizerWrapper construction + class-qualified factory call.
+    # ---- 1. Composition wiring: route the init_tokenizer_and_processor() call
+    # through an ``init_raw_tokenizer_wrapper`` helper (large-class-init-style).
     text = replace_call_site(
         text,
         old=(
@@ -140,13 +129,23 @@ def transform(wt: Path) -> None:
             "        self.init_tokenizer_and_processor()"
         ),
         new=(
-            "        # Initialize tokenizer and multimodal processor\n"
+            "        # Initialize tokenizer and multimodalprocessor\n"
+            "        self.init_raw_tokenizer_wrapper()"
+        ),
+    )
+    text = replace_call_site(
+        text,
+        old="    def init_ipc_channels(self, port_args: PortArgs):\n",
+        new=(
+            "    def init_raw_tokenizer_wrapper(self):\n"
             "        self.raw_tokenizer_wrapper = RawTokenizerWrapper()\n"
             "        TokenizerManager.init_tokenizer_and_processor(\n"
             "            self.raw_tokenizer_wrapper,\n"
             "            server_args=self.server_args,\n"
             "            model_config=self.model_config,\n"
-            "        )"
+            "        )\n"
+            "\n"
+            "    def init_ipc_channels(self, port_args: PortArgs):\n"
         ),
     )
 
