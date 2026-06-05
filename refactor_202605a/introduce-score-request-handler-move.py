@@ -191,6 +191,15 @@ def transform(wt: Path) -> None:
             "from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
             "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult",
         )
+        # The handler now reaches scoring via
+        # ``tokenizer_manager.score_request_handler.score_prompts``; route the
+        # qwen3 _TM stub (which defines score_prompts on itself) through that
+        # attribute.
+        t = t.replace(
+            '                self.model_config.model_path = "qwen/qwen3"\n',
+            '                self.model_config.model_path = "qwen/qwen3"\n'
+            "                self.score_request_handler = self\n",
+        )
         test_serving_rerank.write_text(t)
 
     test_embed_overrides = wt / "test/registered/prefill_only/test_embed_overrides.py"
