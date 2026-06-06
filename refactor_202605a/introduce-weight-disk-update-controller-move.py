@@ -18,8 +18,9 @@ ID = "introduce-weight-disk-update-controller-move"
 SUBJECT = "Hand disk-based weight reload over to WeightDiskUpdateController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut 4 @staticmethod methods
-(``update_weights_from_disk``, ``_update_model_path_info``,
-``_wait_for_model_update_from_disk``, ``_handle_update_weights_from_disk_req_output``)
+(``update_weights_from_disk``,
+``_wait_for_model_update_from_disk``, ``_handle_update_weights_from_disk_req_output``;
+``_update_model_path_info`` stays on TM)
 from TokenizerManager and 1 @staticmethod method
 (``_update_weight_version_if_provided``) from TokenizerControlMixin; paste
 into WeightDiskUpdateController (drop @staticmethod, replace
@@ -51,7 +52,6 @@ logger = logging.getLogger(__name__)
 
 _MOVED_METHODS = (
     "update_weights_from_disk",
-    "_update_model_path_info",
     "_wait_for_model_update_from_disk",
     "handle_update_weights_from_disk_req_output",
     "_update_weight_version_if_provided",
@@ -84,7 +84,6 @@ def transform(wt: Path) -> None:
     # method was privacy-flipped in prep.
     tm_methods = (
         "update_weights_from_disk",
-        "_update_model_path_info",
         "_wait_for_model_update_from_disk",
         "handle_update_weights_from_disk_req_output",
     )
@@ -108,7 +107,6 @@ def transform(wt: Path) -> None:
     # Assemble in canonical order. Body bytes unchanged except @staticmethod stripped + self typing.
     bodies = [
         _strip_static_prefix(cut_blocks_tm["update_weights_from_disk"]),
-        _strip_static_prefix(cut_blocks_tm["_update_model_path_info"]),
         _strip_static_prefix(cut_blocks_tm["_wait_for_model_update_from_disk"]),
         _strip_static_prefix(cut_blocks_tm["handle_update_weights_from_disk_req_output"]),
         _strip_static_prefix(cut_block_mixin),

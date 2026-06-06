@@ -25,14 +25,15 @@ initial_weights_loaded per config and registers a lambda forwarder for
 UpdateWeightFromDiskReqOutput on the shared dispatcher). Wires composition
 in TM.__init__; drops the facade fields ``initial_weights_loaded`` and
 ``model_update_result`` from ``init_weight_update`` (they now live on the
-controller). Converts 4 TM methods (``update_weights_from_disk``,
-``_update_model_path_info``, ``_wait_for_model_update_from_disk``,
+controller). Converts 3 TM methods (``update_weights_from_disk``,
+``_wait_for_model_update_from_disk``,
 ``_handle_update_weights_from_disk_req_output``) and 1
 TokenizerControlMixin method (``_update_weight_version_if_provided``) to
-``@staticmethod`` with ``self: "WeightDiskUpdateController"`` annotation,
-applying body rewrites (``self.server_args.dp_size`` →
-``self.config.dp_size``; ``self.served_model_name=`` /
-``self.model_path=`` re-routed through ``server_args``) and cross-call
+``@staticmethod`` with ``self: "WeightDiskUpdateController"`` annotation.
+``_update_model_path_info`` STAYS on TokenizerManager (it mutates the
+facade's ``served_model_name`` / ``model_path`` identity attributes that
+http_server reads); the controller reaches it through the injected
+``update_model_path_info`` callable. Applies body rewrites and cross-call
 rewrites (intra-controller calls become ``TokenizerManager.<m>(self, ...)``
 / ``TokenizerControlMixin._update_weight_version_if_provided(self, ...)``).
 Rewires 3 sibling mixin callers (``update_weights_from_distributed`` /
@@ -62,6 +63,7 @@ from sglang.srt.utils.aio_rwlock import RWLock
 class WeightDiskUpdateController:
     send_to_scheduler: Any
     abort_request: Callable[..., None]
+    update_model_path_info: Callable[[str, str], None]
     is_pause_getter: Callable[[], bool]
     is_pause_cond: asyncio.Condition
     model_update_lock: RWLock
@@ -108,9 +110,6 @@ NEW_HEADERS = {
         request: Optional[fastapi.Request] = None,
     ) -> Tuple[bool, str]:
 ''',
-    "_update_model_path_info": '''    @staticmethod
-    def _update_model_path_info(self: "WeightDiskUpdateController", model_path: str, load_format: str):
-''',
     "_wait_for_model_update_from_disk": '''    @staticmethod
     async def _wait_for_model_update_from_disk(
         self: "WeightDiskUpdateController", obj: UpdateWeightFromDiskReqInput
@@ -129,15 +128,6 @@ NEW_HEADERS = {
 
 def _rewrite_body(body_text: str) -> str:
     """Apply body rewrites: facade-field re-routing + intra-cluster cross-call class-qualification."""
-    # Field re-routing onto server_args (controller has no served_model_name /
-    # model_path attrs; ServerArgs owns them). server_args reads themselves stay.
-    body_text = body_text.replace(
-        "self.served_model_name = ", "self.server_args.served_model_name = "
-    )
-    body_text = body_text.replace(
-        "self.model_path = model_path", "self.server_args.model_path = model_path"
-    )
-
     # PauseController stayed unextracted (too coupled with other TM state to
     # be a clean independent class). The 3 fields ``abort_request`` /
     # ``is_pause`` / ``is_pause_cond`` that WDU needs are injected as Callable
@@ -161,7 +151,7 @@ def _rewrite_body(body_text: str) -> str:
     )
     body_text = body_text.replace(
         "self._update_model_path_info(obj.model_path, obj.load_format)",
-        "TokenizerManager._update_model_path_info(self, obj.model_path, obj.load_format)",
+        "self.update_model_path_info(obj.model_path, obj.load_format)",
     )
     body_text = body_text.replace(
         "self._update_weight_version_if_provided(obj.weight_version)",
@@ -236,6 +226,9 @@ def transform(wt: Path) -> None:
             "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
             "            abort_request=self.abort_request,\n"
+            "            update_model_path_info=lambda model_path, load_format: self._update_model_path_info(\n"
+            "                model_path, load_format\n"
+            "            ),\n"
             "            is_pause_getter=lambda: self.is_pause,\n"
             "            is_pause_cond=self.is_pause_cond,\n"
             "            model_update_lock=self.model_update_lock,\n"
@@ -265,7 +258,6 @@ def transform(wt: Path) -> None:
     # ---- TM: convert 4 methods to @staticmethod with self: "WeightDiskUpdateController" typing ----
     for name in (
         "update_weights_from_disk",
-        "_update_model_path_info",
         "_wait_for_model_update_from_disk",
         "_handle_update_weights_from_disk_req_output",
     ):
