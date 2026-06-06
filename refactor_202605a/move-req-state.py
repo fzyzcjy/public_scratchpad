@@ -38,7 +38,7 @@ HEADER = '''from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 from sglang.srt.managers.io_struct import EmbeddingReqInput, GenerateReqInput
 from sglang.srt.observability.req_time_stats import APIServerReqTimeStats
@@ -61,13 +61,6 @@ def transform(wt: Path) -> None:
 
     s, e = find_class_lines(tm.read_text(), class_name="ReqState")
     class_text = cut_lines(tm, s, e)
-    # Tighten the decorator: add ``slots=True`` (kw_only=True / frozen=True are
-    # blocked by a positional constructor + runtime field mutation respectively).
-    class_text = class_text.replace(
-        "@dataclasses.dataclass\nclass ReqState:",
-        "@dataclasses.dataclass(slots=True)\nclass ReqState:",
-        1,
-    )
     new.write_text(HEADER + class_text.rstrip() + "\n")
 
     # Add ReqState import to tokenizer_manager.py.
