@@ -163,6 +163,17 @@ def transform(wt: Path) -> None:
     test_file = wt / "test/manual/test_tokenizer_manager.py"
     if test_file.exists():
         t = test_file.read_text()
+        t = t.replace(
+            "from sglang.srt.managers.tokenizer_manager import (\n"
+            "    InputFormat,\n"
+            "    ReqState,\n"
+            "    TokenizerManager,\n"
+            ")",
+            "from sglang.srt.managers.tokenizer_manager import ReqState, TokenizerManager\n"
+            "from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import (\n"
+            "    InputFormat,\n"
+            ")",
+        )
         for name in HELPER_NAMES:
             t = t.replace(
                 f"self.tokenizer_manager.{name}(",
