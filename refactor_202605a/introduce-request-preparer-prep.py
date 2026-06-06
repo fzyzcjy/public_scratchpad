@@ -40,7 +40,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 SKELETON = '''from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from sglang.srt.managers.tokenizer_manager_components.multimodal_processor import MultimodalProcessor
 from sglang.srt.managers.tokenizer_manager_components.raw_tokenizer_wrapper import RawTokenizerWrapper
@@ -58,7 +58,6 @@ class RequestPreparerConfig:
     disable_radix_cache: bool
     is_multimodal: bool
     architectures: List[str]
-    max_req_input_len: Optional[int]
     language_only: bool
     encoder_transfer_backend: str
 
@@ -70,6 +69,7 @@ class RequestPreparer:
     request_validator: RequestValidator
     tokenized_request_builder: TokenizedRequestBuilder
     rid_to_state: Dict[str, ReqState]
+    get_max_req_input_len: Callable[[], Optional[int]]
     config: RequestPreparerConfig
 '''
 
@@ -143,7 +143,7 @@ def _rewrite_body(body: str) -> str:
 
     # Direct TM-only attrs -> config.*
     body = body.replace("self.is_generation", "self.config.is_generation")
-    body = body.replace("self.max_req_input_len", "self.config.max_req_input_len")
+    body = body.replace("self.max_req_input_len", "self.get_max_req_input_len()")
     body = body.replace(
         "self.model_config.hf_config.architectures",
         "self.config.architectures",
@@ -200,6 +200,7 @@ def transform(wt: Path) -> None:
             "            request_validator=self.request_validator,\n"
             "            tokenized_request_builder=self.tokenized_request_builder,\n"
             "            rid_to_state=self.rid_to_state,\n"
+            "            get_max_req_input_len=lambda: self.max_req_input_len,\n"
             "            config=RequestPreparerConfig(\n"
             "                skip_tokenizer_init=self.server_args.skip_tokenizer_init,\n"
             "                enable_dp_attention=self.server_args.enable_dp_attention,\n"
@@ -208,7 +209,6 @@ def transform(wt: Path) -> None:
             "                disable_radix_cache=self.server_args.disable_radix_cache,\n"
             "                is_multimodal=self.model_config.is_multimodal,\n"
             "                architectures=self.model_config.hf_config.architectures,\n"
-            "                max_req_input_len=self.max_req_input_len,\n"
             "                language_only=self.server_args.language_only,\n"
             "                encoder_transfer_backend=self.server_args.encoder_transfer_backend,\n"
             "            ),\n"
