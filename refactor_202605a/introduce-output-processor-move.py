@@ -114,8 +114,9 @@ def transform(wt: Path) -> None:
             "        request_log_manager=request_log_manager,\n"
             "        lora_controller=MagicMock(),\n"
             "        send_to_scheduler=tm.send_to_scheduler,\n"
+            "        get_weight_version=lambda: \"1\",\n"
+            "        get_served_model_name=lambda: \"\",\n"
             "        config=OutputProcessorConfig(\n"
-            "            weight_version=\"1\",\n"
             "            batch_notify_size=1,\n"
             "            incremental_streaming_output=False,\n"
             "            enable_metrics=False,\n"
@@ -124,7 +125,6 @@ def transform(wt: Path) -> None:
             "            speculative_num_draft_tokens=0,\n"
             "            dp_size=1,\n"
             "            enable_lora=False,\n"
-            "            served_model_name=\"\",\n"
             "        ),\n"
             "    )\n"
             "    return tm\n",

@@ -39,7 +39,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 SKELETON = '''from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from sglang.srt.managers.tokenizer_manager_components.lora_controller import LoraController
 from sglang.srt.managers.tokenizer_manager_components.request_log_manager import RequestLogManager
@@ -49,7 +49,6 @@ from sglang.srt.managers.tokenizer_manager_components.request_state import ReqSt
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OutputProcessorConfig:
-    weight_version: Optional[str]
     batch_notify_size: int
     incremental_streaming_output: bool
     enable_metrics: bool
@@ -58,7 +57,6 @@ class OutputProcessorConfig:
     speculative_num_draft_tokens: int
     dp_size: int
     enable_lora: bool
-    served_model_name: str
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -69,6 +67,8 @@ class OutputProcessor:
     request_log_manager: RequestLogManager
     lora_controller: LoraController
     send_to_scheduler: Any
+    get_weight_version: Callable[[], Optional[str]]
+    get_served_model_name: Callable[[], str]
     config: OutputProcessorConfig
 '''
 
@@ -138,8 +138,9 @@ def transform(wt: Path) -> None:
             "            request_log_manager=self.request_log_manager,\n"
             "            lora_controller=self.lora_controller,\n"
             "            send_to_scheduler=self.send_to_scheduler,\n"
+            "            get_weight_version=lambda: self.server_args.weight_version,\n"
+            "            get_served_model_name=lambda: self.served_model_name,\n"
             "            config=OutputProcessorConfig(\n"
-            "                weight_version=self.server_args.weight_version,\n"
             "                batch_notify_size=self.server_args.batch_notify_size,\n"
             "                incremental_streaming_output=self.server_args.incremental_streaming_output,\n"
             "                enable_metrics=self.enable_metrics,\n"
@@ -148,7 +149,6 @@ def transform(wt: Path) -> None:
             "                speculative_num_draft_tokens=self.server_args.speculative_num_draft_tokens,\n"
             "                dp_size=self.server_args.dp_size,\n"
             "                enable_lora=self.server_args.enable_lora,\n"
-            "                served_model_name=self.server_args.served_model_name,\n"
             "            ),\n"
             "        )\n"
         ),
@@ -161,7 +161,7 @@ def transform(wt: Path) -> None:
     body_text = "".join(lines[body_s:e])
 
     # Body rewrites (self.server_args.X / self.enable_metrics / etc. → target class field accesses).
-    body_text = body_text.replace("self.server_args.weight_version", "self.config.weight_version")
+    body_text = body_text.replace("self.server_args.weight_version", "self.get_weight_version()")
     body_text = body_text.replace(
         "self.server_args.incremental_streaming_output",
         "self.config.incremental_streaming_output",
@@ -178,7 +178,7 @@ def transform(wt: Path) -> None:
     body_text = body_text.replace("self.enable_metrics", "self.config.enable_metrics")
     body_text = body_text.replace(
         "served_model_name=self.served_model_name,",
-        "served_model_name=self.config.served_model_name,",
+        "served_model_name=self.get_served_model_name(),",
     )
     body_text = body_text.replace("self.crash_dump_folder", "self.request_log_manager.crash_dump_folder")
 
