@@ -133,8 +133,16 @@ def transform(wt: Path) -> None:
             ")\n",
         )
         t = t.replace(
-            "tm._init_req_state(obj)",
-            "init_req(tm.rid_to_state, obj=obj, enable_trace=tm.server_args.enable_trace, disagg_mode=tm.disaggregation_mode)",
+            "        tm._init_req_state(\n"
+            "            tm.rid_to_state,\n",
+            "        init_req(\n"
+            "            tm.rid_to_state,\n",
+        )
+        t = t.replace(
+            "            tm._init_req_state(\n"
+            "                tm.rid_to_state,\n",
+            "            init_req(\n"
+            "                tm.rid_to_state,\n",
         )
         test_file.write_text(t)
 

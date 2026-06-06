@@ -137,6 +137,32 @@ def transform(wt: Path) -> None:
 
     tm.write_text(new_text)
 
+    # The registered rid-cleanup unit test calls the method directly; switch it
+    # to the staticmethod calling convention at this commit (the move commit
+    # rewrites it again to the relocated free function).
+    test_file = wt / "test/registered/unit/managers/test_tokenizer_manager_rid_cleanup.py"
+    if test_file.exists():
+        tt = test_file.read_text()
+        tt = tt.replace(
+            "        tm._init_req_state(obj)\n",
+            "        tm._init_req_state(\n"
+            "            tm.rid_to_state,\n"
+            "            obj=obj,\n"
+            "            enable_trace=tm.server_args.enable_trace,\n"
+            "            disagg_mode=tm.disaggregation_mode,\n"
+            "        )\n",
+        )
+        tt = tt.replace(
+            "            tm._init_req_state(obj)\n",
+            "            tm._init_req_state(\n"
+            "                tm.rid_to_state,\n"
+            "                obj=obj,\n"
+            "                enable_trace=tm.server_args.enable_trace,\n"
+            "                disagg_mode=tm.disaggregation_mode,\n"
+            "            )\n",
+        )
+        test_file.write_text(tt)
+
 
 if __name__ == "__main__":
     run_pr(
