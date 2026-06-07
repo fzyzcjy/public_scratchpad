@@ -11,7 +11,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site, wire_component_init
+from _helpers import cut_lines, find_class_lines, insert_after, replace_call_site, wire_component_init
 from _runner import run_pr
 
 ID = "introduce-score-request-handler-prep"
@@ -49,17 +49,7 @@ from sglang.srt.configs.model_config import ModelConfig
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ScoreResult:
-    scores: List[List[float]]
-    prompt_tokens: int = 0
-    # Per-item pooled hidden states (pre-head transformer output).
-    # CPU tensors when return_pooled_hidden_states=True; kept as tensors so
-    # in-process consumers (gRPC, engine API) avoid a .tolist() round-trip.
-    # The HTTP path converts to lists in serving_score.py before JSON serialization.
-    # Same layout as scores: one tensor per item (not a single packed 2D tensor).
-    pooled_hidden_states: Optional[List[Optional[torch.Tensor]]] = None
-
+__SCORE_RESULT__
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ScoreRequestHandlerConfig:
@@ -167,7 +157,11 @@ def transform(wt: Path) -> None:
     serving_rerank = wt / "python/sglang/srt/entrypoints/openai/serving_rerank.py"
 
     # ---- 1. Build skeleton (incl. ScoreResult) at new path.
-    new.write_text(SKELETON)
+    # Cut ScoreResult (decorator included) from the mixin and splice it into the
+    # skeleton verbatim — the dataclass moves, it is not retyped.
+    s, e = find_class_lines(mixin.read_text(), class_name="ScoreResult")
+    score_result_text = cut_lines(mixin, s, e)
+    new.write_text(SKELETON.replace("__SCORE_RESULT__\n", score_result_text.rstrip() + "\n"))
 
     # ---- 2. TM: import handler + wire composition.
     text = tm.read_text()
@@ -214,22 +208,6 @@ def transform(wt: Path) -> None:
     # in the move commit.
     mtext = mixin.read_text()
 
-    # Remove the in-file ScoreResult dataclass (now lives in handler module).
-    score_result_block = (
-        "@dataclass(frozen=True, slots=True)\n"
-        "class ScoreResult:\n"
-        "    scores: List[List[float]]\n"
-        "    prompt_tokens: int = 0\n"
-        "    # Per-item pooled hidden states (pre-head transformer output).\n"
-        "    # CPU tensors when return_pooled_hidden_states=True; kept as tensors so\n"
-        "    # in-process consumers (gRPC, engine API) avoid a .tolist() round-trip.\n"
-        "    # The HTTP path converts to lists in serving_score.py before JSON serialization.\n"
-        "    # Same layout as scores: one tensor per item (not a single packed 2D tensor).\n"
-        "    pooled_hidden_states: Optional[List[Optional[torch.Tensor]]] = None\n"
-        "\n"
-        "\n"
-    )
-    mtext = replace_call_site(mtext, old=score_result_block, new="")
     # Re-import ScoreResult from new module so the mixin's signatures still resolve.
     mtext = insert_after(
         mtext,
@@ -318,6 +296,40 @@ def transform(wt: Path) -> None:
             '                self.model_config.model_path = "qwen/qwen3"\n',
             '                self.model_config.model_path = "qwen/qwen3"\n'
             "                self.score_request_handler = self\n",
+        )
+        # At this commit the production path calls the mixin staticmethod
+        # (class-qualified), which bypasses the _TM instance override; patch the
+        # class attribute for the duration of the call. The move commit restores
+        # the plain bound call once score_prompts lives on the handler.
+        tt = tt.replace(
+            "from unittest.mock import Mock\n",
+            "from unittest.mock import Mock, patch\n",
+        )
+        tt = tt.replace(
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult\n",
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+            "    ScoreResult,\n"
+            "    TokenizerManagerScoreMixin,\n"
+            ")\n",
+        )
+        tt = tt.replace(
+            '        req = V1RerankReqInput(query="q", documents=["d1", "d2"], return_documents=True)\n'
+            "        adapted, _ = handler._convert_to_internal_request(req)\n"
+            "        raw_request = Mock()\n"
+            "\n"
+            "        res = asyncio.run(\n"
+            "            handler._handle_non_streaming_request(adapted, req, raw_request)\n"
+            "        )\n",
+            '        req = V1RerankReqInput(query="q", documents=["d1", "d2"], return_documents=True)\n'
+            "        adapted, _ = handler._convert_to_internal_request(req)\n"
+            "        raw_request = Mock()\n"
+            "\n"
+            "        with patch.object(\n"
+            "            TokenizerManagerScoreMixin, \"score_prompts\", _TM.score_prompts\n"
+            "        ):\n"
+            "            res = asyncio.run(\n"
+            "                handler._handle_non_streaming_request(adapted, req, raw_request)\n"
+            "            )\n",
         )
         test_serving_rerank.write_text(tt)
 

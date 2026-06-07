@@ -188,8 +188,26 @@ def transform(wt: Path) -> None:
     if test_serving_rerank.exists():
         t = test_serving_rerank.read_text()
         t = t.replace(
-            "from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
-            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult",
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+            "    ScoreResult,\n"
+            "    TokenizerManagerScoreMixin,\n"
+            ")\n",
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult\n",
+        )
+        t = t.replace(
+            "from unittest.mock import Mock, patch\n",
+            "from unittest.mock import Mock\n",
+        )
+        t = t.replace(
+            "        with patch.object(\n"
+            '            TokenizerManagerScoreMixin, "score_prompts", _TM.score_prompts\n'
+            "        ):\n"
+            "            res = asyncio.run(\n"
+            "                handler._handle_non_streaming_request(adapted, req, raw_request)\n"
+            "            )\n",
+            "        res = asyncio.run(\n"
+            "            handler._handle_non_streaming_request(adapted, req, raw_request)\n"
+            "        )\n",
         )
         test_serving_rerank.write_text(t)
 
