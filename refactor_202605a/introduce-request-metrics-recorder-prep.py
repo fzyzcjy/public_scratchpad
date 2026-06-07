@@ -261,6 +261,17 @@ def transform(wt: Path) -> None:
         )
         v1_loads.write_text(lt)
 
+    # The v1_loads aggregate test's fake TM mirrored the old metrics_collector
+    # attribute; point it at the new owner so the repointed endpoint resolves.
+    v1_loads_test = wt / "test/registered/unit/entrypoints/test_v1_loads_aggregate.py"
+    if v1_loads_test.exists():
+        vt = v1_loads_test.read_text()
+        vt = vt.replace(
+            "    metrics_collector = None\n",
+            "    request_metrics_recorder = SimpleNamespace(metrics_collector=None)\n",
+        )
+        v1_loads_test.write_text(vt)
+
 
 if __name__ == "__main__":
     run_pr(
