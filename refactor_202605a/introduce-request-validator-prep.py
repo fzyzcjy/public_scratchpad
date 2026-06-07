@@ -144,6 +144,7 @@ NEW_HEADERS = {
         '        input_ids: Union[List[int], List[List[int]]],\n'
         '        vocab_size: int,\n'
         '    ) -> None:\n'
+        '        # Handle both single sequence and batch of sequences\n'
     ),
     "_validate_batch_tokenization_constraints": (
         '    @staticmethod\n'
@@ -249,6 +250,23 @@ def transform(wt: Path) -> None:
     )
 
     tm.write_text(text)
+
+    # The manual batch-encode test drives the staged validator method; switch
+    # its calls to the staticmethod convention at this commit (the move
+    # collapses them onto request_validator).
+    import re as _re
+
+    test_file = wt / "test/manual/test_tokenizer_batch_encode.py"
+    if test_file.exists():
+        tt = test_file.read_text()
+        tt = _re.sub(
+            r"self\.tokenizer_manager\._validate_batch_tokenization_constraints\(\s*([^,]+),\s*([^)]+?)\s*\)",
+            r"TokenizerManager._validate_batch_tokenization_constraints(\n"
+            r"                self.tokenizer_manager.request_validator, \1, \2\n"
+            r"            )",
+            tt,
+        )
+        test_file.write_text(tt)
 
 
 if __name__ == "__main__":

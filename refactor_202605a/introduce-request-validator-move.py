@@ -173,7 +173,7 @@ def transform(wt: Path) -> None:
     if test_file.exists():
         t = test_file.read_text()
         t = _re.sub(
-            r"self\.tokenizer_manager\._validate_batch_tokenization_constraints\(\s*([^,]+),\s*([^)]+)\s*\)",
+            r"TokenizerManager\._validate_batch_tokenization_constraints\(\s*self\.tokenizer_manager\.request_validator,\s*([^,]+),\s*([^)]+?),?\s*\)",
             (
                 r"self.tokenizer_manager.request_validator.validate_batch_tokenization_constraints("
                 r"\n            batch_size=\1, obj=\2\n        )"
