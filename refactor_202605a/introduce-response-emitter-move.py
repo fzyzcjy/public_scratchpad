@@ -48,12 +48,6 @@ from sglang.srt.managers.tokenizer_manager_components import logprob_ops
 logger = logging.getLogger(__name__)
 
 _REQUEST_STATE_WAIT_TIMEOUT = envs.SGLANG_REQUEST_STATE_WAIT_TIMEOUT.get()
-
-_INCREMENTAL_STREAMING_META_INFO_KEYS = (
-    "output_token_logprobs",
-    "output_top_logprobs",
-    "output_token_ids_logprobs",
-)
 '''
 
 
