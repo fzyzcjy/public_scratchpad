@@ -31,7 +31,7 @@ Minimal self-field rewrites inside the moved body:
   - ``self._send_one_request`` → ``self.send_one_request`` (Callable kwarg)
   - ``self._send_batch_request`` → ``self.send_batch_request``
   - ``self.server_args.enable_trace`` → ``self.config.enable_trace``
-  - ``self.disaggregation_mode`` → ``self.config.disaggregation_mode``
+  - ``self.disaggregation_mode`` → ``self.get_disaggregation_mode()``
   - ``self.request_preparer`` / ``self.response_emitter`` /
     ``self.rid_to_state`` / ``self.send_to_scheduler``: byte-equivalent
     (dataclass fields on BatchRequestDispatcher carry the same names)
@@ -95,7 +95,7 @@ def transform(wt: Path) -> None:
         "self.server_args.enable_trace", "self.config.enable_trace"
     )
     method_text = method_text.replace(
-        "self.disaggregation_mode", "self.config.disaggregation_mode"
+        "self.disaggregation_mode", "self.get_disaggregation_mode()"
     )
 
     # ---- 3. Paste into BatchRequestDispatcher class body. Inject EXTRA_IMPORTS

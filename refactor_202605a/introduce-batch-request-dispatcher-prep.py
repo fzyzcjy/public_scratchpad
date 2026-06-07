@@ -69,12 +69,12 @@ from sglang.srt.managers.tokenizer_manager_components.response_emitter import Re
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BatchRequestDispatcherConfig:
     enable_trace: bool
-    disaggregation_mode: DisaggregationMode
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BatchRequestDispatcher:
     request_preparer: RequestPreparer
+    get_disaggregation_mode: Callable[[], DisaggregationMode]
     response_emitter: ResponseEmitter
     rid_to_state: Dict[str, ReqState]
     send_to_scheduler: Any
@@ -303,9 +303,9 @@ def transform(wt: Path) -> None:
             "            send_to_scheduler=self.send_to_scheduler,\n"
             "            send_one_request=self._send_one_request,\n"
             "            send_batch_request=self._send_batch_request,\n"
+            "            get_disaggregation_mode=lambda: self.disaggregation_mode,\n"
             "            config=BatchRequestDispatcherConfig(\n"
             "                enable_trace=self.server_args.enable_trace,\n"
-            "                disaggregation_mode=self.disaggregation_mode,\n"
             "            ),\n"
             "        )\n"
         ),
