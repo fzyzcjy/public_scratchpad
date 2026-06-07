@@ -285,6 +285,23 @@ def transform(wt: Path) -> None:
         "                rid_to_state=self.rid_to_state,\n"
         "            )",
     )
+    # The two remaining TM-file callers outside the class (print_exception_wrapper
+    # and SignalHandler) must also follow the staged calling convention at this
+    # commit; the move collapses them onto request_log_manager.
+    text = text.replace(
+        "            func.__self__.dump_requests_before_crash()\n",
+        "            TokenizerManager.dump_requests_before_crash(\n"
+        "                func.__self__.request_log_manager,\n"
+        "                rid_to_state=func.__self__.rid_to_state,\n"
+        "            )\n",
+    )
+    text = text.replace(
+        "        self.tokenizer_manager.dump_requests_before_crash()\n",
+        "        TokenizerManager.dump_requests_before_crash(\n"
+        "            self.tokenizer_manager.request_log_manager,\n"
+        "            rid_to_state=self.tokenizer_manager.rid_to_state,\n"
+        "        )\n",
+    )
 
     tm.write_text(text)
 

@@ -126,20 +126,22 @@ def transform(wt: Path) -> None:
     text = _rewrite_call(text, "record_request_for_crash_dump")
     text = _rewrite_call(text, "dump_requests_before_crash")
 
-    # Two TM-side callers were never lifted to the class-qualified prep form, so
-    # the prep's ``self.dump_requests_before_crash()`` rewrite (and hence the
-    # ``_rewrite_call`` above) never touched them: ``func.__self__.…`` in
-    # print_exception_wrapper and ``self.tokenizer_manager.…`` in SignalHandler.
-    # Route both through request_log_manager directly (method now lives there and
-    # takes ``rid_to_state`` as a keyword-only arg).
+    # Collapse the two staged TM-file callers outside the class
+    # (print_exception_wrapper and SignalHandler) onto request_log_manager.
     text = text.replace(
-        "func.__self__.dump_requests_before_crash()",
+        "TokenizerManager.dump_requests_before_crash(\n"
+        "                func.__self__.request_log_manager,\n"
+        "                rid_to_state=func.__self__.rid_to_state,\n"
+        "            )",
         "func.__self__.request_log_manager.dump_requests_before_crash(\n"
         "                rid_to_state=func.__self__.rid_to_state\n"
         "            )",
     )
     text = text.replace(
-        "self.tokenizer_manager.dump_requests_before_crash()",
+        "TokenizerManager.dump_requests_before_crash(\n"
+        "            self.tokenizer_manager.request_log_manager,\n"
+        "            rid_to_state=self.tokenizer_manager.rid_to_state,\n"
+        "        )",
         "self.tokenizer_manager.request_log_manager.dump_requests_before_crash(\n"
         "            rid_to_state=self.tokenizer_manager.rid_to_state\n"
         "        )",
