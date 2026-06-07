@@ -52,6 +52,9 @@ class LoraController:
     auto_create_handle_loop: Callable[[], None]
     update_lora_adapter_communicator: Any = None  # set after facade.init_communicators
     lora_registry: LoRARegistry = None  # type: ignore[assignment]
+    # Lock to serialize LoRA update operations.
+    # Please note that, unlike `model_update_lock`, this does not block inference, allowing
+    # LoRA updates and inference to overlap.
     lora_update_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     lora_ref_cache: Dict[str, LoRARef] = field(default_factory=dict)
 
@@ -63,7 +66,7 @@ class LoraController:
         self.lora_registry = LoRARegistry(self.server_args.lora_paths)
         # A cache for mapping the lora_name for LoRA adapters that have been loaded at any
         # point to their latest LoRARef objects, so that they can be
-        # dynamically loaded if needed for inference.
+        # dynamically loaded if needed for inference
         if self.server_args.lora_paths is not None:
             for lora_ref in self.server_args.lora_paths:
                 self.lora_ref_cache[lora_ref.lora_name] = lora_ref
@@ -215,17 +218,38 @@ def transform(wt: Path) -> None:
 
     # Replace the now-dead init_lora method with init_lora_controller (the
     # LoraController construction; LoraController.__post_init__ owns the registry).
-    s, _, e = _method_ranges(text, "TokenizerManager", "init_lora")
-    lines = text.splitlines(keepends=True)
-    NEW_INIT_LORA_CONTROLLER = (
-        "    def init_lora_controller(self):\n"
-        "        self.lora_controller = LoraController(\n"
-        "            server_args=self.server_args,\n"
-        "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-        "        )\n"
-        "\n"
+    # Full-literal anchor: if upstream's init_lora body changes, this raises and
+    # the skeleton copy above must be reconciled in the same edit.
+    text = replace_call_site(
+        text,
+        old=(
+            "    def init_lora(self):\n"
+            "        # LoRA\n"
+            "        # Initialize the `LoRARegistry` with initial LoRA adapter paths provided in `server_args`.\n"
+            "        # The registry dynamically updates as adapters are loaded / unloaded during runtime. It\n"
+            "        # serves as the source of truth for available adapters and maps user-friendly LoRA names\n"
+            "        # to internally used unique LoRA IDs.\n"
+            "        self.lora_registry = LoRARegistry(self.server_args.lora_paths)\n"
+            "        # Lock to serialize LoRA update operations.\n"
+            "        # Please note that, unlike `model_update_lock`, this does not block inference, allowing\n"
+            "        # LoRA updates and inference to overlap.\n"
+            "        self.lora_update_lock = asyncio.Lock()\n"
+            "        # A cache for mapping the lora_name for LoRA adapters that have been loaded at any\n"
+            "        # point to their latest LoRARef objects, so that they can be\n"
+            "        # dynamically loaded if needed for inference\n"
+            "        self.lora_ref_cache: Dict[str, LoRARef] = {}\n"
+            "        if self.server_args.lora_paths is not None:\n"
+            "            for lora_ref in self.server_args.lora_paths:\n"
+            "                self.lora_ref_cache[lora_ref.lora_name] = lora_ref\n"
+        ),
+        new=(
+            "    def init_lora_controller(self):\n"
+            "        self.lora_controller = LoraController(\n"
+            "            server_args=self.server_args,\n"
+            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+            "        )\n"
+        ),
     )
-    text = "".join(lines[:s]) + NEW_INIT_LORA_CONTROLLER + "".join(lines[e:])
 
     # Convert TM's 2 lora methods to @staticmethod with self: "LoraController" typing.
     text = _retype_method(text, "TokenizerManager", "_resolve_lora_path")
