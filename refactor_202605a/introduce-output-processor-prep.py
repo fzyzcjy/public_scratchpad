@@ -24,7 +24,6 @@ Builds OutputProcessor skeleton; wires composition in TM.__init__;
 converts _handle_batch_output to @staticmethod with
 self: "OutputProcessor" annotation; applies body rewrites
 (server_args.X -> config.X, enable_metrics -> config.enable_metrics,
-crash_dump_folder -> request_log_manager.crash_dump_folder,
 served_model_name -> get_served_model_name()); rewrites caller in
 handle_loop to TokenizerManager._handle_batch_output(self.output_processor, ...)
 form. Method stays on TM in this commit; the next commit's pure
@@ -179,7 +178,6 @@ def transform(wt: Path) -> None:
         "served_model_name=self.served_model_name,",
         "served_model_name=self.get_served_model_name(),",
     )
-    body_text = body_text.replace("self.crash_dump_folder", "self.request_log_manager.crash_dump_folder")
 
     new_method = NEW_HANDLE_HEADER + body_text
     text = "".join(lines[:s]) + new_method + "".join(lines[e:])

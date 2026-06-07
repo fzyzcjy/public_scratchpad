@@ -277,6 +277,20 @@ def transform(wt: Path) -> None:
         "                self,\n"
         "                data_list=self.dump_request_list,\n",
     )
+    # The crash-dump recording gate must follow the same live component attr the
+    # configure_logging endpoint now mutates (split-brain otherwise).
+    text = replace_call_site(
+        text,
+        old="            if self.crash_dump_folder and state.finished and state.obj.log_metrics:\n",
+        new=(
+            "            if (\n"
+            "                self.request_log_manager.crash_dump_folder\n"
+            "                and state.finished\n"
+            "                and state.obj.log_metrics\n"
+            "            ):\n"
+        ),
+    )
+
     # dump_requests_before_crash callers inside TM (2 sites in sigterm/exception paths).
     text = text.replace(
         "self.dump_requests_before_crash()",
