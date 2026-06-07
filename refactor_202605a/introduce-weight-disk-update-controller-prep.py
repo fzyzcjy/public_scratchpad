@@ -21,14 +21,15 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds WeightDiskUpdateController skeleton (with __post_init__ that flips
-initial_weights_loaded per config and registers a lambda forwarder for
-UpdateWeightFromDiskReqOutput on the shared dispatcher). Wires composition
+initial_weights_loaded per config). The UpdateWeightFromDiskReqOutput
+dispatcher entry is rewritten in place to a lambda forwarding to the
+@staticmethod with the controller as the self arg. Wires composition
 in TM.__init__; drops the facade fields ``initial_weights_loaded`` and
 ``model_update_result`` from ``init_weight_update`` (they now live on the
-controller). Converts 3 TM methods (``update_weights_from_disk``,
+controller). Converts the disk-reload TM methods (``update_weights_from_disk``,
 ``_wait_for_model_update_from_disk``,
-``_handle_update_weights_from_disk_req_output``) and 1
-TokenizerControlMixin method (``_update_weight_version_if_provided``) to
+``_handle_update_weights_from_disk_req_output``) and the
+TokenizerControlMixin ``_update_weight_version_if_provided`` method to
 ``@staticmethod`` with ``self: "WeightDiskUpdateController"`` annotation.
 ``_update_model_path_info`` STAYS on TokenizerManager (it mutates the
 facade's ``served_model_name`` / ``model_path`` identity attributes that
@@ -36,7 +37,7 @@ http_server reads); the controller reaches it through the injected
 ``update_model_path_info`` callable. Applies body rewrites and cross-call
 rewrites (intra-controller calls become ``TokenizerManager.<m>(self, ...)``
 / ``TokenizerControlMixin._update_weight_version_if_provided(self, ...)``).
-Rewires 3 sibling mixin callers (``update_weights_from_distributed`` /
+Rewires the sibling mixin callers (``update_weights_from_distributed`` /
 ``_tensor`` / ``_ipc``) and external entrypoints (engine.py /
 http_server.py — both the ``update_weights_from_disk`` call and the
 ``initial_weights_loaded`` reads / writes) to the class-qualified form.
@@ -201,7 +202,8 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "    def init_weight_update(self):\n"
-            "        # Lock guarding weight-sync updates against in-flight requests.\n"
+            "        # Weight updates\n"
+            "        # The event to notify the weight sync is finished.\n"
             "        self.model_update_lock = RWLock()\n"
         ),
     )
@@ -216,8 +218,8 @@ def transform(wt: Path) -> None:
         ),
     )
 
-    # Composition wiring. The controller's __post_init__ registers the dispatcher
-    # forwarder, so no separate dispatcher-mutation line is needed here.
+    # Composition wiring. The dispatcher forwarder is wired separately below by
+    # rewriting the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher.
     text = wire_component_init(
         text,
         attr="weight_disk_update_controller",

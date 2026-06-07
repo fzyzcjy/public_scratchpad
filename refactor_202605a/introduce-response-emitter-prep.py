@@ -23,12 +23,11 @@ Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 Builds ResponseEmitter skeleton; wires composition in TM.__init__;
 converts _wait_one_response, create_abort_task, _handle_abort_finish_reason,
 _coalesce_streaming_chunks to @staticmethod with
-self: "ResponseEmitter" annotation; applies body rewrites
-(self.server_args.incremental_streaming_output -> self.config.incremental_streaming_output,
-self.server_args.enable_lora -> self.config.enable_lora, sibling
+self: "ResponseEmitter" annotation; rewrites the sibling
 self._coalesce_streaming_chunks / self._handle_abort_finish_reason calls
-through TokenizerManager._X(self, ...) form); rewrites TM-facade callers
-of _wait_one_response (5 sites) to
+through the TokenizerManager._X(self, ...) form; rewrites the TM-facade
+callers of _wait_one_response (in generate_request and
+_handle_batch_request) to
 TokenizerManager._wait_one_response(self.response_emitter, ...)
 form; rewrites entrypoint create_abort_task callers similarly. Methods
 stay on TM in this commit; the next commit's pure cut/paste + caller
@@ -117,6 +116,10 @@ NEW_CREATE_ABORT_HEADER = '''    @staticmethod
 def _retype_method(text: str, method_name: str, new_header: str) -> str:
     s, body_s, e = _method_ranges(text, "TokenizerManager", method_name)
     lines = text.splitlines(keepends=True)
+    # AST body_start skips comment lines sitting between the signature and the
+    # first statement; walk back so pre-existing comments travel with the body.
+    while body_s > s and lines[body_s - 1].lstrip().startswith("#"):
+        body_s -= 1
     body_text = "".join(lines[body_s:e])
     new_method = new_header + body_text
     return "".join(lines[:s]) + new_method + "".join(lines[e:])
