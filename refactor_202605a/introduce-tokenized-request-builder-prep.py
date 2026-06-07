@@ -99,6 +99,19 @@ def transform(wt: Path) -> None:
     new.write_text(SKELETON)
 
     text = tm.read_text()
+
+    # The fake bootstrap_room counter now lives on TokenizedRequestBuilder (its
+    # only reader, _create_tokenized_object, runs with builder-typed self from
+    # this commit on), so drop the now-dead facade copy.
+    text = replace_call_site(
+        text,
+        old=(
+            "        # Single-source counter for auto-assigning fake bootstrap_room.\n"
+            "        self.fake_bootstrap_room_counter = 0\n"
+        ),
+        new="",
+    )
+
     text = insert_after(
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
