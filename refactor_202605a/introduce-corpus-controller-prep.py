@@ -24,7 +24,9 @@ Builds CorpusController skeleton; wires composition in TM.__init__;
 converts add_external_corpus / remove_external_corpus / list_external_corpora
 on TokenizerControlMixin to @staticmethod with self: "CorpusController"
 annotation; applies body rewrites in-place (self.server_args.X ->
-self.config.X). Methods stay on TokenizerControlMixin in this commit.
+self.config.X). The ngram-corpus HTTP mock test is adapted at the move commit (its
+instance-level mocks cannot intercept the staged class-qualified calls).
+Methods stay on TokenizerControlMixin in this commit.
 Entrypoint callers (http_server.py) rewritten to
 ``TokenizerManager.<method>(tokenizer_manager.corpus_controller, ...)``
 form. The next commit's pure cut/paste + caller prefix replacement
