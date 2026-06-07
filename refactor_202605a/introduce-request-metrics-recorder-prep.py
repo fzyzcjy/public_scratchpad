@@ -209,6 +209,15 @@ def transform(wt: Path) -> None:
     text = _replace_method_header(text, "TokenizerManager", "_request_has_grammar", NEW_HAS_GRAMMAR_HEADER)
     text = _replace_method_header(text, "TokenizerManager", "collect_metrics", NEW_COLLECT_HEADER)
 
+    # Intra-cluster cross-call: collect_metrics's self is recorder-typed at this
+    # commit, but _request_has_grammar still lives on TM; class-qualify (the
+    # move collapses it back to self-dispatch).
+    text = replace_call_site(
+        text,
+        old="                self._request_has_grammar(state.obj),\n",
+        new="                TokenizerManager._request_has_grammar(self, state.obj),\n",
+    )
+
     # Caller rewrites.
     text = replace_call_site(
         text,

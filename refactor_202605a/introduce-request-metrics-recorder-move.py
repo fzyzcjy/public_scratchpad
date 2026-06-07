@@ -56,6 +56,10 @@ def transform(wt: Path) -> None:
     collect_text = collect_text.replace("    @staticmethod\n", "", 1)
     collect_text = collect_text.replace('self: "RequestMetricsRecorder", ', "self, ")
     collect_text = collect_text.replace('self: "RequestMetricsRecorder",\n', "self,\n")
+    collect_text = collect_text.replace(
+        "TokenizerManager._request_has_grammar(self, state.obj),",
+        "self._request_has_grammar(state.obj),",
+    )
     has_grammar_text = has_grammar_text.replace("    @staticmethod\n", "", 1)
     has_grammar_text = has_grammar_text.replace('self: "RequestMetricsRecorder", ', "self, ")
     has_grammar_text = has_grammar_text.replace('self: "RequestMetricsRecorder",\n', "self,\n")
