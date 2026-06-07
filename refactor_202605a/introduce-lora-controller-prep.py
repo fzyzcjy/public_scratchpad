@@ -22,9 +22,9 @@ Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds LoraController skeleton (with __post_init__ replacing init_lora);
 wires composition in TM.__init__ + plugs update_lora_adapter_communicator
-in after init_communicators; converts 6 lora methods to @staticmethod with
-self: "LoraController" annotation in their source class (4 in
-TokenizerControlMixin, 2 in TokenizerManager); rewrites cross-calls inside
+in after init_communicators; converts the LoRA load/unload/resolve methods
+to @staticmethod with a self: "LoraController" annotation in their source
+classes (TokenizerControlMixin and TokenizerManager); rewrites cross-calls inside
 the lora cluster (self.<other_lora>(...) → TokenizerManager.<other_lora>(self, ...));
 rewrites TM facade callers + entrypoint callers to
 ``TokenizerManager.<method>(self.lora_controller, ...)`` form. Methods stay
@@ -51,7 +51,7 @@ class LoraController:
     server_args: ServerArgs
     auto_create_handle_loop: Callable[[], None]
     update_lora_adapter_communicator: Any = None  # set after facade.init_communicators
-    lora_registry: LoRARegistry = None  # type: ignore[assignment]
+    lora_registry: LoRARegistry = field(init=False)
     # Lock to serialize LoRA update operations.
     # Please note that, unlike `model_update_lock`, this does not block inference, allowing
     # LoRA updates and inference to overlap.
