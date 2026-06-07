@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Move (pure cut/paste): 4 tokenize-pipeline helpers relocate from
-TokenizerManager to RawTokenizerWrapper.
+"""Move (pure cut/paste): the tokenize-pipeline helpers and the
+InputFormat enum relocate from TokenizerManager to RawTokenizerWrapper.
 
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep
 (rtw-prep-tokenize-helpers) already did all semantic work — staticmethod
 conversion, body rewrites, intra-cluster class-qualification, external
 caller rewrites, typing imports. This commit only:
 
-  - cuts the 4 @staticmethod methods from TokenizerManager
+  - cuts the @staticmethod helpers and the InputFormat enum from
+    TokenizerManager
   - drops @staticmethod + restores plain ``self`` + folds the intra-cluster
     qualifier back to ``self.`` (now sibling instance methods)
   - pastes into RawTokenizerWrapper
   - rewrites external callers from
     ``TokenizerManager._helper(self.raw_tokenizer_wrapper, ...)`` →
-    ``self.raw_tokenizer_wrapper._helper(...)``.
+    ``self.raw_tokenizer_wrapper._helper(...)``
+  - updates the manual test imports and call sites to reach the helpers
+    and InputFormat through raw_tokenizer_wrapper.
 """
 
 # /// script
@@ -37,16 +40,19 @@ from _runner import run_pr
 ID = "rtw-move-tokenize-helpers"
 SUBJECT = "Hand tokenize-pipeline helpers over to RawTokenizerWrapper"
 BODY = """\
-Pure cut/paste move per MECH_COMMIT_SPLIT. Cuts 4 @staticmethod helpers
-(``_detect_input_format`` / ``_prepare_tokenizer_input`` /
-``_extract_tokenizer_results`` / ``_tokenize_texts``) from TM; pastes
-into RawTokenizerWrapper (drop @staticmethod, restore plain ``self``,
-collapse intra-cluster ``TokenizerManager._x(self, ...)`` calls back to
-``self._x(...)`` — they are sibling instance methods on the new owner).
+Pure cut/paste move per MECH_COMMIT_SPLIT. Move the tokenize-pipeline
+helpers (``_detect_input_format`` / ``_prepare_tokenizer_input`` /
+``_extract_tokenizer_results`` / ``_tokenize_texts``) and the
+``InputFormat`` enum from TokenizerManager into RawTokenizerWrapper (drop
+@staticmethod, restore plain ``self``, collapse intra-cluster
+``TokenizerManager._x(self, ...)`` calls back to ``self._x(...)`` — they
+are sibling instance methods on the new owner).
 
 External caller prefix replacement in TM:
 ``TokenizerManager._helper(self.raw_tokenizer_wrapper, ...)`` →
-``self.raw_tokenizer_wrapper._helper(...)``.
+``self.raw_tokenizer_wrapper._helper(...)``. Update the manual test
+imports and call sites to reach the helpers and InputFormat through
+raw_tokenizer_wrapper.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

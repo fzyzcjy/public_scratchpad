@@ -38,7 +38,7 @@ Inside TM, refactors ``_handle_batch_request`` into:
   - new non-generator helper ``_handle_batch_request_dispatch(self, obj, request)``
     holding the entire prefix body, ending in ``return generators, rids``;
     body bytes are identical to the pre-prep generator's prefix.
-  - the original ``_handle_batch_request`` collapses to a 7-line facade
+  - the original ``_handle_batch_request`` collapses to a thin facade
     that calls the helper and yields from response_emitter.
 
 The follow-up -move commit cuts ``_handle_batch_request_dispatch`` from

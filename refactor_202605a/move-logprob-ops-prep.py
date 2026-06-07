@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""In-place prep for moving the 4 logprob methods out of TokenizerManager.
+"""In-place prep for moving the logprob methods out of TokenizerManager.
 
 Make each of ``add_logprob_to_meta_info``, ``convert_logprob_style``,
 ``detokenize_logprob_tokens``, ``detokenize_top_logprobs_tokens`` a
@@ -11,7 +11,8 @@ The module-level constant ``_INCREMENTAL_STREAMING_META_INFO_KEYS`` and
 module-level free fn ``_slice_streaming_output_meta_info`` remain untouched
 in this commit -- they get cut + renamed in ``move-logprob-ops-move``.
 
-All caller sites (intra-method + 3 external) switch to
+All caller sites (intra-method plus the external callers in
+``_handle_batch_output`` and ``_handle_abort_req``) switch to
 ``TokenizerManager.<method>(...)`` form so the next commit is a pure prefix
 replacement.
 
@@ -34,7 +35,7 @@ from _helpers import find_method_lines, replace_call_site
 from _runner import run_pr
 
 ID = "move-logprob-ops-prep"
-SUBJECT = "Prep 4 logprob methods for move: staticmethod + explicit kwargs"
+SUBJECT = "Prep logprob methods for move: staticmethod + explicit kwargs"
 BODY = """\
 In-place prep per MECH_COMMIT_SPLIT before the physical move:
 
@@ -44,7 +45,7 @@ In-place prep per MECH_COMMIT_SPLIT before the physical move:
   - Body rewrites: ``self.tokenizer`` -> ``tokenizer``
   - Intra-method calls go through ``TokenizerManager.<method>(...)`` with
     explicit kwargs
-  - 3 external callers (_handle_batch_output / _handle_abort_req) switch
+  - External callers in _handle_batch_output and _handle_abort_req switch
     to ``TokenizerManager.<method>(...)`` form
 
 No behavior change. Bodies stay in TokenizerManager. Original method names

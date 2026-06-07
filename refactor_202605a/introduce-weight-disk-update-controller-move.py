@@ -17,16 +17,15 @@ from _runner import run_pr
 ID = "introduce-weight-disk-update-controller-move"
 SUBJECT = "Hand disk-based weight reload over to WeightDiskUpdateController"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT. Cut 4 @staticmethod methods
-(``update_weights_from_disk``,
-``_wait_for_model_update_from_disk``, ``_handle_update_weights_from_disk_req_output``;
-``_update_model_path_info`` stays on TM)
-from TokenizerManager and 1 @staticmethod method
-(``_update_weight_version_if_provided``) from TokenizerControlMixin; paste
+Pure physical move per MECH_COMMIT_SPLIT. Cut the @staticmethod methods
+``update_weights_from_disk``, ``_wait_for_model_update_from_disk`` and
+``handle_update_weights_from_disk_req_output`` from TokenizerManager
+(leaving ``_update_model_path_info`` on TM) and
+``_update_weight_version_if_provided`` from TokenizerControlMixin; paste
 into WeightDiskUpdateController (drop @staticmethod, replace
 ``self: "WeightDiskUpdateController"`` → plain ``self``). Flip the
 ``__post_init__`` dispatcher entry from the lambda forwarder + late-TM-import
-to a direct method reference. Caller prefix replacement:
+to a direct bound-method reference. Caller prefix replacement:
 ``TokenizerManager.<method>(self.weight_disk_update_controller, ...)`` →
 ``self.weight_disk_update_controller.<method>(...)`` (TM + mixin sibling
 methods + entrypoints); ditto for the

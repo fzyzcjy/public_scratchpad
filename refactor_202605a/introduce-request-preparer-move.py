@@ -17,14 +17,14 @@ from _runner import run_pr
 ID = "introduce-request-preparer-move"
 SUBJECT = "Hand tokenize-pipeline orchestration over to RequestPreparer"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT. Cut the 4 @staticmethod
-methods (_tokenize_one_request, _batch_tokenize_and_process,
+Pure physical move per MECH_COMMIT_SPLIT. Cut the tokenize-pipeline
+@staticmethods (_tokenize_one_request, _batch_tokenize_and_process,
 _should_use_batch_tokenization, _batch_has_text) from TokenizerManager;
 paste into RequestPreparer (drop @staticmethod, replace
 ``self: "RequestPreparer"`` -> plain ``self``). Cluster cross-calls
 ``TokenizerManager.<m>(self, ...)`` inside the moved bodies collapse
 back to ``self.<m>(...)`` (now instance methods of the new class).
-Caller prefix replacement at the 5 external sites:
+Caller prefix replacement at the external sites:
 ``TokenizerManager.<m>(self.request_preparer, ...)`` ->
 ``self.request_preparer.<m>(...)``.
 """

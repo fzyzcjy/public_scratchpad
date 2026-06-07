@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep: retype 4 tokenize-pipeline helpers as @staticmethod with
+"""Prep: retype the tokenize-pipeline helpers as @staticmethod with
 self: "RawTokenizerWrapper" typing; body rewrites
 (``self.raw_tokenizer_wrapper.<field> → self.<field>``) + intra-cluster
 cross-call class-qualification; external caller rewrites.
@@ -28,7 +28,7 @@ SUBJECT = "Stage tokenize-pipeline helpers for handoff to RawTokenizerWrapper"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
-Converts the 4 helper methods (``_detect_input_format`` /
+Converts the tokenize-pipeline helpers (``_detect_input_format`` /
 ``_prepare_tokenizer_input`` / ``_extract_tokenizer_results`` /
 ``_tokenize_texts``) on TokenizerManager to ``@staticmethod`` with
 ``self: "RawTokenizerWrapper"`` typing. Body rewrites collapse the facade
@@ -39,10 +39,8 @@ sibling calls (``self._detect_input_format(...)`` etc. inside
 to keep the prep-stage methods reachable while the bodies still live on
 TM. External callers in TM that read these helpers
 (``self._tokenize_texts(...)`` etc.) are rewritten to
-``TokenizerManager._x(self.raw_tokenizer_wrapper, ...)``. Adds
-``Tuple`` / ``Union`` to the typing import of raw_tokenizer_wrapper.py
-so the post-move bodies type-check. The next commit cuts and pastes; no
-body changes.
+``TokenizerManager._x(self.raw_tokenizer_wrapper, ...)``. The next commit
+cuts and pastes; no body changes.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

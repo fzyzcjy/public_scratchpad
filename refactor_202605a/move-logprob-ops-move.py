@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mechanical move of the 4 logprob staticmethods (now @staticmethod after
+"""Mechanical move of the logprob staticmethods (now @staticmethod after
 ``move-logprob-ops-prep``) out of TokenizerManager into a new
 ``managers/tokenizer_manager_components/logprob_ops.py`` module.
 
@@ -38,10 +38,10 @@ from _helpers import (
 from _runner import run_pr
 
 ID = "move-logprob-ops-move"
-SUBJECT = "Move 4 logprob staticmethods + slice helper to managers/tokenizer_manager_components/logprob_ops.py"
+SUBJECT = "Move logprob staticmethods + streaming-slice helper to managers/tokenizer_manager_components/logprob_ops.py"
 BODY = """\
 Physical move only:
-  - Cut 4 @staticmethod logprob methods from TokenizerManager
+  - Cut the logprob @staticmethod methods from TokenizerManager
     (add_logprob_to_meta_info / convert_logprob_style /
     detokenize_logprob_tokens / detokenize_top_logprobs_tokens)
   - Cut module-level _INCREMENTAL_STREAMING_META_INFO_KEYS constant
@@ -54,7 +54,7 @@ Physical move only:
       detokenize_top_logprobs_tokens -> _detokenize_top_logprobs_tokens
       _INCREMENTAL_STREAMING_META_INFO_KEYS -> INCREMENTAL_STREAMING_META_INFO_KEYS
       _slice_streaming_output_meta_info     -> slice_streaming_output_meta_info
-  - Add ``from sglang.srt.managers import logprob_ops`` import to TM
+  - Add ``from sglang.srt.managers.tokenizer_manager_components import logprob_ops`` import to TM
   - Update all call sites: ``TokenizerManager.<method>(`` -> ``logprob_ops.<new_name>(``
     (pure prefix replacement); ``_INCREMENTAL_STREAMING_META_INFO_KEYS`` ->
     ``logprob_ops.INCREMENTAL_STREAMING_META_INFO_KEYS``;

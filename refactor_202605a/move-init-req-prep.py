@@ -29,9 +29,10 @@ In-place prep per MECH_COMMIT_SPLIT before the physical move:
   - Add @staticmethod decorator
   - Drop ``self``; pass ``rid_to_state``, ``enable_trace``, ``disagg_mode``
     as explicit args
-  - Three caller sites switch to ``TokenizerManager._init_req_state(...)``
+  - Caller sites switch to ``TokenizerManager._init_req_state(...)``
     (class-qualified call), making the pure-prefix replacement in the
-    next commit byte-symmetric.
+    next commit byte-symmetric; the registered rid-cleanup test is
+    adapted to the staticmethod calling convention.
 
 No behavior change. Body stays inside TokenizerManager class.
 """

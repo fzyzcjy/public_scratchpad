@@ -33,10 +33,11 @@ composition in TokenizerManager.__init__, retypes
 ``init_tokenizer_and_processor`` as ``@staticmethod`` with
 ``self: "RawTokenizerWrapper"`` + injected ``server_args``/``model_config``
 params (body left on TM, byte-equivalent modulo facade-attribute
-re-routing onto the new params). Adds permanent
-``@property tokenizer/processor/mm_processor`` (+ setters) on
-TokenizerManager so external callers keep using ``tm.tokenizer`` —
-``raw_tokenizer_wrapper`` stays as an internal-detail attribute.
+re-routing onto the new params). Adds permanent read-only ``@property``
+delegators (``tokenizer`` / ``processor`` / ``mm_processor`` /
+``async_dynamic_batch_tokenizer``) on TokenizerManager so external callers
+keep reading ``tm.tokenizer`` — ``raw_tokenizer_wrapper`` stays as an
+internal-detail attribute.
 
 The follow-up -move commit is pure cut/paste: relocate
 ``init_tokenizer_and_processor`` + ``InputFormat`` + module helpers

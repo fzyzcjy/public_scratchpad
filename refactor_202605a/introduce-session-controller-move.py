@@ -3,7 +3,7 @@
 
 Per MECH_COMMIT_SPLIT §"拆 class 场景": this commit is purely physical.
 All semantic work (skeleton, composition, staticmethod conversion, body
-rewrites, __post_init__ forwarder, entrypoint caller rewrites) happened
+rewrites, dispatcher forwarder, entrypoint caller rewrites) happened
 in the prep commit. Here we only:
 
   - cut @staticmethod open_session / close_session out of
@@ -13,8 +13,9 @@ in the prep commit. Here we only:
   - paste all three into SessionController (drop @staticmethod, swap
     ``self: "SessionController"`` → plain ``self``)
   - caller prefix replacement at the entrypoint sites
-  - lambda → direct flip in __post_init__ (and drop the now-unused
-    local TokenizerManager import)
+  - flip the OpenSessionReqOutput dispatcher entry from the lambda
+    forwarder to the direct bound method, and drop the now-unused
+    SessionController TYPE_CHECKING import from tokenizer_control_mixin.py
 """
 
 # /// script
@@ -40,9 +41,11 @@ paste into SessionController (drop @staticmethod, replace
 ``self: "SessionController"`` → plain ``self``). Entrypoint callers
 (engine.py, http_server.py) get pure prefix replacement:
 ``TokenizerManager.<method>(...session_controller, ...)`` →
-``...session_controller.<method>(...)``. __post_init__ flips the lambda
-forwarder to a direct method reference (and drops the now-unused
-TokenizerManager local import).
+``...session_controller.<method>(...)``. The request-dispatcher entry for
+OpenSessionReqOutput flips from the prep-stage lambda forwarder to a direct
+bound method ``self.session_controller.handle_open_session_req_output``, and
+the now-unused SessionController TYPE_CHECKING import is removed from
+tokenizer_control_mixin.py.
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

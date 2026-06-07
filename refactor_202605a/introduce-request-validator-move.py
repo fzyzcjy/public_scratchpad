@@ -17,7 +17,7 @@ from _runner import run_pr
 ID = "introduce-request-validator-move"
 SUBJECT = "Hand inbound-request validation over to RequestValidator"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT. Cut 5 @staticmethod _validate_*
+Pure physical move per MECH_COMMIT_SPLIT. Cut the @staticmethod _validate_*
 methods from TokenizerManager; paste into RequestValidator (drop
 @staticmethod, replace ``self: "RequestValidator"`` -> plain ``self``).
 

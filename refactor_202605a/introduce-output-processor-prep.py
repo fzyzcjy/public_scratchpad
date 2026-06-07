@@ -21,12 +21,11 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds OutputProcessor skeleton; wires composition in TM.__init__;
-converts _handle_batch_output (~247 LOC) to @staticmethod with
+converts _handle_batch_output to @staticmethod with
 self: "OutputProcessor" annotation; applies body rewrites
 (server_args.X -> config.X, enable_metrics -> config.enable_metrics,
-raw_tokenizer_wrapper.tokenizer -> self.tokenizer,
 crash_dump_folder -> request_log_manager.crash_dump_folder,
-served_model_name -> config.served_model_name); rewrites caller in
+served_model_name -> get_served_model_name()); rewrites caller in
 handle_loop to TokenizerManager._handle_batch_output(self.output_processor, ...)
 form. Method stays on TM in this commit; the next commit's pure
 cut/paste + caller prefix replacement completes the move.

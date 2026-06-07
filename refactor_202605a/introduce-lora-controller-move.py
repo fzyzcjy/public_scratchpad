@@ -17,11 +17,11 @@ from _runner import run_pr
 ID = "introduce-lora-controller-move"
 SUBJECT = "Hand LoRA load/unload over to LoraController"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT. Cut the 6 @staticmethod lora
-methods (4 from TokenizerControlMixin: load_lora_adapter,
-load_lora_adapter_from_tensors, unload_lora_adapter,
-_unload_lora_adapter_locked; 2 from TokenizerManager:
-_validate_and_resolve_lora, _resolve_lora_path); paste into LoraController
+Pure physical move per MECH_COMMIT_SPLIT. Cut the @staticmethod LoRA
+methods load_lora_adapter, load_lora_adapter_from_tensors,
+unload_lora_adapter and _unload_lora_adapter_locked from
+TokenizerControlMixin, plus _validate_and_resolve_lora and
+_resolve_lora_path from TokenizerManager; paste into LoraController
 (drop @staticmethod, replace ``self: "LoraController"`` → plain ``self``).
 Caller prefix replacement:
 ``TokenizerManager.<method>(self.lora_controller, ...)`` →

@@ -32,8 +32,9 @@ Physical move only:
     has no meaning at module level)
   - Append to managers/tokenizer_manager_components/request_state.py with the additional imports needed
     by the body
-  - Update three caller sites: ``TokenizerManager._init_req_state(...)``
-    -> ``init_req(...)`` (pure prefix replacement)
+  - Rewrite the TokenizerManager call sites and the unit-test call sites
+    from ``TokenizerManager._init_req_state(...)`` -> ``init_req(...)``
+    (pure prefix replacement)
 """
 AREA = "mech_tokenizer_manager"
 BASE = "tom_refactor_202605a/primary/mech_preflight"

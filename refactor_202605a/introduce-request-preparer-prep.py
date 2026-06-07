@@ -21,13 +21,13 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds RequestPreparer skeleton; wires composition in TM.__init__;
-converts the 4 tokenize-orchestration methods (_tokenize_one_request,
+converts the tokenize-orchestration methods (_tokenize_one_request,
 _batch_tokenize_and_process, _should_use_batch_tokenization,
 _batch_has_text) to @staticmethod with self: "RequestPreparer"
 annotation; rewrites bodies (self.server_args.X / self.is_generation /
 self.max_req_input_len / self.model_config.hf_config.architectures
 -> self.config.X) and cluster cross-calls (self.foo(...) ->
-TokenizerManager.foo(self, ...)); rewrites the 5 external caller sites
+TokenizerManager.foo(self, ...)); rewrites the external caller sites
 to TokenizerManager.<method>(self.request_preparer, ...). Methods stay
 on TM in this commit; the next commit's pure cut/paste + caller prefix
 replacement completes the move.

@@ -21,8 +21,8 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds RequestValidator skeleton; wires composition in TM.__init__;
-converts 5 _validate_* methods to @staticmethod with
-self: "RequestValidator" annotation; applies body rewrites
+converts the inbound-request _validate_* methods to @staticmethod
+carrying a self: "RequestValidator" annotation; applies body rewrites
 (self.server_args.X / self.model_config.X / self.<context_len-etc>
 -> self.config.X); rewrites callers to
 ``TokenizerManager.<method>(self.request_validator, ...)`` form.

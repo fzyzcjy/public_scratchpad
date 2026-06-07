@@ -17,16 +17,16 @@ from _runner import run_pr
 ID = "introduce-score-request-handler-move"
 SUBJECT = "Hand scoring over to ScoreRequestHandler"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT. Cut TokenizerManagerScoreMixin
-class body (11 @staticmethod methods, already retyped to
+Pure physical move per MECH_COMMIT_SPLIT. Cut the TokenizerManagerScoreMixin
+class body (the scoring staticmethods already retyped to
 self: "ScoreRequestHandler" in prep); paste into ScoreRequestHandler,
-dropping @staticmethod decorators and restoring plain self. Drop the
+dropping the @staticmethod decorators and restoring plain self. Drop the
 mixin base from TokenizerManager bases and delete the mixin file.
 
 Caller prefix replacement:
 ``TokenizerManagerScoreMixin.<method>(self.tokenizer_manager.score_request_handler, ...)``
 → ``self.tokenizer_manager.score_request_handler.<method>(...)``.
-Drop the now-unused TokenizerManagerScoreMixin import from the three
+Drop the now-unused TokenizerManagerScoreMixin import from the
 entrypoint caller files.
 """
 AREA = "mech_tokenizer_manager"

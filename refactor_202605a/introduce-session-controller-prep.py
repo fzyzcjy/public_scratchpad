@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Prep: SessionController skeleton + composition wiring + init_request_dispatcher
-restructure + 3 methods to @staticmethod with self: "SessionController" typing +
-body rewrites + __post_init__ lambda forwarder + entrypoint caller rewrites.
+restructure + session methods to @staticmethod with self: "SessionController"
+typing + init_request_dispatcher lambda forwarder + entrypoint caller rewrites.
 
 Per MECH_COMMIT_SPLIT §"拆 class 场景": ALL semantic work happens here. The
 follow-up -move commit is pure cut/paste + caller prefix replacement +
-lambda→direct flip in __post_init__.
+lambda→direct flip on the init_request_dispatcher entry.
 
 The dispatcher restructure must happen in prep so subsequent owner-class ctors
 (PauseController / WeightDiskUpdateController / LoraController / CorpusController)
@@ -35,12 +35,13 @@ Builds SessionController skeleton; wires composition in
 TokenizerManager.__init__; converts open_session + close_session
 (TokenizerControlMixin) and _handle_open_session_req_output
 (TokenizerManager) to @staticmethod with self: "SessionController" typing;
-applies body rewrites (self.server_args.enable_streaming_session →
-self.config.enable_streaming_session); drops the
-(OpenSessionReqOutput, ...) entry from init_request_dispatcher body and
-registers it on the dispatcher in __post_init__ via lambda forwarder to
-TM's staticmethod; drops session_futures from init_running_status;
-rewrites entrypoint callers (engine.py, http_server.py) to
+bodies stay byte-equivalent (self.server_args reads still resolve since
+SessionController carries server_args); replaces the
+(OpenSessionReqOutput, self._handle_open_session_req_output) entry in
+init_request_dispatcher with a lambda that forwards to TM's staticmethod
+via self.session_controller; drops session_futures from
+init_running_status; rewrites entrypoint callers (engine.py,
+http_server.py) to
 TokenizerManager.<method>(self.tokenizer_manager.session_controller, ...)
 form. Methods stay on their source classes in this commit; the next
 commit's pure cut/paste + caller prefix replacement + lambda→direct flip

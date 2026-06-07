@@ -20,7 +20,7 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds ScoreRequestHandler skeleton (incl. ScoreResult dataclass); wires
-composition in TM.__init__; converts all 11 mixin methods to
+composition in TM.__init__; converts the scoring mixin methods to
 @staticmethod with self: "ScoreRequestHandler" annotation; applies body
 rewrites (self.is_generation -> self.config.is_generation,
 self.server_args.enable_mis -> self.config.enable_mis,

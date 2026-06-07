@@ -37,8 +37,8 @@ Pure cut/paste move per MECH_COMMIT_SPLIT. Cuts:
 Updates imports in both files (move what the body needs, drop what TM
 no longer uses). No external caller rewrites — the @property facade on
 TokenizerManager (added in prep) absorbs every ``tm.tokenizer`` /
-``tm.processor`` / ``tm.mm_processor`` access. InputFormat enum + the
-4 tokenize-pipeline helpers move in the follow-up
+``tm.processor`` / ``tm.mm_processor`` access. The InputFormat enum and
+the remaining tokenize-pipeline helpers move in the follow-up
 ``rtw-move-tokenize-helpers`` commit.
 """
 AREA = "mech_tokenizer_manager"
