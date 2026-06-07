@@ -174,11 +174,13 @@ def transform(wt: Path) -> None:
             "    InputFormat,\n"
             ")",
         )
-        for name in HELPER_NAMES:
-            t = t.replace(
-                f"self.tokenizer_manager.{name}(",
-                f"self.tokenizer_manager.raw_tokenizer_wrapper.{name}(",
-            )
+        import re as _re
+
+        t = _re.sub(
+            r"TokenizerManager\.(_detect_input_format|_prepare_tokenizer_input|_extract_tokenizer_results)\(\s*self\.tokenizer_manager\.raw_tokenizer_wrapper,\s*",
+            r"self.tokenizer_manager.raw_tokenizer_wrapper.\1(",
+            t,
+        )
         test_file.write_text(t)
 
 

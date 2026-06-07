@@ -160,6 +160,21 @@ def transform(wt: Path) -> None:
         )
     tm.write_text(text)
 
+    # The manual test drives the 3 staged helpers; switch its calls to the
+    # staticmethod convention at this commit (the move collapses them onto
+    # raw_tokenizer_wrapper).
+    import re as _re
+
+    test_file = wt / "test/manual/test_tokenizer_manager.py"
+    if test_file.exists():
+        tt = test_file.read_text()
+        tt = _re.sub(
+            r"self\.tokenizer_manager\.(_detect_input_format|_prepare_tokenizer_input|_extract_tokenizer_results)\(",
+            r"TokenizerManager.\1(self.tokenizer_manager.raw_tokenizer_wrapper, ",
+            tt,
+        )
+        test_file.write_text(tt)
+
     # NOTE: typing import expansion in raw_tokenizer_wrapper.py lives in the
     # follow-up move commit (when the bodies that use Tuple/Union/List actually
     # arrive in the target). Adding them here would leave an unused import that
