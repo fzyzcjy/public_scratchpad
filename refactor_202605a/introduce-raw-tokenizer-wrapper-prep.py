@@ -88,6 +88,10 @@ PROPERTY_FACADE = '''
     def mm_processor(self):
         return self.raw_tokenizer_wrapper.mm_processor
 
+    @property
+    def async_dynamic_batch_tokenizer(self):
+        return self.raw_tokenizer_wrapper.async_dynamic_batch_tokenizer
+
 '''
 
 
