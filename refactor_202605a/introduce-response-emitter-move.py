@@ -147,6 +147,37 @@ def transform(wt: Path) -> None:
             f.write_text(t_new)
 
 
+    # The OpenAI serving unit tests stub create_abort_task on their fake TMs;
+    # the serving code now reaches it via tokenizer_manager.response_emitter, so
+    # route each fake through itself (the rerank-stub pattern).
+    completions_test = wt / "test/registered/unit/entrypoints/openai/test_serving_completions.py"
+    if completions_test.exists():
+        ct = completions_test.read_text()
+        ct = ct.replace(
+            "        tm.create_abort_task = Mock()\n",
+            "        tm.response_emitter = tm\n        tm.create_abort_task = Mock()\n",
+        )
+        completions_test.write_text(ct)
+
+    chat_test = wt / "test/registered/unit/entrypoints/openai/test_serving_chat.py"
+    if chat_test.exists():
+        ct = chat_test.read_text()
+        ct = ct.replace(
+            "        self.create_abort_task = Mock()\n",
+            "        self.response_emitter = self\n        self.create_abort_task = Mock()\n",
+        )
+        chat_test.write_text(ct)
+
+    transcription_test = wt / "test/registered/unit/entrypoints/openai/test_serving_transcription.py"
+    if transcription_test.exists():
+        ct = transcription_test.read_text()
+        ct = ct.replace(
+            "        self.tokenizer = Mock()\n        self._stream_chunks = stream_chunks\n",
+            "        self.tokenizer = Mock()\n        self.response_emitter = self\n        self._stream_chunks = stream_chunks\n",
+        )
+        transcription_test.write_text(ct)
+
+
 if __name__ == "__main__":
     run_pr(
         transform=transform,
