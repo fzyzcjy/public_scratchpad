@@ -21,10 +21,11 @@ BODY = """\
 Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
 
 Builds TokenizedRequestBuilder skeleton; wires composition in TM.__init__;
-converts _create_tokenized_object + _resolve_embed_overrides to
-@staticmethod with self: "TokenizedRequestBuilder" annotation; applies
-body rewrites; rewrites callers to ``TokenizerManager.<method>(self.tokenized_request_builder, ...)``
-form. Methods stay on TM in this commit; the next commit's pure
+converts _create_tokenized_object to @staticmethod with a
+self: "TokenizedRequestBuilder" annotation (_resolve_embed_overrides is
+already a staticmethod and is left as-is); applies body rewrites;
+rewrites callers to ``TokenizerManager._create_tokenized_object(self.tokenized_request_builder, ...)``
+form. The method stays on TM in this commit; the next commit's pure
 cut/paste + caller prefix replacement completes the move.
 """
 AREA = "mech_tokenizer_manager"
@@ -84,7 +85,7 @@ NEW_CREATE_HEADER = '''    @staticmethod
         self: "TokenizedRequestBuilder",
         obj: Union[GenerateReqInput, EmbeddingReqInput],
         input_text: str,
-        input_ids: List[int],
+        input_ids: Optional[List[int]],
         input_embeds: Optional[Union[List[float], None]] = None,
         mm_inputs=None,
         token_type_ids: Optional[List[int]] = None,
@@ -131,6 +132,15 @@ def transform(wt: Path) -> None:
     # apply body rewrites in-place. Body stays in TM class.
     s, body_s, e = _method_ranges(text, "TokenizerManager", "_create_tokenized_object")
     lines = text.splitlines(keepends=True)
+    original_header = "".join(lines[s:body_s])
+    expected_header = NEW_CREATE_HEADER.replace("    @staticmethod\n", "").replace(
+        'self: "TokenizedRequestBuilder",', "self,"
+    )
+    if original_header.rstrip("\n") != expected_header.rstrip("\n"):
+        raise ValueError(
+            "_create_tokenized_object header drifted from the expected upstream form:\n"
+            + original_header
+        )
     body_text = "".join(lines[body_s:e])
 
     # Body rewrites (self.X → self.config.X / self.tokenizer / etc.)
