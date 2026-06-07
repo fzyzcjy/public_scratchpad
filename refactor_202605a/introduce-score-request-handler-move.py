@@ -191,15 +191,6 @@ def transform(wt: Path) -> None:
             "from sglang.srt.managers.tokenizer_manager_score_mixin import ScoreResult",
             "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import ScoreResult",
         )
-        # The handler now reaches scoring via
-        # ``tokenizer_manager.score_request_handler.score_prompts``; route the
-        # qwen3 _TM stub (which defines score_prompts on itself) through that
-        # attribute.
-        t = t.replace(
-            '                self.model_config.model_path = "qwen/qwen3"\n',
-            '                self.model_config.model_path = "qwen/qwen3"\n'
-            "                self.score_request_handler = self\n",
-        )
         test_serving_rerank.write_text(t)
 
     test_embed_overrides = wt / "test/registered/prefill_only/test_embed_overrides.py"
@@ -213,68 +204,16 @@ def transform(wt: Path) -> None:
         t = t.replace(
             "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
             "    TokenizerManagerScoreMixin,\n"
-            ")",
-            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import (\n"
-            "    ScoreRequestHandler,\n"
-            "    ScoreRequestHandlerConfig,\n"
-            ")",
-        )
-        # The mixin-inheritance stub doesn't fit the frozen+slots dataclass; the
-        # tests now drive a real ScoreRequestHandler, constructing one per
-        # scenario instead of mutating attributes.
-        t = t.replace(
-            "class _FakeServerArgs:\n"
-            '    """Minimal stub for server_args."""\n'
-            "\n"
-            "    def __init__(self, enable_mis=False):\n"
-            "        self.enable_mis = enable_mis\n"
-            "\n"
-            "\n"
-            "class _FakeMixin(TokenizerManagerScoreMixin):\n"
-            '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n'
-            "\n"
-            "    def __init__(self, enable_mis=False):\n"
-            "        self.server_args = _FakeServerArgs(enable_mis)\n"
-            "        self.tokenizer = None\n"
-            "        self.is_generation = True\n",
-            "def _make_handler(\n"
-            "    *, is_generation=True, enable_mis=False, generate_request=None\n"
-            ") -> ScoreRequestHandler:\n"
-            "    return ScoreRequestHandler(\n"
-            "        tokenizer=None,\n"
-            "        rid_to_state={},\n"
-            "        generate_request=generate_request,\n"
-            "        config=ScoreRequestHandlerConfig(\n"
-            "            is_generation=is_generation,\n"
-            "            enable_mis=enable_mis,\n"
-            "            model_config=None,\n"
-            "        ),\n"
-            "    )\n",
-        )
-        t = t.replace(
-            "        self.mixin = _FakeMixin(enable_mis=True)\n",
-            "        self.handler = _make_handler(enable_mis=True)\n",
-        )
-        t = t.replace(
-            "        self.mixin = _FakeMixin()\n",
-            "        self.handler = _make_handler()\n",
-        )
-        t = t.replace(
-            "        self.mixin.is_generation = True\n",
-            "        self.handler = _make_handler(is_generation=True)\n",
-        )
-        t = t.replace(
-            "        self.mixin.is_generation = False\n",
+            ")\n",
             "",
         )
-        t = t.replace(
-            "        self.mixin.generate_request = MagicMock(return_value=mock_result)\n",
-            "        self.handler = _make_handler(\n"
-            "            is_generation=False,\n"
-            "            generate_request=MagicMock(return_value=mock_result),\n"
-            "        )\n",
+        # Collapse the prep-stage qualified calls (methods now live on the
+        # handler as bound methods).
+        t = _re.sub(
+            r"TokenizerManagerScoreMixin\.(\w+)\(\s*self\.handler,\s*",
+            r"self.handler.\1(",
+            t,
         )
-        t = t.replace("self.mixin.", "self.handler.")
         test_embed_overrides.write_text(t)
 
 

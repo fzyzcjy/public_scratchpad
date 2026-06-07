@@ -306,6 +306,96 @@ def transform(wt: Path) -> None:
     )
     serving_rerank.write_text(rtext)
 
+    # ---- Test adaptations at THIS commit (the staged methods read self.config.*
+    # and serving_rerank routes through score_request_handler, so the fakes must
+    # already match; the move commit only collapses the call qualifiers).
+    import re as _re2
+
+    test_serving_rerank = wt / "test/registered/prefill_only/test_serving_rerank.py"
+    if test_serving_rerank.exists():
+        tt = test_serving_rerank.read_text()
+        tt = tt.replace(
+            '                self.model_config.model_path = "qwen/qwen3"\n',
+            '                self.model_config.model_path = "qwen/qwen3"\n'
+            "                self.score_request_handler = self\n",
+        )
+        test_serving_rerank.write_text(tt)
+
+    test_embed_overrides = wt / "test/registered/prefill_only/test_embed_overrides.py"
+    if test_embed_overrides.exists():
+        tt = test_embed_overrides.read_text()
+        tt = tt.replace(
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+            "    TokenizerManagerScoreMixin,\n"
+            ")",
+            "from sglang.srt.managers.tokenizer_manager_score_mixin import (\n"
+            "    TokenizerManagerScoreMixin,\n"
+            ")\n"
+            "from sglang.srt.managers.tokenizer_manager_components.score_request_handler import (\n"
+            "    ScoreRequestHandler,\n"
+            "    ScoreRequestHandlerConfig,\n"
+            ")",
+        )
+        tt = tt.replace(
+            "class _FakeServerArgs:\n"
+            '    """Minimal stub for server_args."""\n'
+            "\n"
+            "    def __init__(self, enable_mis=False):\n"
+            "        self.enable_mis = enable_mis\n"
+            "\n"
+            "\n"
+            "class _FakeMixin(TokenizerManagerScoreMixin):\n"
+            '    """Minimal stub to call mixin methods without a full TokenizerManager."""\n'
+            "\n"
+            "    def __init__(self, enable_mis=False):\n"
+            "        self.server_args = _FakeServerArgs(enable_mis)\n"
+            "        self.tokenizer = None\n"
+            "        self.is_generation = True\n",
+            "def _make_handler(\n"
+            "    *, is_generation=True, enable_mis=False, generate_request=None\n"
+            ") -> ScoreRequestHandler:\n"
+            "    return ScoreRequestHandler(\n"
+            "        tokenizer=None,\n"
+            "        rid_to_state={},\n"
+            "        generate_request=generate_request,\n"
+            "        config=ScoreRequestHandlerConfig(\n"
+            "            is_generation=is_generation,\n"
+            "            enable_mis=enable_mis,\n"
+            "            model_config=None,\n"
+            "        ),\n"
+            "    )\n",
+        )
+        tt = tt.replace(
+            "        self.mixin = _FakeMixin(enable_mis=True)\n",
+            "        self.handler = _make_handler(enable_mis=True)\n",
+        )
+        tt = tt.replace(
+            "        self.mixin = _FakeMixin()\n",
+            "        self.handler = _make_handler()\n",
+        )
+        tt = tt.replace(
+            "        self.mixin.is_generation = True\n",
+            "        self.handler = _make_handler(is_generation=True)\n",
+        )
+        tt = tt.replace(
+            "        self.mixin.is_generation = False\n",
+            "",
+        )
+        tt = tt.replace(
+            "        self.mixin.generate_request = MagicMock(return_value=mock_result)\n",
+            "        self.handler = _make_handler(\n"
+            "            is_generation=False,\n"
+            "            generate_request=MagicMock(return_value=mock_result),\n"
+            "        )\n",
+        )
+        tt = tt.replace("self.mixin.", "self.handler.")
+        tt = _re2.sub(
+            r"self\.handler\.(_resolve_overrides_for_sequence|_resolve_embed_overrides_for_request|_build_token_id_inputs|score_request)\(",
+            r"TokenizerManagerScoreMixin.\1(self.handler, ",
+            tt,
+        )
+        test_embed_overrides.write_text(tt)
+
 
 if __name__ == "__main__":
     run_pr(
