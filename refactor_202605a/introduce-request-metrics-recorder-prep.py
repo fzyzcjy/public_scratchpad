@@ -39,7 +39,7 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 SKELETON = '''from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from sglang.srt.disaggregation.utils import DisaggregationMode
 from sglang.srt.observability.cpu_monitor import start_cpu_monitor_thread
@@ -56,7 +56,7 @@ class RequestMetricsRecorder:
     server_args: ServerArgs
     enable_metrics: bool
     enable_priority_scheduling: bool
-    disaggregation_mode: DisaggregationMode
+    get_disaggregation_mode: Callable[[], DisaggregationMode]
     metrics_collector: Optional[TokenizerMetricsCollector] = None
 
     def __post_init__(self) -> None:
@@ -155,7 +155,7 @@ def transform(wt: Path) -> None:
             "            server_args=self.server_args,\n"
             "            enable_metrics=self.enable_metrics,\n"
             "            enable_priority_scheduling=self.enable_priority_scheduling,\n"
-            "            disaggregation_mode=self.disaggregation_mode,\n"
+            "            get_disaggregation_mode=lambda: self.disaggregation_mode,\n"
             "        )\n"
         ),
     )
@@ -208,6 +208,11 @@ def transform(wt: Path) -> None:
     # self: "RequestMetricsRecorder" typing; body stays byte-equivalent.
     text = _replace_method_header(text, "TokenizerManager", "_request_has_grammar", NEW_HAS_GRAMMAR_HEADER)
     text = _replace_method_header(text, "TokenizerManager", "collect_metrics", NEW_COLLECT_HEADER)
+    text = replace_call_site(
+        text,
+        old="            and self.disaggregation_mode != DisaggregationMode.PREFILL\n",
+        new="            and self.get_disaggregation_mode() != DisaggregationMode.PREFILL\n",
+    )
 
     # Intra-cluster cross-call: collect_metrics's self is recorder-typed at this
     # commit, but _request_has_grammar still lives on TM; class-qualify (the
@@ -241,6 +246,20 @@ def transform(wt: Path) -> None:
     )
 
     tm.write_text(text)
+
+    # /v1/loads reaches the collector via getattr on TM; repoint it at the new
+    # owner (the recorder always exists; the attr stays None when metrics are off).
+    v1_loads = wt / "python/sglang/srt/entrypoints/v1_loads.py"
+    if v1_loads.exists():
+        lt = v1_loads.read_text()
+        lt = lt.replace(
+            'mc = getattr(tokenizer_manager, "metrics_collector", None)',
+            'mc = getattr(\n'
+            '            tokenizer_manager.request_metrics_recorder, "metrics_collector", None\n'
+            '        )',
+            1,
+        )
+        v1_loads.write_text(lt)
 
 
 if __name__ == "__main__":
