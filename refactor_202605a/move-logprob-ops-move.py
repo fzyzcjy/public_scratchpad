@@ -72,26 +72,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from sglang.srt.managers.io_struct import BatchStrOutput
 from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 
-INCREMENTAL_STREAMING_META_INFO_KEYS = (
-    "output_token_logprobs",
-    "output_top_logprobs",
-    "output_token_ids_logprobs",
-)
-
-
-def slice_streaming_output_meta_info(
-    meta_info: Dict[Any, Any],
-    last_output_offset: int,
-    customized_info_keys: Optional[Iterable[str]] = None,
-) -> None:
-    """Align output-side metadata with the current incremental streaming chunk."""
-    streaming_meta_info_keys = set(INCREMENTAL_STREAMING_META_INFO_KEYS)
-    if customized_info_keys is not None:
-        streaming_meta_info_keys.update(customized_info_keys)
-    for key in meta_info.keys() & streaming_meta_info_keys:
-        meta_info[key] = meta_info[key][last_output_offset:]
-
-
 '''
 
 
@@ -154,22 +134,34 @@ def transform(wt: Path) -> None:
     )
     add_text = cut_lines(tm, s, e)
 
-    # Cut module-level free fn (line-range cut).
+    # Cut module-level free fn (line-range cut, captured for the new module).
     s, e = find_function_lines(tm.read_text(), function_name="_slice_streaming_output_meta_info")
-    cut_lines(tm, s, e)
+    slice_fn_text = cut_lines(tm, s, e)
 
     # Cut the module-level constant block (no AST helper for module-level consts;
-    # do it via line-range scan).
+    # do it via line-range scan), capturing it for the new module.
     text = tm.read_text()
     const_start_marker = "_INCREMENTAL_STREAMING_META_INFO_KEYS = (\n"
     idx = text.index(const_start_marker)
     end_marker = ")\n"
     end_idx = text.index(end_marker, idx) + len(end_marker)
+    const_text = text[idx:end_idx]
     # Also drop the trailing blank line(s) so we don't leave a stray gap.
     while text[end_idx : end_idx + 1] == "\n":
         end_idx += 1
     text = text[:idx] + text[end_idx:]
     tm.write_text(text)
+
+    # Scope-induced renames on the captured text (documented: drop the now-public
+    # underscore prefix).
+    const_text = const_text.replace(
+        "_INCREMENTAL_STREAMING_META_INFO_KEYS", "INCREMENTAL_STREAMING_META_INFO_KEYS"
+    )
+    slice_fn_text = slice_fn_text.replace(
+        "_slice_streaming_output_meta_info", "slice_streaming_output_meta_info"
+    ).replace(
+        "_INCREMENTAL_STREAMING_META_INFO_KEYS", "INCREMENTAL_STREAMING_META_INFO_KEYS"
+    )
 
     # ===== Build the new module =====
 
@@ -192,6 +184,10 @@ def transform(wt: Path) -> None:
 
     new.write_text(
         HEADER
+        + const_text.rstrip()
+        + "\n\n\n"
+        + slice_fn_text.rstrip()
+        + "\n\n\n"
         + fill_meta_info_fn.rstrip()
         + "\n\n\n"
         + absorb_recv_fn.rstrip()
