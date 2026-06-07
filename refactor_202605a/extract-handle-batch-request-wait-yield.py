@@ -40,7 +40,7 @@ BASE = "tom_refactor_202605a/primary/mech_preflight"
 AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 
 
-WAIT_YIELD_EMITTER_METHOD = '''
+WAIT_YIELD_EMITTER_HEADER = '''
     async def _handle_batch_request(
         self,
         obj,
@@ -49,29 +49,6 @@ WAIT_YIELD_EMITTER_METHOD = '''
         generators,
         request=None,
     ):
-        """Wait for all per-request generators and yield outputs (single or stream)."""
-        is_stream = hasattr(obj, "stream") and obj.stream
-        if not is_stream:
-            outputs = await asyncio.gather(*(gen.__anext__() for gen in generators))
-            yield outputs
-        else:
-            rid_to_index = {rid: i for i, rid in enumerate(rids)}
-            task_map = {asyncio.create_task(gen.__anext__()): gen for gen in generators}
-            while task_map:
-                done, _ = await asyncio.wait(
-                    task_map.keys(), return_when=asyncio.FIRST_COMPLETED
-                )
-
-                for task in done:
-                    gen = task_map.pop(task)
-                    try:
-                        result = task.result()
-                        result["index"] = rid_to_index[result["meta_info"]["id"]]
-                        yield result
-                        new_task = asyncio.create_task(gen.__anext__())
-                        task_map[new_task] = gen
-                    except StopAsyncIteration:
-                        pass
 '''
 
 
@@ -112,7 +89,12 @@ def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
 
     emitter_text = emitter.read_text()
-    emitter.write_text(emitter_text.rstrip() + "\n" + WAIT_YIELD_EMITTER_METHOD)
+    tm_text_pre = tm.read_text()
+    if WAIT_YIELD_OLD not in tm_text_pre:
+        raise ValueError("wait+yield segment anchor not found in tokenizer_manager.py")
+    emitter.write_text(
+        emitter_text.rstrip() + "\n" + WAIT_YIELD_EMITTER_HEADER + WAIT_YIELD_OLD
+    )
 
     tm_text = tm.read_text()
     tm_text = replace_call_site(tm_text, old=WAIT_YIELD_OLD, new=WAIT_YIELD_FACADE_NEW)
