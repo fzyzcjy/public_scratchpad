@@ -61,6 +61,10 @@ def transform(wt: Path) -> None:
     create_text = create_text.replace('self: "TokenizedRequestBuilder",', "self,")
     create_text = create_text.replace("def _create_tokenized_object(", "def build(", 1)
     # _resolve_embed_overrides keeps @staticmethod; no `self: TargetClass` annotation since it has no self.
+    create_text = create_text.replace(
+        "TokenizerManager._resolve_embed_overrides(",
+        "self._resolve_embed_overrides(",
+    )
 
     trb_text = trb.read_text()
     trb_text = trb_text.replace(

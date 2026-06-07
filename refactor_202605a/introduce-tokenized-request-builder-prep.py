@@ -162,6 +162,15 @@ def transform(wt: Path) -> None:
     new_method = NEW_CREATE_HEADER + body_text
     text = "".join(lines[:s]) + new_method + "".join(lines[e:])
 
+    # _create_tokenized_object's body dispatches to it via self; at this commit
+    # the builder has no such method yet, so class-qualify (the move collapses
+    # it back to self-dispatch).
+    text = replace_call_site(
+        text,
+        old="                positional_embed_overrides = self._resolve_embed_overrides(\n",
+        new="                positional_embed_overrides = TokenizerManager._resolve_embed_overrides(\n",
+    )
+
     # _resolve_embed_overrides is already @staticmethod; just retag self typing (it has no `self` param).
     # (Original is `def _resolve_embed_overrides(obj):` so no change needed — leave it.)
 
