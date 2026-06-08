@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep: WeightDiskUpdateController skeleton + composition + in-place staticmethod conversion + caller rewrites."""
+"""Prep: WeightUpdaterController skeleton + composition + in-place staticmethod conversion + caller rewrites."""
 
 # /// script
 # requires-python = ">=3.10"
@@ -15,12 +15,12 @@ sys.path.insert(0, str(HERE))
 from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
-ID = "introduce-weight-disk-update-controller-prep"
-SUBJECT = "Stage disk-based weight reload for handoff to WeightDiskUpdateController"
+ID = "introduce-weight-updater-controller-prep"
+SUBJECT = "Stage disk-based weight reload for handoff to WeightUpdaterController"
 BODY = """\
 Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
-Builds WeightDiskUpdateController skeleton (with __post_init__ that flips
+Builds WeightUpdaterController skeleton (with __post_init__ that flips
 initial_weights_loaded per config). The UpdateWeightFromDiskReqOutput
 dispatcher entry is rewritten in place to a lambda forwarding to the
 @staticmethod with the controller as the self arg. Wires composition
@@ -30,7 +30,7 @@ controller). Converts the disk-reload TM methods (``update_weights_from_disk``,
 ``_wait_for_model_update_from_disk``,
 ``_handle_update_weights_from_disk_req_output``) and the
 TokenizerControlMixin ``_update_weight_version_if_provided`` method to
-``@staticmethod`` with ``self: "WeightDiskUpdateController"`` annotation.
+``@staticmethod`` with ``self: "WeightUpdaterController"`` annotation.
 ``_update_model_path_info`` STAYS on TokenizerManager (it mutates the
 facade's ``served_model_name`` / ``model_path`` identity attributes that
 http_server reads); the controller reaches it through the injected
@@ -61,7 +61,7 @@ from sglang.srt.utils.aio_rwlock import RWLock
 
 
 @dataclass(slots=True, kw_only=True)
-class WeightDiskUpdateController:
+class WeightUpdaterController:
     send_to_scheduler: Any
     abort_request: Callable[..., None]
     update_model_path_info: Callable[[str, str], None]
@@ -102,26 +102,26 @@ def _method_ranges(text: str, class_name: str, method_name: str):
     raise ValueError(f"{class_name}.{method_name} not found")
 
 
-# Replacement headers: @staticmethod + self: "WeightDiskUpdateController" typing.
+# Replacement headers: @staticmethod + self: "WeightUpdaterController" typing.
 NEW_HEADERS = {
     "update_weights_from_disk": '''    @staticmethod
     async def update_weights_from_disk(
-        self: "WeightDiskUpdateController",
+        self: "WeightUpdaterController",
         obj: UpdateWeightFromDiskReqInput,
         request: Optional[fastapi.Request] = None,
     ) -> Tuple[bool, str]:
 ''',
     "_wait_for_model_update_from_disk": '''    @staticmethod
     async def _wait_for_model_update_from_disk(
-        self: "WeightDiskUpdateController", obj: UpdateWeightFromDiskReqInput
+        self: "WeightUpdaterController", obj: UpdateWeightFromDiskReqInput
     ) -> Tuple[bool, str]:
 ''',
     "_handle_update_weights_from_disk_req_output": '''    @staticmethod
-    def handle_update_weights_from_disk_req_output(self: "WeightDiskUpdateController", recv_obj):
+    def handle_update_weights_from_disk_req_output(self: "WeightUpdaterController", recv_obj):
 ''',
     "_update_weight_version_if_provided": '''    @staticmethod
     def _update_weight_version_if_provided(
-        self: "WeightDiskUpdateController", weight_version: Optional[str]
+        self: "WeightUpdaterController", weight_version: Optional[str]
     ) -> None:
 ''',
 }
@@ -132,7 +132,7 @@ def _rewrite_body(body_text: str) -> str:
     # PauseController stayed unextracted (too coupled with other TM state to
     # be a clean independent class). The 3 fields ``abort_request`` /
     # ``is_pause`` / ``is_pause_cond`` that WDU needs are injected as Callable
-    # kwargs / shared refs on WeightDiskUpdateController. Body forms:
+    # kwargs / shared refs on WeightUpdaterController. Body forms:
     #   self.abort_request(abort_all=True)  →  self.abort_request(abort_all=True)
     #     (same call; ``abort_request`` is now a Callable field on WDU, not TM's method)
     #   self.is_pause                       →  self.is_pause_getter()
@@ -143,9 +143,9 @@ def _rewrite_body(body_text: str) -> str:
     )
 
     # Cross-call rewrites within the wd-controller cluster (4 TM methods + 1 mixin
-    # method): self.<peer>(...) on the WeightDiskUpdateController self →
+    # method): self.<peer>(...) on the WeightUpdaterController self →
     # <SourceClass>.<peer>(self, ...). Move-step reduces these to self.<peer>(...)
-    # (now an instance method of WeightDiskUpdateController) via pure prefix replace.
+    # (now an instance method of WeightUpdaterController) via pure prefix replace.
     body_text = body_text.replace(
         "await self._wait_for_model_update_from_disk(obj)",
         "await TokenizerManager._wait_for_model_update_from_disk(self, obj)",
@@ -162,7 +162,7 @@ def _rewrite_body(body_text: str) -> str:
 
 
 def _retype_method(text: str, class_name: str, method_name: str) -> str:
-    """Replace a method's header with @staticmethod + self: "WeightDiskUpdateController" typing.
+    """Replace a method's header with @staticmethod + self: "WeightUpdaterController" typing.
     Applies _rewrite_body to body bytes.
     """
     s, body_s, e = _method_ranges(text, class_name, method_name)
@@ -174,7 +174,7 @@ def _retype_method(text: str, class_name: str, method_name: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_disk_update_controller.py"
+    new = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_updater_controller.py"
     new.write_text(SKELETON)
 
     # ---- TM: drop facade fields + import + composition wiring ----
@@ -182,7 +182,7 @@ def transform(wt: Path) -> None:
 
     # Drop facade fields from init_weight_update. model_update_lock stays --
     # it was already wired into PauseController by introduce-pause-controller-prep,
-    # so TM remains its canonical owner; WeightDiskUpdateController receives a
+    # so TM remains its canonical owner; WeightUpdaterController receives a
     # shared reference via composition.
     text = replace_call_site(
         text,
@@ -212,20 +212,20 @@ def transform(wt: Path) -> None:
         text,
         anchor="from sglang.srt.managers.tokenizer_control_mixin import TokenizerControlMixin\n",
         addition=(
-            "from sglang.srt.managers.tokenizer_manager_components.weight_disk_update_controller import (\n"
-            "    WeightDiskUpdateController,\n"
+            "from sglang.srt.managers.tokenizer_manager_components.weight_updater_controller import (\n"
+            "    WeightUpdaterController,\n"
             ")\n"
         ),
     )
 
     # Composition wiring. The dispatcher forwarder is wired separately below by
     # rewriting the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher.
-    # Place init_weight_disk_update_controller directly below init_weight_update
+    # Place init_weight_updater_controller directly below init_weight_update
     # (it consumes model_update_lock / is_pause_cond that init_weight_update sets);
     # insert the call after init_weight_update and the method before init_lora so
     # the "# Init LoRA status" comment stays attached to init_lora.
     _WDUC_CONSTRUCTION = (
-        "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
+        "        self.weight_updater_controller = WeightUpdaterController(\n"
         "            send_to_scheduler=self.send_to_scheduler,\n"
         "            abort_request=self.abort_request,\n"
         "            update_model_path_info=lambda model_path, load_format: self._update_model_path_info(\n"
@@ -241,12 +241,12 @@ def transform(wt: Path) -> None:
     text = replace_call_site(
         text,
         old="        self.init_weight_update()\n",
-        new="        self.init_weight_update()\n\n        self.init_weight_disk_update_controller()\n",
+        new="        self.init_weight_update()\n\n        self.init_weight_updater_controller()\n",
     )
     text = replace_call_site(
         text,
         old="    def init_lora(self):\n",
-        new="    def init_weight_disk_update_controller(self):\n"
+        new="    def init_weight_updater_controller(self):\n"
         + _WDUC_CONSTRUCTION.rstrip()
         + "\n\n"
         + "    def init_lora(self):\n",
@@ -254,7 +254,7 @@ def transform(wt: Path) -> None:
 
     # Rewrite the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher
     # in place: route through a lambda forwarder calling the @staticmethod
-    # (still on TM) with self.weight_disk_update_controller as the self arg.
+    # (still on TM) with self.weight_updater_controller as the self arg.
     # -move flips this to a direct method ref.
     text = replace_call_site(
         text,
@@ -263,13 +263,13 @@ def transform(wt: Path) -> None:
             "                (\n"
             "                    UpdateWeightFromDiskReqOutput,\n"
             "                    lambda x: TokenizerManager.handle_update_weights_from_disk_req_output(\n"
-            "                        self.weight_disk_update_controller, x\n"
+            "                        self.weight_updater_controller, x\n"
             "                    ),\n"
             "                ),\n"
         ),
     )
 
-    # ---- TM: convert 4 methods to @staticmethod with self: "WeightDiskUpdateController" typing ----
+    # ---- TM: convert 4 methods to @staticmethod with self: "WeightUpdaterController" typing ----
     for name in (
         "update_weights_from_disk",
         "_wait_for_model_update_from_disk",
@@ -286,10 +286,10 @@ def transform(wt: Path) -> None:
     # The 3 sibling mixin methods (update_weights_from_distributed / _tensor / _ipc)
     # stay on the mixin but their `self._update_weight_version_if_provided(...)`
     # calls must be rewritten to the class-qualified form. Move-step reduces to
-    # self.weight_disk_update_controller._update_weight_version_if_provided(...).
+    # self.weight_updater_controller._update_weight_version_if_provided(...).
     cm_text = cm_text.replace(
         "self._update_weight_version_if_provided(obj.weight_version)",
-        "TokenizerControlMixin._update_weight_version_if_provided(self.weight_disk_update_controller, obj.weight_version)",
+        "TokenizerControlMixin._update_weight_version_if_provided(self.weight_updater_controller, obj.weight_version)",
     )
     control_mixin.write_text(cm_text)
 
@@ -301,20 +301,20 @@ def transform(wt: Path) -> None:
     text = engine.read_text()
     text = text.replace(
         "self.tokenizer_manager.update_weights_from_disk(",
-        "TokenizerManager.update_weights_from_disk(self.tokenizer_manager.weight_disk_update_controller, ",
+        "TokenizerManager.update_weights_from_disk(self.tokenizer_manager.weight_updater_controller, ",
     )
     engine.write_text(text)
 
     text = http_server.read_text()
     text = text.replace(
         "_global_state.tokenizer_manager.update_weights_from_disk(",
-        "TokenizerManager.update_weights_from_disk(_global_state.tokenizer_manager.weight_disk_update_controller, ",
+        "TokenizerManager.update_weights_from_disk(_global_state.tokenizer_manager.weight_updater_controller, ",
     )
     # Facade-field reads / writes on http_server (initial_weights_loaded was
     # dropped from TM, now lives on the controller).
     text = text.replace(
         "_global_state.tokenizer_manager.initial_weights_loaded",
-        "_global_state.tokenizer_manager.weight_disk_update_controller.initial_weights_loaded",
+        "_global_state.tokenizer_manager.weight_updater_controller.initial_weights_loaded",
     )
     http_server.write_text(text)
 

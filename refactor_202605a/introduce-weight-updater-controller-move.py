@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move (pure cut/paste): WeightDiskUpdateController methods relocate from TM + ControlMixin to target class."""
+"""Move (pure cut/paste): WeightUpdaterController methods relocate from TM + ControlMixin to target class."""
 
 # /// script
 # requires-python = ">=3.10"
@@ -14,20 +14,20 @@ sys.path.insert(0, str(HERE))
 from _helpers import cut_lines, find_method_lines, rewrite_intra_class_calls
 from _runner import run_pr
 
-ID = "introduce-weight-disk-update-controller-move"
-SUBJECT = "Hand disk-based weight reload over to WeightDiskUpdateController"
+ID = "introduce-weight-updater-controller-move"
+SUBJECT = "Hand disk-based weight reload over to WeightUpdaterController"
 BODY = """\
 Pure physical move per MECH_COMMIT_SPLIT. Cut the @staticmethod methods
 ``update_weights_from_disk``, ``_wait_for_model_update_from_disk`` and
 ``handle_update_weights_from_disk_req_output`` from TokenizerManager
 (leaving ``_update_model_path_info`` on TM) and
 ``_update_weight_version_if_provided`` from TokenizerControlMixin; paste
-into WeightDiskUpdateController (drop @staticmethod, replace
-``self: "WeightDiskUpdateController"`` → plain ``self``). Flip the
+into WeightUpdaterController (drop @staticmethod, replace
+``self: "WeightUpdaterController"`` → plain ``self``). Flip the
 the ``init_request_dispatcher`` entry from the prep-stage lambda forwarder
 to a direct bound-method reference. Caller prefix replacement:
-``TokenizerManager.<method>(self.weight_disk_update_controller, ...)`` →
-``self.weight_disk_update_controller.<method>(...)`` (TM + mixin sibling
+``TokenizerManager.<method>(self.weight_updater_controller, ...)`` →
+``self.weight_updater_controller.<method>(...)`` (TM + mixin sibling
 methods + entrypoints); ditto for the
 ``TokenizerControlMixin._update_weight_version_if_provided`` call sites.
 """
@@ -58,17 +58,17 @@ _MOVED_METHODS = (
 
 
 def _strip_static_prefix(body: str) -> str:
-    """Remove @staticmethod decorator, replace self: "WeightDiskUpdateController" → plain self,
+    """Remove @staticmethod decorator, replace self: "WeightUpdaterController" → plain self,
     and flip intra-class qualifier on cross-method calls (prep rewrote them to
     ``TokenizerManager.<m>(self, ...)`` / ``TokenizerControlMixin.<m>(self, ...)``;
-    after move both classes' methods live on WeightDiskUpdateController)."""
+    after move both classes' methods live on WeightUpdaterController)."""
     body = body.replace("    @staticmethod\n", "", 1)
-    body = body.replace('self: "WeightDiskUpdateController",', "self,")
-    body = body.replace('self: "WeightDiskUpdateController"\n', "self\n")
+    body = body.replace('self: "WeightUpdaterController",', "self,")
+    body = body.replace('self: "WeightUpdaterController"\n', "self\n")
     body = rewrite_intra_class_calls(
         body,
         source_classes=["TokenizerManager", "TokenizerControlMixin"],
-        target_class="WeightDiskUpdateController",
+        target_class="WeightUpdaterController",
         methods=list(_MOVED_METHODS),
     )
     return body
@@ -77,7 +77,7 @@ def _strip_static_prefix(body: str) -> str:
 def transform(wt: Path) -> None:
     tm = wt / "python/sglang/srt/managers/tokenizer_manager.py"
     control_mixin = wt / "python/sglang/srt/managers/tokenizer_control_mixin.py"
-    wd = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_disk_update_controller.py"
+    wd = wt / "python/sglang/srt/managers/tokenizer_manager_components/weight_updater_controller.py"
 
     # Cut 4 methods from TM, bottom-up (highest start line first). The handler
     # method was privacy-flipped in prep.
@@ -126,19 +126,19 @@ def transform(wt: Path) -> None:
         "                (\n"
         "                    UpdateWeightFromDiskReqOutput,\n"
         "                    lambda x: TokenizerManager.handle_update_weights_from_disk_req_output(\n"
-        "                        self.weight_disk_update_controller, x\n"
+        "                        self.weight_updater_controller, x\n"
         "                    ),\n"
         "                ),\n",
         "                (\n"
         "                    UpdateWeightFromDiskReqOutput,\n"
-        "                    self.weight_disk_update_controller.handle_update_weights_from_disk_req_output,\n"
+        "                    self.weight_updater_controller.handle_update_weights_from_disk_req_output,\n"
         "                ),\n",
     )
     tm.write_text(text)
 
     # ---- Caller prefix replacement: TM facade + sibling mixin callers ----
-    # TokenizerManager.<method>(self.weight_disk_update_controller, ... ) →
-    # self.weight_disk_update_controller.<method>(...).
+    # TokenizerManager.<method>(self.weight_updater_controller, ... ) →
+    # self.weight_updater_controller.<method>(...).
     # The only remaining TM-internal call site is in update_weights_from_disk (now
     # cut), so TM has no residual class-qualified calls; mixin holds the 3 sibling
     # callers of _update_weight_version_if_provided. Use regex to absorb both the
@@ -148,8 +148,8 @@ def transform(wt: Path) -> None:
 
     text = control_mixin.read_text()
     text = _re.sub(
-        r"TokenizerControlMixin\._update_weight_version_if_provided\(\s*self\.weight_disk_update_controller,\s*",
-        "self.weight_disk_update_controller._update_weight_version_if_provided(",
+        r"TokenizerControlMixin\._update_weight_version_if_provided\(\s*self\.weight_updater_controller,\s*",
+        "self.weight_updater_controller._update_weight_version_if_provided(",
         text,
     )
     control_mixin.write_text(text)
@@ -162,16 +162,16 @@ def transform(wt: Path) -> None:
 
     text = engine.read_text()
     text = _re.sub(
-        r"TokenizerManager\.update_weights_from_disk\(\s*self\.tokenizer_manager\.weight_disk_update_controller,\s*",
-        "self.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
+        r"TokenizerManager\.update_weights_from_disk\(\s*self\.tokenizer_manager\.weight_updater_controller,\s*",
+        "self.tokenizer_manager.weight_updater_controller.update_weights_from_disk(",
         text,
     )
     engine.write_text(text)
 
     text = http_server.read_text()
     text = _re.sub(
-        r"TokenizerManager\.update_weights_from_disk\(\s*_global_state\.tokenizer_manager\.weight_disk_update_controller,\s*",
-        "_global_state.tokenizer_manager.weight_disk_update_controller.update_weights_from_disk(",
+        r"TokenizerManager\.update_weights_from_disk\(\s*_global_state\.tokenizer_manager\.weight_updater_controller,\s*",
+        "_global_state.tokenizer_manager.weight_updater_controller.update_weights_from_disk(",
         text,
     )
     http_server.write_text(text)
