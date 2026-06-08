@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
-from _helpers import insert_after, replace_call_site, wire_component_init
+from _helpers import insert_after, replace_call_site
 from _runner import run_pr
 
 ID = "introduce-weight-disk-update-controller-prep"
@@ -220,24 +220,36 @@ def transform(wt: Path) -> None:
 
     # Composition wiring. The dispatcher forwarder is wired separately below by
     # rewriting the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher.
-    text = wire_component_init(
+    # Place init_weight_disk_update_controller directly below init_weight_update
+    # (it consumes model_update_lock / is_pause_cond that init_weight_update sets);
+    # insert the call after init_weight_update and the method before init_lora so
+    # the "# Init LoRA status" comment stays attached to init_lora.
+    _WDUC_CONSTRUCTION = (
+        "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
+        "            send_to_scheduler=self.send_to_scheduler,\n"
+        "            abort_request=self.abort_request,\n"
+        "            update_model_path_info=lambda model_path, load_format: self._update_model_path_info(\n"
+        "                model_path, load_format\n"
+        "            ),\n"
+        "            is_pause_getter=lambda: self.is_pause,\n"
+        "            is_pause_cond=self.is_pause_cond,\n"
+        "            model_update_lock=self.model_update_lock,\n"
+        "            server_args=self.server_args,\n"
+        "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
+        "        )\n"
+    )
+    text = replace_call_site(
         text,
-        attr="weight_disk_update_controller",
-        before_attr="session_controller",
-        construction=(
-            "        self.weight_disk_update_controller = WeightDiskUpdateController(\n"
-            "            send_to_scheduler=self.send_to_scheduler,\n"
-            "            abort_request=self.abort_request,\n"
-            "            update_model_path_info=lambda model_path, load_format: self._update_model_path_info(\n"
-            "                model_path, load_format\n"
-            "            ),\n"
-            "            is_pause_getter=lambda: self.is_pause,\n"
-            "            is_pause_cond=self.is_pause_cond,\n"
-            "            model_update_lock=self.model_update_lock,\n"
-            "            server_args=self.server_args,\n"
-            "            auto_create_handle_loop=self.auto_create_handle_loop,\n"
-            "        )\n"
-        ),
+        old="        self.init_weight_update()\n",
+        new="        self.init_weight_update()\n\n        self.init_weight_disk_update_controller()\n",
+    )
+    text = replace_call_site(
+        text,
+        old="    def init_lora(self):\n",
+        new="    def init_weight_disk_update_controller(self):\n"
+        + _WDUC_CONSTRUCTION.rstrip()
+        + "\n\n"
+        + "    def init_lora(self):\n",
     )
 
     # Rewrite the UpdateWeightFromDiskReqOutput entry in init_request_dispatcher
