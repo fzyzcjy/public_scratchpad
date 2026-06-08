@@ -17,7 +17,7 @@ from _runner import run_pr
 ID = "introduce-score-request-handler-prep"
 SUBJECT = "Stage scoring methods for handoff to ScoreRequestHandler"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds ScoreRequestHandler skeleton (incl. ScoreResult dataclass); wires
 composition in TM.__init__; converts the scoring mixin methods to

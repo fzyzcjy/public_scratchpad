@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-multimodal-processor-prep"
 SUBJECT = "Stage EPD dispatch for handoff to MultimodalProcessor"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds MultimodalProcessor skeleton (incl. from_server_args factory);
 wires composition in TM.__init__; drops the conditional mm_receiver block

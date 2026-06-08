@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for nem-migrate-maybe-prepare (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for nem-migrate-maybe-prepare (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Cut prep'd staticmethod from Scheduler to NgramEmbeddingManager. Body
 byte-equivalent. Add manager-side imports the body needs. Collapse caller +

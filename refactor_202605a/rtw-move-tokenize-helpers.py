@@ -2,7 +2,7 @@
 """Move (pure cut/paste): the tokenize-pipeline helpers and the
 InputFormat enum relocate from TokenizerManager to RawTokenizerWrapper.
 
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep
 (rtw-prep-tokenize-helpers) already did all semantic work — staticmethod
 conversion, body rewrites, intra-cluster class-qualification, external
 caller rewrites, typing imports. This commit only:

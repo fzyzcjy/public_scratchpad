@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for wu-move-from-disk (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for wu-move-from-disk (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape ``ModelRunner.update_weights_from_disk`` toward becoming a
 ``WeightUpdater`` method:

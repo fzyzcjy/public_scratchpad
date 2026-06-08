@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-request-validator-prep"
 SUBJECT = "Stage inbound-request validation for handoff to RequestValidator"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds RequestValidator skeleton; wires composition in TM.__init__;
 converts the inbound-request _validate_* methods to @staticmethod

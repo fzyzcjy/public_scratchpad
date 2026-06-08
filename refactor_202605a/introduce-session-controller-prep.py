@@ -3,7 +3,7 @@
 restructure + session methods to @staticmethod with self: "SessionController"
 typing + init_request_dispatcher lambda forwarder + entrypoint caller rewrites.
 
-Per MECH_COMMIT_SPLIT §"拆 class 场景": ALL semantic work happens here. The
+Per MECH_COMMIT_SPLIT §"split-class scenario": ALL semantic work happens here. The
 follow-up -move commit is pure cut/paste + caller prefix replacement +
 lambda→direct flip on the init_request_dispatcher entry.
 
@@ -29,7 +29,7 @@ from _runner import run_pr
 ID = "introduce-session-controller-prep"
 SUBJECT = "Stage session lifecycle for handoff to SessionController"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds SessionController skeleton; wires composition in
 TokenizerManager.__init__; converts open_session + close_session

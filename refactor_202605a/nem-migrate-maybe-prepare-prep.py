@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for nem-migrate-maybe-prepare (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for nem-migrate-maybe-prepare (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape ``Scheduler._maybe_prepare_ngram_embedding`` toward becoming a
 ``NgramEmbeddingManager`` method named ``prepare_for_forward`` (combining

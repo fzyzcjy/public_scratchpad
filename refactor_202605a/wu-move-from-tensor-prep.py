@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for wu-move-from-tensor (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for wu-move-from-tensor (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape ``update_weights_from_tensor`` + helper
 ``_update_weights_from_flattened_bucket`` toward becoming ``WeightUpdater``

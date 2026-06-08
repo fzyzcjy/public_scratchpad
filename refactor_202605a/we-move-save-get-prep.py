@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for we-move-save-get (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for we-move-save-get (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape 3 ModelRunner methods toward becoming ``WeightExporter`` methods:
 ``save_remote_model``, ``save_sharded_model``, ``get_weights_by_name``. Each

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for wu-move-from-tensor (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for wu-move-from-tensor (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Cut the 2 prep'd staticmethods to ``WeightUpdater``. Bodies byte-equivalent
 (prep already applied ``self.X`` → ``self._mr.X``). Cut module-level helpers

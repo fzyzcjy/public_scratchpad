@@ -4,7 +4,7 @@ self: "RawTokenizerWrapper" typing; body rewrites
 (``self.raw_tokenizer_wrapper.<field> → self.<field>``) + intra-cluster
 cross-call class-qualification; external caller rewrites.
 
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work; the
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work; the
 follow-up rtw-move-tokenize-helpers commit is pure cut/paste with the
 intra-cluster qualifier folded back to ``self.``.
 """
@@ -26,7 +26,7 @@ from _runner import run_pr
 ID = "rtw-prep-tokenize-helpers"
 SUBJECT = "Stage tokenize-pipeline helpers for handoff to RawTokenizerWrapper"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Converts the tokenize-pipeline helpers (``_detect_input_format`` /
 ``_prepare_tokenizer_input`` / ``_extract_tokenizer_results`` /

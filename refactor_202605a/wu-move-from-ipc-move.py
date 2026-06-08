@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for wu-move-from-ipc (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for wu-move-from-ipc (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Cut prep'd staticmethod onto WeightUpdater (before the module-level helpers
 section). Body byte-equivalent. Drop local imports + collapse external callers.

@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-output-processor-prep"
 SUBJECT = "Stage batch-output handling for handoff to OutputProcessor"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds OutputProcessor skeleton; wires composition in TM.__init__;
 converts _handle_batch_output to @staticmethod with

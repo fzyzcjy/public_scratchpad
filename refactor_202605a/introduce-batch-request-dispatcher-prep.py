@@ -26,7 +26,7 @@ from _runner import run_pr
 ID = "introduce-batch-request-dispatcher-prep"
 SUBJECT = "Stage batch-request dispatch for handoff to BatchRequestDispatcher"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds BatchRequestDispatcher skeleton (dataclass fields only — no
 ``dispatch`` body); wires composition in TM.__init__ at the end of the

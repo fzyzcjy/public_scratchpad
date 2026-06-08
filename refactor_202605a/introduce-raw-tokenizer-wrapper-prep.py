@@ -26,7 +26,7 @@ from _runner import run_pr
 ID = "introduce-raw-tokenizer-wrapper-prep"
 SUBJECT = "Stage tokenizer/processor ownership for handoff to RawTokenizerWrapper"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds RawTokenizerWrapper skeleton (fields only — no body), wires
 composition in TokenizerManager.__init__, retypes

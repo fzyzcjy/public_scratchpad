@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for wu-move-from-distributed (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for wu-move-from-distributed (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Cut both staticmethods to WeightUpdater. Bodies byte-equivalent. Collapse
 inner cross-method call and external caller; drop the local

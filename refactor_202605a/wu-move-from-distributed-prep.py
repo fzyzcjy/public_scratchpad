@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for wu-move-from-distributed (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for wu-move-from-distributed (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape ``update_weights_from_distributed`` + its private helper
 ``_update_bucketed_weights_from_distributed`` toward becoming

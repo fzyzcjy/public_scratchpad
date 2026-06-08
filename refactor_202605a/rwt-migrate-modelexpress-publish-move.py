@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for rwt-migrate-modelexpress-publish (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for rwt-migrate-modelexpress-publish (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Cut 3 staticmethods to ``RemoteInstanceWeightTransport``. Bodies byte-equivalent.
 Add uuid + torch imports the bodies need. Collapse all qualified calls.

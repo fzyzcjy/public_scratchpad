@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-weight-disk-update-controller-prep"
 SUBJECT = "Stage disk-based weight reload for handoff to WeightDiskUpdateController"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds WeightDiskUpdateController skeleton (with __post_init__ that flips
 initial_weights_loaded per config). The UpdateWeightFromDiskReqOutput

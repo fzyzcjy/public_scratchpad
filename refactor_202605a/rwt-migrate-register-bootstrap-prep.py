@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for rwt-migrate-register-bootstrap (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for rwt-migrate-register-bootstrap (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape ``_register_to_engine_info_bootstrap`` toward becoming a
 ``RemoteInstanceWeightTransport`` method. ``@staticmethod`` + ``self:

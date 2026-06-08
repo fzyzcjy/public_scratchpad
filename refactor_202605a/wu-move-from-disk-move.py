@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for wu-move-from-disk (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for wu-move-from-disk (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Pure cut+paste of the prep'd staticmethod onto ``WeightUpdater``. Body
 byte-equivalent. Call sites collapse qualified form back to instance form;

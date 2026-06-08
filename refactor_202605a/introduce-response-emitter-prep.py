@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-response-emitter-prep"
 SUBJECT = "Stage client-side wait/abort for handoff to ResponseEmitter"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds ResponseEmitter skeleton; wires composition in TM.__init__;
 converts _wait_one_response, create_abort_task, _handle_abort_finish_reason,

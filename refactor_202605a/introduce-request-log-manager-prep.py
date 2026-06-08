@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-request-log-manager-prep"
 SUBJECT = "Stage request dumping for handoff to RequestLogManager"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds RequestLogManager skeleton (+ from_server_args factory); wires
 composition in TM.__init__; drops the init_request_logging_and_dumping()

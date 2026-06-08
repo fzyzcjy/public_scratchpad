@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for rwt-migrate-register-bootstrap (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for rwt-migrate-register-bootstrap (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Pure cut+paste onto ``RemoteInstanceWeightTransport``. Body byte-equivalent.
 Internal caller collapses qualified form back to instance call.

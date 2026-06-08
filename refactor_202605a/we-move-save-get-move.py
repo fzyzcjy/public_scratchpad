@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Move stage for we-move-save-get (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Move stage for we-move-save-get (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Pure cut+paste onto ``WeightExporter``. Bodies byte-equivalent. Call sites
 collapse qualified form back to instance-method form; the local

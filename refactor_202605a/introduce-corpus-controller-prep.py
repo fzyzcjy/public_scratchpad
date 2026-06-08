@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-corpus-controller-prep"
 SUBJECT = "Stage external-corpus operations for handoff to CorpusController"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds CorpusController skeleton; wires composition in TM.__init__;
 converts add_external_corpus / remove_external_corpus / list_external_corpora

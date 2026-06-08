@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prep stage for rwt-migrate-modelexpress-publish (MECH_COMMIT_SPLIT §"拆 class 场景"):
+"""Prep stage for rwt-migrate-modelexpress-publish (MECH_COMMIT_SPLIT §"split-class scenario"):
 
 Reshape 3 methods (``_publish_modelexpress_metadata``,
 ``_build_transfer_engine_worker_metadata``, ``_build_nixl_worker_metadata``)
