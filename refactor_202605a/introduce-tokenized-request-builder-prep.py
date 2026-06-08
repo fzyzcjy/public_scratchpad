@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-tokenized-request-builder-prep"
 SUBJECT = "Stage TokenizedRequest assembly for handoff to TokenizedRequestBuilder"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds TokenizedRequestBuilder skeleton; wires composition in TM.__init__;
 converts _create_tokenized_object to @staticmethod with a
@@ -36,8 +36,9 @@ AREA_BRANCH = f"tom_refactor_202605a/primary/{AREA}"
 SKELETON = '''from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Type
+from typing import Any, Dict, Optional, Type
 
+from sglang.srt.managers.tokenizer_manager_components.request_state import ReqState
 from sglang.srt.sampling.sampling_params import SamplingParams
 
 
@@ -53,6 +54,7 @@ class TokenizedRequestBuilderConfig:
 class TokenizedRequestBuilder:
     tokenizer: Optional[Any]
     config: TokenizedRequestBuilderConfig
+    rid_to_state: Dict[str, ReqState]
     fake_bootstrap_room_counter: int = 0
 '''
 
@@ -164,14 +166,6 @@ def transform(wt: Path) -> None:
         "self.server_args.disaggregation_transfer_backend",
         "self.config.disaggregation_transfer_backend",
     )
-    # Drop the trailing time_stats side-effect (moves to callers per design).
-    body_text = body_text.replace(
-        "        tokenized_obj.time_stats = self.rid_to_state[obj.rid].time_stats\n"
-        "        self.rid_to_state[obj.rid].time_stats.set_tokenize_finish_time()\n"
-        "\n"
-        "        return tokenized_obj\n",
-        "        return tokenized_obj\n",
-    )
     new_method = NEW_CREATE_HEADER + body_text
     text = "".join(lines[:s]) + new_method + "".join(lines[e:])
 
@@ -198,7 +192,7 @@ def transform(wt: Path) -> None:
         ),
         new=(
             "        self.request_validator.validate_one(obj=obj, input_ids=input_ids)\n"
-            "        tokenized_obj = TokenizerManager._create_tokenized_object(\n"
+            "        return TokenizerManager._create_tokenized_object(\n"
             "            self.tokenized_request_builder,\n"
             "            obj,\n"
             "            input_text,\n"
@@ -207,9 +201,6 @@ def transform(wt: Path) -> None:
             "            mm_inputs,\n"
             "            token_type_ids,\n"
             "        )\n"
-            "        tokenized_obj.time_stats = self.rid_to_state[obj.rid].time_stats\n"
-            "        self.rid_to_state[obj.rid].time_stats.set_tokenize_finish_time()\n"
-            "        return tokenized_obj\n"
         ),
     )
     text = replace_call_site(
@@ -222,18 +213,17 @@ def transform(wt: Path) -> None:
             "            )\n"
         ),
         new=(
-            "            tokenized_obj = TokenizerManager._create_tokenized_object(\n"
-            "                self.tokenized_request_builder,\n"
-            "                req,\n"
-            "                req.text,\n"
-            "                input_ids_list[i],\n"
-            "                None,\n"
-            "                None,\n"
-            "                token_type_ids,\n"
+            "            tokenized_objs.append(\n"
+            "                TokenizerManager._create_tokenized_object(\n"
+            "                    self.tokenized_request_builder,\n"
+            "                    req,\n"
+            "                    req.text,\n"
+            "                    input_ids_list[i],\n"
+            "                    None,\n"
+            "                    None,\n"
+            "                    token_type_ids,\n"
+            "                )\n"
             "            )\n"
-            "            tokenized_obj.time_stats = self.rid_to_state[req.rid].time_stats\n"
-            "            self.rid_to_state[req.rid].time_stats.set_tokenize_finish_time()\n"
-            "            tokenized_objs.append(tokenized_obj)\n"
         ),
     )
 
