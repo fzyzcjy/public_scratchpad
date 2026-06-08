@@ -18,7 +18,7 @@ from _runner import run_pr
 ID = "introduce-lora-controller-prep"
 SUBJECT = "Stage LoRA load/unload for handoff to LoraController"
 BODY = """\
-Per MECH_COMMIT_SPLIT §"拆 class 场景": prep does ALL semantic work.
+Per MECH_COMMIT_SPLIT §"split-class scenario": prep does ALL semantic work.
 
 Builds LoraController skeleton (with __post_init__ replacing init_lora);
 wires composition in TM.__init__ + plugs update_lora_adapter_communicator
@@ -59,6 +59,7 @@ class LoraController:
     lora_ref_cache: Dict[str, LoRARef] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        # LoRA
         # Initialize the `LoRARegistry` with initial LoRA adapter paths provided in `server_args`.
         # The registry dynamically updates as adapters are loaded / unloaded during runtime. It
         # serves as the source of truth for available adapters and maps user-friendly LoRA names

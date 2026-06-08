@@ -24,7 +24,7 @@ Pure physical move per MECH_COMMIT_SPLIT. Cut the @staticmethod methods
 ``_update_weight_version_if_provided`` from TokenizerControlMixin; paste
 into WeightDiskUpdateController (drop @staticmethod, replace
 ``self: "WeightDiskUpdateController"`` → plain ``self``). Flip the
-``__post_init__`` dispatcher entry from the lambda forwarder + late-TM-import
+the ``init_request_dispatcher`` entry from the prep-stage lambda forwarder
 to a direct bound-method reference. Caller prefix replacement:
 ``TokenizerManager.<method>(self.weight_disk_update_controller, ...)`` →
 ``self.weight_disk_update_controller.<method>(...)`` (TM + mixin sibling

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Move (pure cut/paste): SessionController methods relocate from source classes.
 
-Per MECH_COMMIT_SPLIT §"拆 class 场景": this commit is purely physical.
+Per MECH_COMMIT_SPLIT §"split-class scenario": this commit is purely physical.
 All semantic work (skeleton, composition, staticmethod conversion, body
 rewrites, dispatcher forwarder, entrypoint caller rewrites) happened
 in the prep commit. Here we only:
 
   - cut @staticmethod open_session / close_session out of
     TokenizerControlMixin
-  - cut @staticmethod _handle_open_session_req_output out of
+  - cut @staticmethod handle_open_session_req_output out of
     TokenizerManager
   - paste all three into SessionController (drop @staticmethod, swap
     ``self: "SessionController"`` → plain ``self``)
@@ -34,9 +34,9 @@ from _runner import run_pr
 ID = "introduce-session-controller-move"
 SUBJECT = "Hand session lifecycle over to SessionController"
 BODY = """\
-Pure physical move per MECH_COMMIT_SPLIT §"拆 class 场景". Cut
+Pure physical move per MECH_COMMIT_SPLIT §"split-class scenario". Cut
 @staticmethod open_session + close_session from TokenizerControlMixin and
-@staticmethod _handle_open_session_req_output from TokenizerManager;
+@staticmethod handle_open_session_req_output from TokenizerManager;
 paste into SessionController (drop @staticmethod, replace
 ``self: "SessionController"`` → plain ``self``). Entrypoint callers
 (engine.py, http_server.py) get pure prefix replacement:
@@ -75,7 +75,7 @@ def transform(wt: Path) -> None:
     http_server = wt / "python/sglang/srt/entrypoints/http_server.py"
 
     # Cut bottom-up so earlier line numbers stay valid. Method was renamed
-    # from ``_handle_open_session_req_output`` to ``handle_open_session_req_output``
+    # from the prep-stage class-qualified form to the bound method
     # in prep (privacy flip — it's now public API of SessionController).
     s, e = find_method_lines(
         tm.read_text(),

@@ -92,14 +92,16 @@ def transform(wt: Path) -> None:
     test_file = wt / "test/registered/prefill_only/test_embed_overrides.py"
     if test_file.exists():
         t = test_file.read_text()
-        t = t.replace(
-            "TokenizerManager._resolve_embed_overrides",
-            "TokenizedRequestBuilder._resolve_embed_overrides",
-        )
-        # Doc-comment reference at top of file.
+        # Doc-comment reference at top of file. Fix the class+path together
+        # BEFORE the generic class-token rewrite, else the path anchor no
+        # longer matches and the source path is left stale.
         t = t.replace(
             "- TokenizerManager._resolve_embed_overrides (tokenizer_manager.py)",
             "- TokenizedRequestBuilder._resolve_embed_overrides (tokenized_request_builder.py)",
+        )
+        t = t.replace(
+            "TokenizerManager._resolve_embed_overrides",
+            "TokenizedRequestBuilder._resolve_embed_overrides",
         )
         t = t.replace(
             "# TokenizerManager._resolve_embed_overrides",
