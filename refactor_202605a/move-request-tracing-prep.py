@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """In-place prep for moving convert_to_span_attrs out of TokenizerManager.
 
-Make convert_to_span_attrs a @staticmethod with explicit ``served_model_name``
-kwarg; drop the ``self.server_args.enable_trace`` early-return (caller
-already gates on ``state.time_stats.trace_ctx.tracing_enable``). Body stays
+Make convert_to_span_attrs a @staticmethod with explicit ``enable_trace``
+and ``served_model_name`` kwargs, retyping the early-return guard's receiver
+from ``self.server_args.enable_trace`` to the parameter. Body stays
 in TokenizerManager class; the next commit ``move-request-tracing-move``
 physically relocates it to ``managers/tokenizer_manager_components/request_tracing.py``.
 """
@@ -28,9 +28,10 @@ BODY = """\
 In-place prep per MECH_COMMIT_SPLIT before the physical move:
 
   - Add @staticmethod decorator
-  - Drop ``self``; pass ``served_model_name`` as explicit kwarg
-  - Drop ``self.server_args.enable_trace`` early-return (caller already
-    gates on tracing_enable; per request_tracing.md ch4)
+  - Drop ``self``; pass ``enable_trace`` and ``served_model_name`` as
+    explicit kwargs
+  - Retype the early-return guard's receiver to the ``enable_trace`` param,
+    keeping the guard byte-identical otherwise
   - Caller switches to ``TokenizerManager.convert_to_span_attrs(...)``
     (class-qualified call) so the next commit's caller change is a pure
     prefix replacement.
@@ -52,6 +53,7 @@ NEW_HEADER = '''    @staticmethod
             BatchTokenIDOutput,
         ],
         i: int,
+        enable_trace: bool,
         served_model_name: str,
     ) -> Dict[str, Any]:
 '''
@@ -87,10 +89,10 @@ def transform(wt: Path) -> None:
     lines = text.splitlines(keepends=True)
     body_text = "".join(lines[body_s:e])
 
-    # Drop early-return guarded by self.server_args.enable_trace.
+    # Retype the guard's receiver: self.server_args.enable_trace -> enable_trace param.
     body_text = body_text.replace(
-        "        if not self.server_args.enable_trace:\n            return span_attrs\n\n",
-        "",
+        "        if not self.server_args.enable_trace:\n",
+        "        if not enable_trace:\n",
     )
     # served_model_name -> arg
     body_text = body_text.replace(
@@ -110,6 +112,7 @@ def transform(wt: Path) -> None:
             "                            state=state,\n"
             "                            recv_obj=recv_obj,\n"
             "                            i=i,\n"
+            "                            enable_trace=self.server_args.enable_trace,\n"
             "                            served_model_name=self.served_model_name,\n"
             "                        )"
         ),
